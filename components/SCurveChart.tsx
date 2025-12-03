@@ -3,6 +3,7 @@ import {
   ComposedChart,
   Line,
   Area,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -45,11 +46,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false, yearLabel }) => {
   // Convert weekly data to chart format
   const chartData = showWeekly && weeklyData 
-    ? weeklyData.map(w => ({
-        period: `${w.week} (${w.year})`,
-        plan: w.baseline,
-        actual: w.actual,
-      }))
+    ? weeklyData.map((w, idx) => {
+        const prev = idx === 0 ? 0 : weeklyData[idx - 1].baseline;
+        const weeklyTarget = Math.max(0, w.baseline - prev);
+        return {
+          period: `${w.week} (${w.year})`,
+          plan: w.baseline,
+          actual: w.actual,
+          weeklyTarget,
+        };
+      })
     : data?.map(d => ({
         period: `${d.month}${yearLabel ? ` (${yearLabel})` : ''}`,
         plan: d.plan,
@@ -115,6 +121,18 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
           />
+
+          {/* Weekly target (delta baseline) */}
+          {showWeekly && (
+            <Bar
+              name="Target Mingguan"
+              dataKey="weeklyTarget"
+              barSize={12}
+              fill="#c084fc"
+              opacity={0.8}
+              radius={[4, 4, 4, 4]}
+            />
+          )}
 
           {/* Actual Curve */}
           <Area

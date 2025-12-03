@@ -14,6 +14,7 @@ export const ManageData: React.FC = () => {
     addProjectFilter,
     selectedYear,
     setSelectedYear,
+    setUseManualSCurve,
     updateTasks, 
     updateSCurveData,
     setProjects,
@@ -64,6 +65,8 @@ export const ManageData: React.FC = () => {
     const numValue = parseFloat(value) || 0;
     const updated = sCurveData.map(d => d.month === month ? { ...d, [field]: numValue } : d);
     updateSCurveData(updated);
+    // Gunakan manual S-curve ketika ada perubahan
+    setUseManualSCurve(true);
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -83,6 +86,7 @@ export const ManageData: React.FC = () => {
       // Update projects dan weekly summary
       setProjects(parsed.projects);
       setWeeklySummary(parsed.summaryBaseline);
+      setUseManualSCurve(false); // kembali ke data CSV
       
       // Convert weekly to monthly untuk backward compatibility
       const monthlyData = weeklyToMonthly(parsed.summaryBaseline);

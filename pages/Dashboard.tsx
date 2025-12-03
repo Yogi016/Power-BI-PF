@@ -6,6 +6,7 @@ import { StatCard } from '../components/StatCard';
 import { WeeklySummaryTable } from '../components/WeeklySummaryTable';
 import { WeeklyTimeline } from '../components/WeeklyTimeline';
 import { Activity, BarChart3, TrendingUp, AlertCircle, CheckCircle2, Filter } from 'lucide-react';
+import { useState } from 'react';
 
 export const Dashboard: React.FC = () => {
   const { 
@@ -18,11 +19,13 @@ export const Dashboard: React.FC = () => {
     selectedYear,
     selectedProjectFilter,
     projectFilters,
+    useManualSCurve,
     setSelectedPIC,
     setSelectedProject,
     setSelectedYear,
     setSelectedProjectFilter,
   } = useData();
+  const [weeklyMode, setWeeklyMode] = useState<'weekly' | 'monthly'>('monthly');
 
   // Get unique PICs from projects
   const availablePICs = useMemo(() => {
@@ -112,7 +115,8 @@ export const Dashboard: React.FC = () => {
   }, [filteredWeeks, filteredProjects]);
 
   // Calculate metrics from CSV data or fallback to legacy data
-  const displayWeeklyData = filteredWeeksWithProjects.length > 0;
+  const weeklyDataAvailable = filteredWeeksWithProjects.length > 0 && !useManualSCurve;
+  const displayWeeklyData = weeklyMode === 'weekly' && weeklyDataAvailable;
   const currentData = displayWeeklyData 
     ? filteredWeeksWithProjects[filteredWeeksWithProjects.length - 1]
     : null;
@@ -243,11 +247,26 @@ export const Dashboard: React.FC = () => {
               <p className="text-sm text-slate-500">Menampilkan {activeProjectLabel} ({filteredProjects.length || projects.length} proyek) • Tahun: {selectedYear ?? 'Semua'}</p>
             </div>
             <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedProject || selectedProjectFilter || ''}
-              onChange={(e) => {
-                const val = e.target.value;
-                const isRealProject = allProjectsList.some(p => p.id === val);
+              <div className="flex bg-slate-100 rounded-lg overflow-hidden text-xs sm:text-sm">
+                <button
+                  onClick={() => setWeeklyMode('monthly')}
+                  className={`px-3 py-2 ${weeklyMode === 'monthly' ? 'bg-white text-slate-900 font-semibold shadow-sm' : 'text-slate-500'}`}
+                >
+                  Bulanan
+                </button>
+                <button
+                  onClick={() => weeklyDataAvailable ? setWeeklyMode('weekly') : null}
+                  className={`px-3 py-2 border-l border-slate-200 ${weeklyMode === 'weekly' ? 'bg-white text-slate-900 font-semibold shadow-sm' : weeklyDataAvailable ? 'text-slate-500' : 'text-slate-300'}`}
+                  disabled={!weeklyDataAvailable}
+                >
+                  Mingguan
+                </button>
+              </div>
+              <select
+                value={selectedProject || selectedProjectFilter || ''}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  const isRealProject = allProjectsList.some(p => p.id === val);
                 if (isRealProject) {
                   setSelectedProject(val || null);
                   setSelectedProjectFilter(null);
@@ -316,10 +335,12 @@ export const Dashboard: React.FC = () => {
               )}
             </div>
           </div>
-          <WeeklySummaryTable weeklySummary={filteredWeeksWithProjects} />
-          {filteredProjects.length > 0 && (
-            <WeeklyTimeline weeks={filteredWeeksWithProjects} projects={filteredProjects} />
-          )}
+          <div id="weekly-timeline">
+            <WeeklySummaryTable weeklySummary={filteredWeeksWithProjects} />
+            {filteredProjects.length > 0 && (
+              <WeeklyTimeline weeks={filteredWeeksWithProjects} projects={filteredProjects} />
+            )}
+          </div>
         </div>
       )}
 
@@ -327,9 +348,12 @@ export const Dashboard: React.FC = () => {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-lg font-bold text-slate-800">Activity Breakdown</h3>
-          <button className="text-sm text-indigo-600 font-medium hover:text-indigo-800 flex items-center gap-1">
+          <a 
+            href="#weekly-timeline"
+            className="text-sm text-indigo-600 font-medium hover:text-indigo-800 flex items-center gap-1"
+          >
              View Full Schedule <BarChart3 size={16}/>
-          </button>
+          </a>
         </div>
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-sm text-left">

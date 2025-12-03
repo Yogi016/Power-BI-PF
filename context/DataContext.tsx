@@ -16,6 +16,7 @@ interface DataContextType {
   selectedYear: number | null;
   projectFilters: string[];
   selectedProjectFilter: string | null;
+  useManualSCurve: boolean;
   
   // Actions
   updateSCurveData: (data: MonthlyData[]) => void;
@@ -28,6 +29,7 @@ interface DataContextType {
   setSelectedYear: (year: number | null) => void;
   setSelectedProjectFilter: (filter: string | null) => void;
   addProjectFilter: (name: string) => void;
+  setUseManualSCurve: (val: boolean) => void;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -48,6 +50,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     'Lain - Lain',
   ]);
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string | null>('Semua Proyek');
+  const [useManualSCurve, setUseManualSCurve] = useState<boolean>(false);
   const [csvLoaded, setCsvLoaded] = useState(false);
 
   // Load CSV data automatically on mount
@@ -132,6 +135,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       selectedYear,
       projectFilters,
       selectedProjectFilter,
+      useManualSCurve,
       updateSCurveData, 
       updateTasks, 
       updateTask,
@@ -142,6 +146,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       setSelectedYear,
       setSelectedProjectFilter,
       addProjectFilter,
+      setUseManualSCurve,
     }}>
       {children}
     </DataContext.Provider>
