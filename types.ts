@@ -9,6 +9,7 @@ export interface MonthlyData {
 export interface WeeklyData {
   week: string; // Format: "Juni-1", "Juni-2", etc.
   weekIndex: number; // 0-39 untuk 40 minggu
+  year: number; // Tahun dari minggu tersebut
   baseline: number; // Baseline Scurve (%)
   actual: number; // Kumulatif Realisasi (%)
   weeklyBaseline?: number; // Beban Tiap Minggu Baseline
@@ -60,4 +61,9 @@ export interface KPIMetric {
 export enum PageView {
   DASHBOARD = 'DASHBOARD',
   MANAGE_DATA = 'MANAGE_DATA'
+}
+
+export interface ProjectFilterState {
+  options: string[];
+  selected: string | null;
 }

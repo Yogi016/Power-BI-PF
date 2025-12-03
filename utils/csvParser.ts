@@ -10,10 +10,12 @@ function parsePercentage(value: string): number {
 
 // Generate week labels: Juni-1, Juni-2, ..., Maret-4
 const MONTHS = ['Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember', 'Januari', 'Februari', 'Maret'];
-function getWeekLabel(weekIndex: number): string {
+const START_YEAR = 2024; // Tahun awal dataset (Juni) yang akan berlanjut ke tahun berikutnya
+function getWeekMeta(weekIndex: number): { label: string; year: number } {
   const monthIndex = Math.floor(weekIndex / 4);
   const weekInMonth = (weekIndex % 4) + 1;
-  return `${MONTHS[monthIndex]}-${weekInMonth}`;
+  const year = monthIndex >= 7 ? START_YEAR + 1 : START_YEAR;
+  return { label: `${MONTHS[monthIndex]}-${weekInMonth}`, year };
 }
 
 // Parse CSV dengan format SCURVE FINAL
@@ -33,7 +35,7 @@ export function parseSCurveCSV(csvContent: string): {
   const headers = headerLine.split(';').map(h => h.trim());
   
   // Cari kolom-kolom mingguan (Juni 1-4, Juli 1-4, dst)
-  const weekColumns: { index: number; label: string }[] = [];
+  const weekColumns: { index: number; label: string; year: number }[] = [];
   let weekIndex = 0;
   
   // Header dimulai dari kolom ke-5 (index 4) untuk mingguan
@@ -41,7 +43,8 @@ export function parseSCurveCSV(csvContent: string): {
   for (let i = 4; i < headers.length && weekIndex < 40; i++) {
     const header = headers[i];
     if (header && /^\d+$/.test(header)) {
-      weekColumns.push({ index: i, label: getWeekLabel(weekIndex) });
+      const meta = getWeekMeta(weekIndex);
+      weekColumns.push({ index: i, label: meta.label, year: meta.year });
       weekIndex++;
     }
   }
@@ -162,13 +165,14 @@ export function parseSCurveCSV(csvContent: string): {
     
     if (rowType.includes('baseline scurve') || rowType.includes('baseline')) {
       // Parse data mingguan dari kolom ke-5 (index 4) dan seterusnya
-      weekColumns.forEach(({ index, label }, idx) => {
+      weekColumns.forEach(({ index, label, year }, idx) => {
         const colIndex = index;
         const value = parsePercentage(columns[colIndex] || '0');
         if (summaryBaseline.length <= idx) {
           summaryBaseline.push({
             week: label,
             weekIndex: idx,
+            year,
             baseline: value,
             actual: 0,
           });
@@ -177,13 +181,14 @@ export function parseSCurveCSV(csvContent: string): {
         }
       });
     } else if (rowType.includes('kumulatif realisasi') || rowType.includes('kumulatif')) {
-      weekColumns.forEach(({ index, label }, idx) => {
+      weekColumns.forEach(({ index, label, year }, idx) => {
         const colIndex = index;
         const value = parsePercentage(columns[colIndex] || '0');
         if (summaryActual.length <= idx) {
           summaryActual.push({
             week: label,
             weekIndex: idx,
+            year,
             baseline: 0,
             actual: value,
           });
@@ -203,15 +208,16 @@ export function parseSCurveCSV(csvContent: string): {
   
   if (summaryBaseline.length > 0 || summaryActual.length > 0) {
     const maxLength = Math.max(summaryBaseline.length, summaryActual.length, weekColumns.length);
-    mergedSummary = weekColumns.slice(0, maxLength).map(({ label }, idx) => ({
+    mergedSummary = weekColumns.slice(0, maxLength).map(({ label, year }, idx) => ({
       week: label,
       weekIndex: idx,
+      year,
       baseline: summaryBaseline[idx]?.baseline || 0,
       actual: summaryActual[idx]?.actual || 0,
     }));
   } else {
     // Jika tidak ada summary, buat dari aggregasi proyek
-    mergedSummary = weekColumns.map(({ label }, idx) => {
+    mergedSummary = weekColumns.map(({ label, year }, idx) => {
       let totalBaseline = 0;
       let totalActual = 0;
       
@@ -228,6 +234,7 @@ export function parseSCurveCSV(csvContent: string): {
       return {
         week: label,
         weekIndex: idx,
+        year,
         baseline: totalBaseline,
         actual: totalActual,
       };
@@ -276,4 +283,3 @@ export function weeklyToMonthly(weeklyData: WeeklyData[]): MonthlyData[] {
   
   return result;
 }
-

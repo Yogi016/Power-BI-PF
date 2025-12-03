@@ -14,10 +14,12 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
       {/* Sidebar */}
       <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20">
         <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-           <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center text-white font-bold">
-             PT
-           </div>
-           <span className="text-white font-semibold text-lg tracking-tight">ProTrack</span>
+          <img
+            src="/pf-logo.png"
+            alt="PF"
+            className="h-8 w-auto object-contain"
+            loading="lazy"
+          />
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -72,9 +74,12 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
         <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-6 shadow-sm z-10">
           <div className="flex items-center gap-4">
              <button className="md:hidden text-slate-500"><Menu size={24}/></button>
-             <h2 className="text-sm font-medium text-slate-500">
-                Project / <span className="text-slate-900">Mahakam Phase 3</span>
-             </h2>
+             <div className="flex items-center gap-3">
+               <img src="/pf-logo.png" alt="PF" className="h-8 w-auto object-contain hidden sm:block" loading="lazy" />
+               <h2 className="text-sm font-medium text-slate-500">
+                  Project / <span className="text-slate-900">Mahakam Phase 3</span>
+               </h2>
+             </div>
           </div>
           <div className="flex items-center gap-4">
              <div className="text-right hidden sm:block">

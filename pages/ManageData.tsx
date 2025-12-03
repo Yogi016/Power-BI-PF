@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { TaskItem, MonthlyData } from '../types';
-import { Save, Plus, Trash2, Edit2, X, Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, X, Upload, FileText, CheckCircle2, AlertCircle, PlusCircle } from 'lucide-react';
 import { parseSCurveCSV, weeklyToMonthly } from '../utils/csvParser';
 
 export const ManageData: React.FC = () => {
@@ -10,6 +10,8 @@ export const ManageData: React.FC = () => {
     sCurveData, 
     projects,
     weeklySummary,
+    projectFilters,
+    addProjectFilter,
     updateTasks, 
     updateSCurveData,
     setProjects,
@@ -18,6 +20,7 @@ export const ManageData: React.FC = () => {
   const [editingTask, setEditingTask] = useState<string | null>(null);
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [newProjectFilter, setNewProjectFilter] = useState('');
   
   // Local state for S-Curve inputs to handle changes before save if needed, 
   // but for this demo, we'll edit directly.
@@ -71,6 +74,11 @@ export const ManageData: React.FC = () => {
         message: `Error: ${error instanceof Error ? error.message : 'Gagal memproses file CSV'}` 
       });
     }
+  };
+
+  const handleAddProjectFilter = () => {
+    addProjectFilter(newProjectFilter);
+    setNewProjectFilter('');
   };
 
   return (
@@ -140,7 +148,38 @@ export const ManageData: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        
+
+        {/* Project filter manager */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm">
+          <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Pilihan Proyek</h3>
+              <p className="text-sm text-slate-500">Atur opsi filter proyek (Mahakam, Bontang, Blora, Lain - Lain, dll).</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                value={newProjectFilter}
+                onChange={(e) => setNewProjectFilter(e.target.value)}
+                placeholder="Nama proyek baru"
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              />
+              <button
+                onClick={handleAddProjectFilter}
+                className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+              >
+                <PlusCircle size={16} />
+                Tambah
+              </button>
+            </div>
+          </div>
+          <div className="p-4 flex flex-wrap gap-2">
+            {projectFilters.map((name) => (
+              <span key={name} className="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs font-semibold border border-slate-200">
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
         {/* S-Curve Data Editor */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
           <div className="p-6 border-b border-slate-100">

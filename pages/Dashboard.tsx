@@ -3,6 +3,8 @@ import { useData } from '../context/DataContext';
 import { SCurveChart } from '../components/SCurveChart';
 import { PICDonutChart } from '../components/PICDonutChart';
 import { StatCard } from '../components/StatCard';
+import { WeeklySummaryTable } from '../components/WeeklySummaryTable';
+import { WeeklyTimeline } from '../components/WeeklyTimeline';
 import { Activity, BarChart3, TrendingUp, AlertCircle, CheckCircle2, Filter } from 'lucide-react';
 
 export const Dashboard: React.FC = () => {
@@ -13,8 +15,13 @@ export const Dashboard: React.FC = () => {
     weeklySummary,
     selectedPIC,
     selectedProject,
+    selectedYear,
+    selectedProjectFilter,
+    projectFilters,
     setSelectedPIC,
     setSelectedProject,
+    setSelectedYear,
+    setSelectedProjectFilter,
   } = useData();
 
   // Get unique PICs from projects
@@ -24,15 +31,47 @@ export const Dashboard: React.FC = () => {
     return Array.from(pics).sort();
   }, [projects]);
 
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    weeklySummary.forEach(w => years.add(w.year));
+    return Array.from(years).sort();
+  }, [weeklySummary]);
+  
+  const allProjectsList = useMemo(() => {
+    return [...projects].sort((a, b) => a.name.localeCompare(b.name));
+  }, [projects]);
+  const hasProjectOptions = allProjectsList.length > 0;
+
+  const projectMatchesFilter = (name: string) => {
+    if (!selectedProjectFilter || selectedProjectFilter === 'Semua Proyek') return true;
+    if (selectedProjectFilter === 'Lain - Lain') {
+      return !['mahakam', 'bontang', 'blora'].some(keyword =>
+        name.toLowerCase().includes(keyword)
+      );
+    }
+    return name.toLowerCase().includes(selectedProjectFilter.toLowerCase());
+  };
+
   // Filter projects based on selection
   const filteredProjects = useMemo(() => {
-    if (!selectedPIC && !selectedProject) return projects;
     return projects.filter(p => {
       if (selectedPIC && p.pic !== selectedPIC) return false;
       if (selectedProject && p.id !== selectedProject) return false;
+      if (!projectMatchesFilter(p.name)) return false;
       return true;
     });
-  }, [projects, selectedPIC, selectedProject]);
+  }, [projects, selectedPIC, selectedProject, selectedProjectFilter]);
+
+  const activeProjectLabel = useMemo(() => {
+    if (selectedProject) {
+      const proj = projects.find(p => p.id === selectedProject);
+      return proj ? proj.name : 'Proyek dipilih';
+    }
+    if (selectedProjectFilter && selectedProjectFilter !== 'Semua Proyek') {
+      return `Filter: ${selectedProjectFilter}`;
+    }
+    return 'Semua Proyek';
+  }, [selectedProject, selectedProjectFilter, projects]);
 
   // Get projects for selected PIC
   const projectsForPIC = useMemo(() => {
@@ -40,10 +79,35 @@ export const Dashboard: React.FC = () => {
     return projects.filter(p => p.pic === selectedPIC);
   }, [projects, selectedPIC]);
 
+  // Filter weekly data by year (if selected)
+  const filteredWeeks = useMemo(() => {
+    if (!selectedYear) return weeklySummary;
+    return weeklySummary.filter(w => w.year === selectedYear);
+  }, [weeklySummary, selectedYear]);
+
+  // Apply project filter to weekly data for charts (actuals aggregated from filtered projects)
+  const filteredWeeksWithProjects = useMemo(() => {
+    if (filteredProjects.length === 0 || filteredWeeks.length === 0) return filteredWeeks;
+
+    const actualMap = new Map<string, number>();
+    filteredProjects.forEach(project => {
+      project.activities.forEach(activity => {
+        Object.entries(activity.weeklyProgress).forEach(([weekLabel, value]) => {
+          actualMap.set(weekLabel, (actualMap.get(weekLabel) || 0) + value);
+        });
+      });
+    });
+
+    return filteredWeeks.map(week => ({
+      ...week,
+      actual: actualMap.get(week.week) ?? 0,
+    }));
+  }, [filteredWeeks, filteredProjects]);
+
   // Calculate metrics from CSV data or fallback to legacy data
-  const displayWeeklyData = weeklySummary.length > 0;
+  const displayWeeklyData = filteredWeeksWithProjects.length > 0;
   const currentData = displayWeeklyData 
-    ? weeklySummary[weeklySummary.length - 1]
+    ? filteredWeeksWithProjects[filteredWeeksWithProjects.length - 1]
     : null;
   
   const planVsActual = currentData 
@@ -73,37 +137,62 @@ export const Dashboard: React.FC = () => {
           </div>
           
           {/* Filters */}
-          {(projects.length > 0 || availablePICs.length > 0) && (
-            <div className="flex items-center gap-3">
-              <Filter size={18} className="text-slate-500" />
+          <div className="flex flex-wrap items-center gap-3">
+            <Filter size={18} className="text-slate-500" />
+
+            <select
+              value={selectedProject || ''}
+              onChange={(e) => setSelectedProject(e.target.value || null)}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              disabled={!hasProjectOptions}
+            >
+              <option value="">{hasProjectOptions ? 'All Projects' : 'No project data'}</option>
+              {allProjectsList.map(project => (
+                <option key={project.id} value={project.id}>
+                  {project.name} ({project.pic})
+                </option>
+              ))}
+            </select>
+
+            {projectFilters.length > 0 && (
               <select
-                value={selectedPIC || ''}
-                onChange={(e) => {
-                  setSelectedPIC(e.target.value || null);
-                  setSelectedProject(null); // Reset project when PIC changes
-                }}
+                value={selectedProjectFilter || 'Semua Proyek'}
+                onChange={(e) => setSelectedProjectFilter(e.target.value || null)}
                 className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
               >
-                <option value="">All PIC</option>
-                {availablePICs.map(pic => (
-                  <option key={pic} value={pic}>{pic}</option>
+                {projectFilters.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
                 ))}
               </select>
-              
-              {selectedPIC && projectsForPIC.length > 0 && (
-                <select
-                  value={selectedProject || ''}
-                  onChange={(e) => setSelectedProject(e.target.value || null)}
-                  className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
-                >
-                  <option value="">All Projects</option>
-                  {projectsForPIC.map(project => (
-                    <option key={project.id} value={project.id}>{project.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-          )}
+            )}
+
+            <select
+              value={selectedPIC || ''}
+              onChange={(e) => {
+                setSelectedPIC(e.target.value || null);
+                setSelectedProject(null); // Reset project when PIC changes
+              }}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            >
+              <option value="">All PIC</option>
+              {availablePICs.map(pic => (
+                <option key={pic} value={pic}>{pic}</option>
+              ))}
+            </select>
+
+            {availableYears.length > 0 && (
+              <select
+                value={selectedYear ?? ''}
+                onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : null)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              >
+                <option value="">All Years</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            )}
+          </div>
         </div>
       </div>
 
@@ -141,8 +230,11 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* S-Curve - Takes up 2/3 width */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-lg font-bold text-slate-800">Progress S-Curve</h3>
+          <div className="flex justify-between items-center mb-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-800">Progress S-Curve</h3>
+              <p className="text-sm text-slate-500">Menampilkan {activeProjectLabel} ({filteredProjects.length || projects.length} proyek)</p>
+            </div>
             <div className="flex gap-2">
                <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-medium rounded-full border border-orange-100">Baseline</span>
                <span className="px-3 py-1 bg-sky-50 text-sky-600 text-xs font-medium rounded-full border border-sky-100">Actual</span>
@@ -150,7 +242,7 @@ export const Dashboard: React.FC = () => {
           </div>
           <SCurveChart 
             data={displayWeeklyData ? undefined : sCurveData} 
-            weeklyData={displayWeeklyData ? weeklySummary : undefined}
+            weeklyData={displayWeeklyData ? filteredWeeksWithProjects : undefined}
             showWeekly={displayWeeklyData}
           />
         </div>
@@ -158,12 +250,38 @@ export const Dashboard: React.FC = () => {
         {/* PIC Distribution - Takes up 1/3 width */}
         <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col">
           <h3 className="text-lg font-bold text-slate-800 mb-2">Resource Allocation</h3>
-          <p className="text-sm text-slate-500 mb-4">Task distribution by Person In Charge (PIC)</p>
+          <p className="text-sm text-slate-500 mb-4">Task distribution by Person In Charge (PIC) untuk {activeProjectLabel.toLowerCase()}</p>
           <div className="flex-grow flex items-center justify-center">
             <PICDonutChart tasks={tasks} />
           </div>
         </div>
       </div>
+
+      {/* Power BI style weekly snapshot & timeline */}
+      {displayWeeklyData && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Proyek Aktif</p>
+              <p className="text-sm text-slate-700">{activeProjectLabel}</p>
+            </div>
+            <div className="flex flex-wrap gap-2 justify-end max-w-[70%]">
+              {filteredProjects.map(p => (
+                <span key={p.id} className="px-3 py-1 bg-slate-100 text-slate-800 rounded-full text-xs font-semibold border border-slate-200">
+                  {p.name}
+                </span>
+              ))}
+              {filteredProjects.length === 0 && (
+                <span className="text-xs text-slate-400">Tidak ada proyek sesuai filter</span>
+              )}
+            </div>
+          </div>
+          <WeeklySummaryTable weeklySummary={filteredWeeksWithProjects} />
+          {filteredProjects.length > 0 && (
+            <WeeklyTimeline weeks={filteredWeeksWithProjects} projects={filteredProjects} />
+          )}
+        </div>
+      )}
 
       {/* Detailed Task Table */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
