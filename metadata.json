@@ -1,0 +1,5 @@
+{
+  "name": "ProTrack Analytics",
+  "description": "A Power BI-style project visualization dashboard showing S-Curves, progress tracking, and resource allocation based on project schedules.",
+  "requestFramePermissions": []
+}
