@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, ReactNode, useEffect } from
 import { MonthlyData, TaskItem, ProjectData, WeeklyData } from '../types';
 import { INITIAL_SCURVE_DATA, INITIAL_TASKS } from '../constants';
 import { parseSCurveCSV, weeklyToMonthly } from '../utils/csvParser';
+import { supabase } from '../lib/supabaseClient';
 
 interface DataContextType {
   // Legacy data (untuk backward compatibility)
@@ -52,6 +53,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [selectedProjectFilter, setSelectedProjectFilter] = useState<string | null>('Semua Proyek');
   const [useManualSCurve, setUseManualSCurve] = useState<boolean>(false);
   const [csvLoaded, setCsvLoaded] = useState(false);
+  const [supabaseLoaded, setSupabaseLoaded] = useState(false);
 
   // Load CSV data automatically on mount
   useEffect(() => {
@@ -105,6 +107,108 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
     loadCSVData();
   }, [csvLoaded, projects.length]);
+
+  // Load data from Supabase if credentials available
+  useEffect(() => {
+    if (!supabase || supabaseLoaded) return;
+
+    const loadSupabase = async () => {
+      try {
+        // fetch projects with activities and weekly progress
+        const { data: projectData, error: projError } = await supabase
+          .from('protrack.projects')
+          .select(`
+            id, name, pic,
+            activities:activities (
+              id,
+              category,
+              sub_category,
+              activity,
+              start_week,
+              end_week,
+              weeklyProgress:activity_weekly_progress (week_index, week_label, year, value)
+            )
+          `);
+        if (projError) throw projError;
+
+        const mappedProjects: ProjectData[] = (projectData || []).map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          pic: p.pic,
+          activities: (p.activities || []).map((a: any) => {
+            const weeklyProgress: Record<string, number> = {};
+            (a.weeklyProgress || []).forEach((wp: any) => {
+              weeklyProgress[wp.week_label] = Number(wp.value) || 0;
+            });
+            return {
+              pic: p.pic,
+              project: p.name,
+              category: a.category || undefined,
+              subCategory: a.sub_category || undefined,
+              activity: a.activity,
+              weeklyProgress,
+              startWeek: a.start_week ?? undefined,
+              endWeek: a.end_week ?? undefined,
+            };
+          }),
+          weeklyBaseline: [],
+          weeklyActual: [],
+        }));
+
+        const { data: summaryData, error: summaryError } = await supabase
+          .from('protrack.weekly_summary')
+          .select('week_index, week_label, year, baseline, actual')
+          .order('week_index', { ascending: true });
+        if (summaryError) throw summaryError;
+
+        const mappedSummary: WeeklyData[] = (summaryData || []).map((row: any) => ({
+          week: row.week_label,
+          weekIndex: row.week_index,
+          year: row.year,
+          baseline: Number(row.baseline) || 0,
+          actual: Number(row.actual) || 0,
+        }));
+
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('protrack.tasks')
+          .select('*');
+        if (tasksError) throw tasksError;
+
+        const mappedTasks: TaskItem[] = (tasksData || []).map((t: any) => ({
+          id: t.id,
+          code: t.code,
+          activity: t.activity,
+          pic: t.pic,
+          weight: Number(t.weight) || 0,
+          progress: Number(t.progress) || 0,
+          status: t.status,
+          startDate: t.start_date || new Date().toISOString(),
+          endDate: t.end_date || new Date().toISOString(),
+          projectId: t.project_id || undefined,
+          startYear: t.start_year || undefined,
+          startMonth: t.start_month || undefined,
+          startWeek: t.start_week || undefined,
+        }));
+
+        setProjects(mappedProjects);
+        if (mappedSummary.length > 0) {
+          setWeeklySummary(mappedSummary);
+          const monthlyData = weeklyToMonthly(mappedSummary);
+          if (monthlyData.length > 0) {
+            setSCurveData(monthlyData);
+          }
+        }
+        if (mappedTasks.length > 0) {
+          setTasks(mappedTasks);
+        }
+        setSupabaseLoaded(true);
+      } catch (err) {
+        console.warn('Supabase load failed, fallback to CSV/default:', err);
+      }
+    };
+
+    loadSupabase();
+  }, [supabaseLoaded]);
 
   const updateSCurveData = (data: MonthlyData[]) => {
     setSCurveData(data);
