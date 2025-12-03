@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { TaskItem, MonthlyData } from '../types';
-import { Save, Plus, Trash2, Edit2, X } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, X, Upload, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
+import { parseSCurveCSV, weeklyToMonthly } from '../utils/csvParser';
 
 export const ManageData: React.FC = () => {
-  const { tasks, sCurveData, updateTasks, updateSCurveData } = useData();
+  const { 
+    tasks, 
+    sCurveData, 
+    projects,
+    weeklySummary,
+    updateTasks, 
+    updateSCurveData,
+    setProjects,
+    setWeeklySummary,
+  } = useData();
   const [editingTask, setEditingTask] = useState<string | null>(null);
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Local state for S-Curve inputs to handle changes before save if needed, 
   // but for this demo, we'll edit directly.
@@ -21,6 +33,46 @@ export const ManageData: React.FC = () => {
     updateSCurveData(updated);
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validasi file CSV
+    if (!file.name.endsWith('.csv')) {
+      setImportStatus({ type: 'error', message: 'File harus berformat CSV' });
+      return;
+    }
+
+    try {
+      const text = await file.text();
+      const parsed = parseSCurveCSV(text);
+      
+      // Update projects dan weekly summary
+      setProjects(parsed.projects);
+      setWeeklySummary(parsed.summaryBaseline);
+      
+      // Convert weekly to monthly untuk backward compatibility
+      const monthlyData = weeklyToMonthly(parsed.summaryBaseline);
+      updateSCurveData(monthlyData);
+      
+      setImportStatus({ 
+        type: 'success', 
+        message: `Berhasil mengimpor ${parsed.projects.length} proyek dengan ${parsed.summaryBaseline.length} data mingguan` 
+      });
+      
+      // Reset file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    } catch (error) {
+      console.error('Error parsing CSV:', error);
+      setImportStatus({ 
+        type: 'error', 
+        message: `Error: ${error instanceof Error ? error.message : 'Gagal memproses file CSV'}` 
+      });
+    }
+  };
+
   return (
     <div className="p-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-20">
       <div className="flex justify-between items-center mb-8">
@@ -28,11 +80,64 @@ export const ManageData: React.FC = () => {
           <h1 className="text-2xl font-bold text-slate-900">Manage Data</h1>
           <p className="text-slate-500">Update project schedules, progress, and S-Curve metrics.</p>
         </div>
-        <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm">
-          <Save size={18} />
-          Save Changes
-        </button>
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".csv"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="csv-upload"
+          />
+          <label
+            htmlFor="csv-upload"
+            className="flex items-center gap-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-lg font-medium transition-colors shadow-sm cursor-pointer"
+          >
+            <Upload size={18} />
+            Import CSV
+          </label>
+          <button className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm">
+            <Save size={18} />
+            Save Changes
+          </button>
+        </div>
       </div>
+
+      {/* Import Status */}
+      {importStatus.type && (
+        <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
+          importStatus.type === 'success' 
+            ? 'bg-green-50 border border-green-200 text-green-800' 
+            : 'bg-red-50 border border-red-200 text-red-800'
+        }`}>
+          {importStatus.type === 'success' ? (
+            <CheckCircle2 size={20} className="text-green-600" />
+          ) : (
+            <AlertCircle size={20} className="text-red-600" />
+          )}
+          <span className="text-sm font-medium">{importStatus.message}</span>
+        </div>
+      )}
+
+      {/* Info Projects */}
+      {projects.length > 0 && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center gap-2 mb-2">
+            <FileText size={18} className="text-blue-600" />
+            <h3 className="font-semibold text-blue-900">Data dari CSV</h3>
+          </div>
+          <p className="text-sm text-blue-700">
+            {projects.length} proyek terdeteksi • {weeklySummary.length} data mingguan tersedia
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {projects.map(project => (
+              <span key={project.id} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                {project.pic}: {project.name}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
         

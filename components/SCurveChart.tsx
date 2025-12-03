@@ -10,11 +10,13 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { MonthlyData } from '../types';
+import { MonthlyData, WeeklyData } from '../types';
 import { COLORS } from '../constants';
 
 interface Props {
-  data: MonthlyData[];
+  data?: MonthlyData[];
+  weeklyData?: WeeklyData[];
+  showWeekly?: boolean;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -39,13 +41,41 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const SCurveChart: React.FC<Props> = ({ data }) => {
+export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false }) => {
+  // Convert weekly data to chart format
+  const chartData = showWeekly && weeklyData 
+    ? weeklyData.map(w => ({
+        period: w.week,
+        plan: w.baseline,
+        actual: w.actual,
+      }))
+    : data?.map(d => ({
+        period: d.month,
+        plan: d.plan,
+        actual: d.actual,
+      })) || [];
+
+  // Untuk weekly data, kita perlu mengurangi jumlah tick yang ditampilkan
+  const xAxisConfig = showWeekly 
+    ? {
+        dataKey: "period",
+        angle: -45,
+        textAnchor: "end",
+        height: 100,
+        interval: 3, // Tampilkan setiap 4 minggu
+        tick: { fill: '#64748b', fontSize: 10 },
+      }
+    : {
+        dataKey: "period",
+        tick: { fill: '#64748b', fontSize: 12 },
+      };
+
   return (
     <div className="w-full h-[400px]">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
-          data={data}
-          margin={{ top: 20, right: 30, left: 0, bottom: 0 }}
+          data={chartData}
+          margin={{ top: 20, right: 30, left: 0, bottom: showWeekly ? 80 : 0 }}
         >
           <defs>
             <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
@@ -55,11 +85,10 @@ export const SCurveChart: React.FC<Props> = ({ data }) => {
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
           <XAxis 
-            dataKey="month" 
+            {...xAxisConfig}
             axisLine={false}
             tickLine={false}
-            tick={{ fill: '#64748b', fontSize: 12 }}
-            dy={10}
+            dy={showWeekly ? 60 : 10}
           />
           <YAxis 
             axisLine={false}
@@ -82,7 +111,7 @@ export const SCurveChart: React.FC<Props> = ({ data }) => {
             dataKey="plan"
             stroke={COLORS.planLine}
             strokeWidth={3}
-            dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+            dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
           />
 
@@ -99,7 +128,7 @@ export const SCurveChart: React.FC<Props> = ({ data }) => {
             dataKey="actual"
             stroke={COLORS.actualLine}
             strokeWidth={3}
-            dot={{ r: 4, strokeWidth: 2, fill: '#fff' }}
+            dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
           />
         </ComposedChart>
