@@ -49,6 +49,9 @@ export interface TaskItem {
   startDate: string;
   endDate: string;
   projectId?: string; // Link ke project jika ada
+  startYear?: number;
+  startMonth?: string;
+  startWeek?: number; // 1-4
 }
 
 export interface KPIMetric {

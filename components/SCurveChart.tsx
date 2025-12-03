@@ -17,6 +17,7 @@ interface Props {
   data?: MonthlyData[];
   weeklyData?: WeeklyData[];
   showWeekly?: boolean;
+  yearLabel?: string | null;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -41,16 +42,16 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false }) => {
+export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false, yearLabel }) => {
   // Convert weekly data to chart format
   const chartData = showWeekly && weeklyData 
     ? weeklyData.map(w => ({
-        period: w.week,
+        period: `${w.week} (${w.year})`,
         plan: w.baseline,
         actual: w.actual,
       }))
     : data?.map(d => ({
-        period: d.month,
+        period: `${d.month}${yearLabel ? ` (${yearLabel})` : ''}`,
         plan: d.plan,
         actual: d.actual,
       })) || [];

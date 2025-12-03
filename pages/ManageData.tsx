@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useData } from '../context/DataContext';
 import { TaskItem, MonthlyData } from '../types';
-import { Save, Plus, Trash2, Edit2, X, Upload, FileText, CheckCircle2, AlertCircle, PlusCircle } from 'lucide-react';
+import { Save, Plus, Trash2, Edit2, X, Upload, FileText, CheckCircle2, AlertCircle, PlusCircle, Calendar } from 'lucide-react';
 import { parseSCurveCSV, weeklyToMonthly } from '../utils/csvParser';
 
 export const ManageData: React.FC = () => {
@@ -12,6 +12,8 @@ export const ManageData: React.FC = () => {
     weeklySummary,
     projectFilters,
     addProjectFilter,
+    selectedYear,
+    setSelectedYear,
     updateTasks, 
     updateSCurveData,
     setProjects,
@@ -21,6 +23,8 @@ export const ManageData: React.FC = () => {
   const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error' | null; message: string }>({ type: null, message: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [newProjectFilter, setNewProjectFilter] = useState('');
+  const availableYears = Array.from(new Set(weeklySummary.map(w => w.year))).sort();
+  const monthOptions = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   
   // Local state for S-Curve inputs to handle changes before save if needed, 
   // but for this demo, we'll edit directly.
@@ -28,6 +32,32 @@ export const ManageData: React.FC = () => {
   const handleTaskChange = (id: string, field: keyof TaskItem, value: any) => {
     const updated = tasks.map(t => t.id === id ? { ...t, [field]: value } : t);
     updateTasks(updated);
+  };
+
+  const handleAddTask = () => {
+    const newTask: TaskItem = {
+      id: `task-${Date.now()}`,
+      code: 'NEW',
+      activity: 'New Activity',
+      pic: 'DANTA',
+      status: 'Not Started',
+      weight: 0,
+      progress: 0,
+      startDate: new Date().toISOString().substring(0, 10),
+      endDate: new Date().toISOString().substring(0, 10),
+      startYear: new Date().getFullYear(),
+      startMonth: monthOptions[new Date().getMonth()],
+      startWeek: 1,
+    };
+    const updated = [...tasks, newTask];
+    updateTasks(updated);
+    setEditingTask(newTask.id);
+  };
+
+  const handleDeleteTask = (id: string) => {
+    const updated = tasks.filter(t => t.id !== id);
+    updateTasks(updated);
+    if (editingTask === id) setEditingTask(null);
   };
 
   const handleSCurveChange = (month: string, field: 'plan' | 'actual', value: string) => {
@@ -89,6 +119,21 @@ export const ManageData: React.FC = () => {
           <p className="text-slate-500">Update project schedules, progress, and S-Curve metrics.</p>
         </div>
         <div className="flex items-center gap-3">
+          {availableYears.length > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+              <Calendar size={16} className="text-slate-500" />
+              <select
+                value={selectedYear ?? ''}
+                onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : null)}
+                className="outline-none"
+              >
+                <option value="">Semua Tahun</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -184,7 +229,7 @@ export const ManageData: React.FC = () => {
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm flex flex-col">
           <div className="p-6 border-b border-slate-100">
             <h3 className="text-lg font-bold text-slate-800">S-Curve Metrics</h3>
-            <p className="text-sm text-slate-500">Update Plan vs Actual percentages per month.</p>
+            <p className="text-sm text-slate-500">Update Plan vs Actual percentages per month. Tahun: {selectedYear ?? 'Semua'}</p>
           </div>
           <div className="p-0 overflow-x-auto">
             <table className="w-full text-sm">
@@ -235,7 +280,10 @@ export const ManageData: React.FC = () => {
               <h3 className="text-lg font-bold text-slate-800">Activity Data</h3>
               <p className="text-sm text-slate-500">Modify task details, owners, and progress.</p>
              </div>
-             <button className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors">
+             <button 
+               onClick={handleAddTask}
+               className="text-indigo-600 hover:bg-indigo-50 p-2 rounded-lg transition-colors"
+             >
                <Plus size={20} />
              </button>
           </div>
@@ -248,6 +296,9 @@ export const ManageData: React.FC = () => {
                   <th className="px-4 py-3 text-left font-semibold text-slate-600">Activity</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600 w-24">PIC</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600 w-32">Status</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600 w-20">Year</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600 w-24">Month</th>
+                  <th className="px-4 py-3 text-left font-semibold text-slate-600 w-16">Week</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600 w-24">Weight</th>
                   <th className="px-4 py-3 text-left font-semibold text-slate-600 w-24">Progress</th>
                   <th className="px-4 py-3 text-right font-semibold text-slate-600 w-20">Action</th>
@@ -302,6 +353,42 @@ export const ManageData: React.FC = () => {
                         </select>
                       </td>
                       <td className="px-4 py-3">
+                        <input
+                          type="number"
+                          min="2020"
+                          max="2100"
+                          disabled={!isEditing}
+                          value={task.startYear ?? ''}
+                          onChange={(e) => handleTaskChange(task.id, 'startYear', Number(e.target.value))}
+                          className={`w-full bg-transparent ${isEditing ? 'border-b border-indigo-500' : ''} outline-none`}
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          disabled={!isEditing}
+                          value={task.startMonth ?? ''}
+                          onChange={(e) => handleTaskChange(task.id, 'startMonth', e.target.value)}
+                          className={`w-full bg-transparent ${isEditing ? 'border-b border-indigo-500' : ''} outline-none appearance-none`}
+                        >
+                          <option value="">-</option>
+                          {monthOptions.map(m => (
+                            <option key={m} value={m}>{m}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select
+                          disabled={!isEditing}
+                          value={task.startWeek ?? 1}
+                          onChange={(e) => handleTaskChange(task.id, 'startWeek', Number(e.target.value))}
+                          className={`w-full bg-transparent ${isEditing ? 'border-b border-indigo-500' : ''} outline-none appearance-none`}
+                        >
+                          {[1,2,3,4].map(week => (
+                            <option key={week} value={week}>{week}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-3">
                         <input 
                           type="number"
                           disabled={!isEditing}
@@ -333,7 +420,10 @@ export const ManageData: React.FC = () => {
                             <button onClick={() => setEditingTask(task.id)} className="text-slate-400 hover:text-indigo-600 p-1">
                               <Edit2 size={16} />
                             </button>
-                            <button className="text-slate-400 hover:text-red-600 p-1">
+                            <button 
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="text-slate-400 hover:text-red-600 p-1"
+                            >
                               <Trash2 size={16} />
                             </button>
                           </div>

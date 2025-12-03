@@ -40,7 +40,14 @@ export const Dashboard: React.FC = () => {
   const allProjectsList = useMemo(() => {
     return [...projects].sort((a, b) => a.name.localeCompare(b.name));
   }, [projects]);
-  const hasProjectOptions = allProjectsList.length > 0;
+  const projectSelectOptions = useMemo(() => {
+    if (allProjectsList.length > 0) {
+      return allProjectsList.map(p => ({ value: p.id, label: p.name }));
+    }
+    // fallback to user-added filters when no project data
+    return projectFilters.map(name => ({ value: name, label: name }));
+  }, [allProjectsList, projectFilters]);
+  const hasProjectOptions = projectSelectOptions.length > 0;
 
   const projectMatchesFilter = (name: string) => {
     if (!selectedProjectFilter || selectedProjectFilter === 'Semua Proyek') return true;
@@ -230,20 +237,53 @@ export const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* S-Curve - Takes up 2/3 width */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
-          <div className="flex justify-between items-center mb-3">
+          <div className="flex flex-wrap justify-between items-start gap-3 mb-3">
             <div>
               <h3 className="text-lg font-bold text-slate-800">Progress S-Curve</h3>
-              <p className="text-sm text-slate-500">Menampilkan {activeProjectLabel} ({filteredProjects.length || projects.length} proyek)</p>
+              <p className="text-sm text-slate-500">Menampilkan {activeProjectLabel} ({filteredProjects.length || projects.length} proyek) • Tahun: {selectedYear ?? 'Semua'}</p>
             </div>
-            <div className="flex gap-2">
-               <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-medium rounded-full border border-orange-100">Baseline</span>
-               <span className="px-3 py-1 bg-sky-50 text-sky-600 text-xs font-medium rounded-full border border-sky-100">Actual</span>
+            <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={selectedProject || selectedProjectFilter || ''}
+              onChange={(e) => {
+                const val = e.target.value;
+                const isRealProject = allProjectsList.some(p => p.id === val);
+                if (isRealProject) {
+                  setSelectedProject(val || null);
+                  setSelectedProjectFilter(null);
+                } else {
+                  setSelectedProject(null);
+                  setSelectedProjectFilter(val || null);
+                }
+              }}
+              className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+            >
+              <option value="">{hasProjectOptions ? 'Semua Proyek' : 'Import/kelola proyek di Manage Data'}</option>
+              {projectSelectOptions.map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+              <select
+                value={selectedYear ?? ''}
+                onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : null)}
+                className="px-3 py-2 border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none"
+              >
+                <option value="">Semua Tahun</option>
+                {availableYears.map(year => (
+                  <option key={year} value={year}>{year}</option>
+                ))}
+              </select>
+              <div className="flex gap-2">
+                <span className="px-3 py-1 bg-orange-50 text-orange-600 text-xs font-medium rounded-full border border-orange-100">Baseline</span>
+                <span className="px-3 py-1 bg-sky-50 text-sky-600 text-xs font-medium rounded-full border border-sky-100">Actual</span>
+              </div>
             </div>
           </div>
           <SCurveChart 
             data={displayWeeklyData ? undefined : sCurveData} 
             weeklyData={displayWeeklyData ? filteredWeeksWithProjects : undefined}
             showWeekly={displayWeeklyData}
+            yearLabel={selectedYear ? selectedYear.toString() : 'Semua Tahun'}
           />
         </div>
 
