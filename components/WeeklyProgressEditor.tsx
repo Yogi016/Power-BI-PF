@@ -44,6 +44,29 @@ export const WeeklyProgressEditor: React.FC<WeeklyProgressEditorProps> = ({
     setLoading(true);
     const data = await fetchWeeklyProgressForActivity(activityId);
     
+    // Fetch activity details (start_date, end_date, weight)
+    let activityDetails: { startDate: string; endDate: string; weight: number } | null = null;
+    try {
+      const { supabase } = await import('../lib/supabaseClient');
+      if (supabase) {
+        const { data: activityData } = await supabase
+          .from('activities')
+          .select('start_date, end_date, weight')
+          .eq('id', activityId)
+          .single();
+        
+        if (activityData) {
+          activityDetails = {
+            startDate: activityData.start_date,
+            endDate: activityData.end_date,
+            weight: activityData.weight || 100,
+          };
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching activity details:', error);
+    }
+    
     // Generate weeks based on selected month/year
     const weeks: WeekData[] = [];
     const monthName = months[selectedMonth - 1].substring(0, 3); // Jan, Feb, etc.
@@ -55,15 +78,47 @@ export const WeeklyProgressEditor: React.FC<WeeklyProgressEditorProps> = ({
         d.year === selectedYear
       );
       
-      // Calculate plan: distribute evenly across weeks
-      const planPerWeek = 100 / (12 * 4); // Assuming 12 months * 4 weeks = 48 weeks
-      const cumulativePlan = ((selectedMonth - 1) * 4 + i) * planPerWeek;
+      // Calculate plan based on activity duration
+      let plan = 0;
+      if (activityDetails && activityDetails.startDate && activityDetails.endDate) {
+        const startDate = new Date(activityDetails.startDate);
+        const endDate = new Date(activityDetails.endDate);
+        
+        // Calculate week date range (approximate: week 1 = days 1-7, week 2 = days 8-14, etc)
+        const weekStartDay = (i - 1) * 7 + 1;
+        const weekEndDay = i * 7;
+        const weekStartDate = new Date(selectedYear, selectedMonth - 1, weekStartDay);
+        const weekEndDate = new Date(selectedYear, selectedMonth - 1, weekEndDay);
+        
+        // Check if this week is within activity duration
+        if (weekEndDate >= startDate && weekStartDate <= endDate) {
+          // Calculate total weeks in activity
+          const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+          const totalWeeks = Math.ceil(totalDays / 7);
+          
+          // Calculate which week this is in the activity (1-based)
+          const weeksSinceStart = Math.floor((weekStartDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24 * 7)) + 1;
+          
+          if (weeksSinceStart > 0 && weeksSinceStart <= totalWeeks) {
+            // S-curve distribution: slow start, fast middle, slow end
+            // Using cumulative percentage based on S-curve formula
+            const progress = weeksSinceStart / totalWeeks;
+            const sCurveValue = 1 / (1 + Math.exp(-10 * (progress - 0.5))); // Sigmoid function
+            plan = sCurveValue * (activityDetails.weight || 100);
+          }
+        }
+      } else {
+        // Fallback: simple linear distribution if no dates
+        const planPerWeek = 100 / (12 * 4);
+        const cumulativePlan = ((selectedMonth - 1) * 4 + i) * planPerWeek;
+        plan = Math.min(cumulativePlan, 100);
+      }
       
       weeks.push({
         weekLabel,
-        weekIndex: (selectedMonth - 1) * 4 + i, // Global week index
+        weekIndex: (selectedMonth - 1) * 4 + i,
         year: selectedYear,
-        plan: Math.min(cumulativePlan, 100),
+        plan: Math.min(Math.max(plan, 0), 100), // Clamp between 0-100
         actual: existing?.progressValue || 0,
       });
     }

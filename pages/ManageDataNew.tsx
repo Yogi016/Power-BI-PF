@@ -29,6 +29,9 @@ export const ManageDataNew: React.FC = () => {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  
+  // Delete confirmation state
+  const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
 
   // Form state
   const [formData, setFormData] = useState<Partial<Project>>({
@@ -42,6 +45,13 @@ export const ManageDataNew: React.FC = () => {
     status: 'active',
     budget: undefined,
   });
+
+  // Activities state for the project being created/edited
+  const [activities, setActivities] = useState<Array<{
+    code: string;
+    activityName: string;
+    weight: number;
+  }>>([]);
 
   // Load projects
   useEffect(() => {
@@ -74,18 +84,41 @@ export const ManageDataNew: React.FC = () => {
       status: 'active',
       budget: undefined,
     });
+    setActivities([]);
   };
 
-  const handleEdit = (project: Project) => {
+  const handleEdit = async (project: Project) => {
     setIsCreating(false);
     setEditingProject(project);
     setFormData(project);
+    
+    // Load existing activities
+    try {
+      const { supabase } = await import('../lib/supabaseClient');
+      if (supabase) {
+        const { data } = await supabase
+          .from('activities')
+          .select('code, activity_name, weight')
+          .eq('project_id', project.id);
+        
+        if (data) {
+          setActivities(data.map(a => ({
+            code: a.code,
+            activityName: a.activity_name,
+            weight: a.weight || 0,
+          })));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading activities:', error);
+    }
   };
 
   const handleCancel = () => {
     setIsCreating(false);
     setEditingProject(null);
     setFormData({});
+    setActivities([]);
   };
 
   const handleSave = async () => {
@@ -94,9 +127,29 @@ export const ManageDataNew: React.FC = () => {
       return;
     }
 
+    // Validate activities total weight
+    const totalWeight = activities.reduce((sum, a) => sum + a.weight, 0);
+    if (activities.length > 0 && Math.abs(totalWeight - 100) > 0.1) {
+      showNotification('error', `Total bobot activities harus 100% (saat ini: ${totalWeight.toFixed(1)}%)`);
+      return;
+    }
+
     if (isCreating) {
       const newProject = await createProject(formData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
       if (newProject) {
+        // Save activities
+        if (activities.length > 0) {
+          const { createActivity } = await import('../lib/supabase');
+          for (const activity of activities) {
+            await createActivity(newProject.id, {
+              code: activity.code,
+              activityName: activity.activityName,
+              pic: formData.pic || '', // Use project PIC
+              weight: activity.weight,
+              status: 'not-started',
+            });
+          }
+        }
         showNotification('success', 'Project berhasil dibuat');
         loadProjects();
         handleCancel();
@@ -106,6 +159,26 @@ export const ManageDataNew: React.FC = () => {
     } else if (editingProject) {
       const success = await updateProject(editingProject.id, formData);
       if (success) {
+        // Update activities (delete all and recreate for simplicity)
+        const { supabase } = await import('../lib/supabaseClient');
+        const { createActivity } = await import('../lib/supabase');
+        
+        if (supabase) {
+          // Delete existing activities
+          await supabase.from('activities').delete().eq('project_id', editingProject.id);
+          
+          // Create new activities
+          for (const activity of activities) {
+            await createActivity(editingProject.id, {
+              code: activity.code,
+              activityName: activity.activityName,
+              pic: formData.pic || editingProject.pic, // Use project PIC
+              weight: activity.weight,
+              status: 'not-started',
+            });
+          }
+        }
+        
         showNotification('success', 'Project berhasil diupdate');
         loadProjects();
         handleCancel();
@@ -116,17 +189,39 @@ export const ManageDataNew: React.FC = () => {
   };
 
   const handleDelete = async (projectId: string, projectName: string) => {
-    if (!confirm(`Yakin ingin menghapus project "${projectName}"? Semua data terkait akan terhapus.`)) {
-      return;
-    }
+    setDeleteConfirm({ projectId, projectName });
+  };
 
-    const success = await deleteProject(projectId);
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+
+    const success = await deleteProject(deleteConfirm.projectId);
     if (success) {
       showNotification('success', 'Project berhasil dihapus');
       loadProjects();
     } else {
       showNotification('error', 'Gagal menghapus project');
     }
+    setDeleteConfirm(null);
+  };
+
+  const cancelDelete = () => {
+    setDeleteConfirm(null);
+  };
+
+  // Activity management functions
+  const addActivity = () => {
+    setActivities([...activities, { code: '', activityName: '', weight: 0 }]);
+  };
+
+  const updateActivity = (index: number, field: string, value: any) => {
+    const updated = [...activities];
+    updated[index] = { ...updated[index], [field]: value };
+    setActivities(updated);
+  };
+
+  const removeActivity = (index: number) => {
+    setActivities(activities.filter((_, i) => i !== index));
   };
 
   if (loading) {
@@ -156,6 +251,43 @@ export const ManageDataNew: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Delete Confirmation Modal */}
+        {deleteConfirm && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                  <AlertCircle size={24} className="text-red-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Konfirmasi Hapus</h3>
+                  <p className="text-sm text-slate-600">Tindakan ini tidak dapat dibatalkan</p>
+                </div>
+              </div>
+              
+              <p className="text-slate-700 mb-6">
+                Yakin ingin menghapus project <strong>"{deleteConfirm.projectName}"</strong>? 
+                Semua data terkait (activities, progress, S-Curve) akan terhapus.
+              </p>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Ya, Hapus
+                </button>
+                <button
+                  onClick={cancelDelete}
+                  className="flex-1 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Notification */}
         {notification && (
@@ -293,6 +425,103 @@ export const ManageDataNew: React.FC = () => {
                   placeholder="200000000"
                 />
               </div>
+            </div>
+
+            {/* Activities Section */}
+            <div className="mt-6 border-t border-slate-200 pt-6">
+              <div className="flex justify-between items-center mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Activities</h3>
+                  <p className="text-sm text-slate-600">Tambahkan kegiatan untuk project ini (opsional)</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addActivity}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                >
+                  <Plus size={16} />
+                  Tambah Activity
+                </button>
+              </div>
+
+              {activities.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Kode</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Nama Activity</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
+                        <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {activities.map((activity, index) => (
+                        <tr key={index} className="hover:bg-slate-50">
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={activity.code}
+                              onChange={(e) => updateActivity(index, 'code', e.target.value)}
+                              className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              placeholder="A"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="text"
+                              value={activity.activityName}
+                              onChange={(e) => updateActivity(index, 'activityName', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              placeholder="Nama kegiatan"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="number"
+                              min="0"
+                              max="100"
+                              step="0.1"
+                              value={activity.weight}
+                              onChange={(e) => updateActivity(index, 'weight', parseFloat(e.target.value) || 0)}
+                              className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              placeholder="0"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-center">
+                            <button
+                              type="button"
+                              onClick={() => removeActivity(index)}
+                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                      <tr className="bg-slate-50 font-semibold">
+                        <td colSpan={2} className="px-3 py-2 text-right">Total Bobot:</td>
+                        <td className="px-3 py-2">
+                          <span className={`${
+                            Math.abs(activities.reduce((sum, a) => sum + a.weight, 0) - 100) < 0.1
+                              ? 'text-green-600'
+                              : 'text-red-600'
+                          }`}>
+                            {activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%
+                          </span>
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {activities.length === 0 && (
+                <div className="text-center py-8 text-slate-500 text-sm border-2 border-dashed border-slate-200 rounded-lg">
+                  Belum ada activity. Klik "Tambah Activity" untuk menambahkan.
+                </div>
+              )}
             </div>
 
             <div className="flex gap-3 mt-6">
