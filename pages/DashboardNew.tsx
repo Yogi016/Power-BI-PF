@@ -4,8 +4,10 @@ import { ProgressMetrics } from '../components/ProgressMetrics';
 import { SCurveChart } from '../components/SCurveChart';
 import { TimelineSelector } from '../components/TimelineSelector';
 import { ProjectSelector } from '../components/ProjectSelector';
+import { FilterPanel } from '../components/FilterPanel';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
+import { FilterState, applyFilters, getDefaultFilters, saveFilters, loadFilters } from '../lib/filterUtils';
 import { Loader2, TrendingUp } from 'lucide-react';
 
 export const DashboardNew: React.FC = () => {
@@ -17,6 +19,17 @@ export const DashboardNew: React.FC = () => {
   const [sCurveData, setSCurveData] = useState<SCurveDataPoint[]>([]);
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  // Filters state
+  const [filters, setFilters] = useState<FilterState>(() => {
+    const saved = loadFilters('dashboardFilters');
+    return saved || getDefaultFilters();
+  });
+
+  // Save filters to localStorage when changed
+  useEffect(() => {
+    saveFilters('dashboardFilters', filters);
+  }, [filters]);
 
   // Load projects on mount
   useEffect(() => {
@@ -69,10 +82,15 @@ export const DashboardNew: React.FC = () => {
     loadMetrics();
   }, [selectedProjectId]);
 
+  // Apply filters to projects
+  const filteredProjects = useMemo(() => {
+    return applyFilters(projects, filters);
+  }, [projects, filters]);
+
   // Get selected project
   const selectedProject = useMemo(() => {
-    return projects.find(p => p.id === selectedProjectId) || null;
-  }, [projects, selectedProjectId]);
+    return filteredProjects.find(p => p.id === selectedProjectId) || null;
+  }, [filteredProjects, selectedProjectId]);
 
   // Get available years from S-Curve data
   const availableYears = useMemo(() => {
@@ -156,10 +174,16 @@ export const DashboardNew: React.FC = () => {
         {/* Project Header */}
         {selectedProject && <ProjectHeader project={selectedProject} />}
 
-        {/* Project Selector & Timeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ProjectSelector
+        {/* Filters & Project Selector */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <FilterPanel
             projects={projects}
+            filters={filters}
+            onFiltersChange={setFilters}
+          />
+          
+          <ProjectSelector
+            projects={filteredProjects}
             selectedProjectId={selectedProjectId}
             onProjectChange={setSelectedProjectId}
           />

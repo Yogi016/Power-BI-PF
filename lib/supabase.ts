@@ -185,12 +185,20 @@ export async function fetchActivities(projectId: string): Promise<ActivityData[]
     if (error) throw error;
 
     return (data || []).map(row => ({
+      id: row.id,
+      code: row.code,
+      activityName: row.activity_name,
+      startDate: row.start_date || '',
+      endDate: row.end_date || '',
+      status: row.status || 'not-started',
       pic: row.pic,
-      project: '', // Will be filled by caller
+      weight: row.weight,
+      // Legacy fields for backward compatibility
+      project: '',
       category: row.category,
       subCategory: row.sub_category,
       activity: row.activity_name,
-      weeklyProgress: {}, // Will be filled by weekly_progress query
+      weeklyProgress: {},
       startWeek: row.start_week,
       endWeek: row.end_week,
     }));
@@ -347,6 +355,34 @@ export async function updateActivityStatus(
     return false;
   }
 }
+
+/**
+ * Update activity dates (for Gantt chart drag-to-reschedule)
+ */
+export async function updateActivityDates(
+  activityId: string,
+  startDate: string,
+  endDate: string
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('activities')
+      .update({ 
+        start_date: startDate,
+        end_date: endDate,
+      })
+      .eq('id', activityId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating activity dates:', error);
+    return false;
+  }
+}
+
 
 // =====================================================
 // CREATE OPERATIONS

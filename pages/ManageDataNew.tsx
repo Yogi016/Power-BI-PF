@@ -51,6 +51,8 @@ export const ManageDataNew: React.FC = () => {
     code: string;
     activityName: string;
     weight: number;
+    startDate: string;
+    endDate: string;
   }>>([]);
 
   // Load projects
@@ -98,7 +100,7 @@ export const ManageDataNew: React.FC = () => {
       if (supabase) {
         const { data } = await supabase
           .from('activities')
-          .select('code, activity_name, weight')
+          .select('code, activity_name, weight, start_date, end_date')
           .eq('project_id', project.id);
         
         if (data) {
@@ -106,6 +108,8 @@ export const ManageDataNew: React.FC = () => {
             code: a.code,
             activityName: a.activity_name,
             weight: a.weight || 0,
+            startDate: a.start_date || '',
+            endDate: a.end_date || '',
           })));
         }
       }
@@ -142,12 +146,14 @@ export const ManageDataNew: React.FC = () => {
           const { createActivity } = await import('../lib/supabase');
           for (const activity of activities) {
             await createActivity(newProject.id, {
-              code: activity.code,
-              activityName: activity.activityName,
-              pic: formData.pic || '', // Use project PIC
-              weight: activity.weight,
-              status: 'not-started',
-            });
+            code: activity.code,
+            activityName: activity.activityName,
+            pic: formData.pic || '',
+            weight: activity.weight,
+            status: 'not-started',
+            startDate: activity.startDate || null,
+            endDate: activity.endDate || null,
+          });
           }
         }
         showNotification('success', 'Project berhasil dibuat');
@@ -170,12 +176,14 @@ export const ManageDataNew: React.FC = () => {
           // Create new activities
           for (const activity of activities) {
             await createActivity(editingProject.id, {
-              code: activity.code,
-              activityName: activity.activityName,
-              pic: formData.pic || editingProject.pic, // Use project PIC
-              weight: activity.weight,
-              status: 'not-started',
-            });
+            code: activity.code,
+            activityName: activity.activityName,
+            pic: formData.pic || editingProject.pic,
+            weight: activity.weight,
+            status: 'not-started',
+            startDate: activity.startDate || null,
+            endDate: activity.endDate || null,
+          });
           }
         }
         
@@ -211,7 +219,7 @@ export const ManageDataNew: React.FC = () => {
 
   // Activity management functions
   const addActivity = () => {
-    setActivities([...activities, { code: '', activityName: '', weight: 0 }]);
+    setActivities([...activities, { code: '', activityName: '', weight: 0, startDate: '', endDate: '' }]);
   };
 
   const updateActivity = (index: number, field: string, value: any) => {
@@ -451,6 +459,8 @@ export const ManageDataNew: React.FC = () => {
                       <tr>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Kode</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Nama Activity</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Start Date</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">End Date</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
                         <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
                       </tr>
@@ -478,6 +488,22 @@ export const ManageDataNew: React.FC = () => {
                           </td>
                           <td className="px-3 py-2">
                             <input
+                              type="date"
+                              value={activity.startDate}
+                              onChange={(e) => updateActivity(index, 'startDate', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="date"
+                              value={activity.endDate}
+                              onChange={(e) => updateActivity(index, 'endDate', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            />
+                          </td>
+                          <td className="px-3 py-2">
+                            <input
                               type="number"
                               min="0"
                               max="100"
@@ -500,7 +526,7 @@ export const ManageDataNew: React.FC = () => {
                         </tr>
                       ))}
                       <tr className="bg-slate-50 font-semibold">
-                        <td colSpan={2} className="px-3 py-2 text-right">Total Bobot:</td>
+                        <td colSpan={4} className="px-3 py-2 text-right">Total Bobot:</td>
                         <td className="px-3 py-2">
                           <span className={`${
                             Math.abs(activities.reduce((sum, a) => sum + a.weight, 0) - 100) < 0.1

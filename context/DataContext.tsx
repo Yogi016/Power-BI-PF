@@ -116,7 +116,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       try {
         // fetch projects with activities and weekly progress
         const { data: projectData, error: projError } = await supabase
-          .from('protrack.projects')
+          .from('projects')
           .select(`
             id, name, pic,
             activities:activities (

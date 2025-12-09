@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { LayoutDashboard, Database, Settings, LogOut, Menu, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Database, Settings, LogOut, Menu, ChevronLeft, ChevronRight, BarChart3 } from 'lucide-react';
 import { PageView } from '../types';
 
 interface Props {
@@ -17,8 +17,8 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
       <aside className={`${collapsed ? 'w-20' : 'w-64'} bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20 transition-all duration-200`}>
         <div className="p-4 flex items-center gap-3 border-b border-slate-800 justify-between">
           <img
-            src="/pf-logo.png"
-            alt="PF"
+            src="/logo_putih.png"
+            alt="Logo"
             className={`${collapsed ? 'h-8 w-8 mx-auto' : 'h-8 w-auto'} object-contain`}
             loading="lazy"
           />
@@ -66,6 +66,18 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
           >
             <Menu size={20} className={activePage === PageView.WEEKLY_PROGRESS ? 'text-indigo-200' : 'text-slate-400 group-hover:text-white'} />
             <span className={`font-medium ${collapsed ? 'hidden' : 'block'}`}>Weekly Progress</span>
+          </button>
+
+          <button
+            onClick={() => onNavigate(PageView.GANTT)}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg w-full transition-all duration-200 group ${
+              activePage === PageView.GANTT
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' 
+              : 'hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <BarChart3 size={20} className={activePage === PageView.GANTT ? 'text-indigo-200' : 'text-slate-400 group-hover:text-white'} />
+            <span className={`font-medium ${collapsed ? 'hidden' : 'block'}`}>Gantt Chart</span>
           </button>
         </nav>
 

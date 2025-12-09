@@ -82,9 +82,10 @@ export interface KPIMetric {
 }
 
 export enum PageView {
-  DASHBOARD = 'DASHBOARD',
-  MANAGE_DATA = 'MANAGE_DATA',
-  WEEKLY_PROGRESS = 'WEEKLY_PROGRESS'
+  DASHBOARD = 'dashboard',
+  MANAGE_DATA = 'manage-data',
+  WEEKLY_PROGRESS = 'weekly-progress',
+  GANTT = 'gantt',
 }
 
 export interface ProjectFilterState {
