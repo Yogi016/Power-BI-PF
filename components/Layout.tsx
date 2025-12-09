@@ -55,6 +55,18 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
             <Database size={20} className={activePage === PageView.MANAGE_DATA ? 'text-indigo-200' : 'text-slate-400 group-hover:text-white'} />
             <span className={`font-medium ${collapsed ? 'hidden' : 'block'}`}>Manage Data</span>
           </button>
+
+          <button
+            onClick={() => onNavigate(PageView.WEEKLY_PROGRESS)}
+            className={`flex items-center gap-3 px-4 py-3 rounded-lg w-full transition-all duration-200 group ${
+              activePage === PageView.WEEKLY_PROGRESS
+              ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' 
+              : 'hover:bg-slate-800 hover:text-white'
+            }`}
+          >
+            <Menu size={20} className={activePage === PageView.WEEKLY_PROGRESS ? 'text-indigo-200' : 'text-slate-400 group-hover:text-white'} />
+            <span className={`font-medium ${collapsed ? 'hidden' : 'block'}`}>Weekly Progress</span>
+          </button>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
@@ -88,7 +100,7 @@ export const Layout: React.FC<Props> = ({ activePage, onNavigate, children }) =>
              <div className="flex items-center gap-3">
                <img src="/pf-logo.png" alt="PF" className="h-8 w-auto object-contain hidden sm:block" loading="lazy" />
                <h2 className="text-sm font-medium text-slate-500">
-                  Project / <span className="text-slate-900">Mahakam Phase 3</span>
+                  <span className="text-slate-900">Project Fungsi Lingkungan</span>
                </h2>
              </div>
           </div>

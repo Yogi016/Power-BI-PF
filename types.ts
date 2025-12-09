@@ -1,3 +1,23 @@
+// =====================================================
+// CORE INTERFACES
+// =====================================================
+
+// Project interface - Main project information
+export interface Project {
+  id: string;
+  name: string;
+  pic: string; // Person In Charge
+  description?: string; // Uraian Kegiatan/Program
+  category?: string;
+  location?: string;
+  startDate: string; // ISO date string
+  endDate: string; // ISO date string
+  status: 'active' | 'completed' | 'on-hold' | 'cancelled';
+  budget?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 // Legacy interface untuk backward compatibility
 export interface MonthlyData {
   month: string;
@@ -63,10 +83,42 @@ export interface KPIMetric {
 
 export enum PageView {
   DASHBOARD = 'DASHBOARD',
-  MANAGE_DATA = 'MANAGE_DATA'
+  MANAGE_DATA = 'MANAGE_DATA',
+  WEEKLY_PROGRESS = 'WEEKLY_PROGRESS'
 }
 
 export interface ProjectFilterState {
   options: string[];
   selected: string | null;
 }
+
+// S-Curve data point untuk chart
+export interface SCurveDataPoint {
+  periodLabel: string; // "Jan 2025" atau "Juni-1"
+  periodIndex: number;
+  year: number;
+  baseline: number; // Cumulative baseline %
+  actual: number; // Cumulative actual %
+  periodBaseline?: number; // Baseline untuk periode ini saja
+  periodActual?: number; // Actual untuk periode ini saja
+  variance?: number; // actual - baseline
+}
+
+// Project metrics untuk dashboard
+export interface ProjectMetrics {
+  totalActivities: number;
+  completedActivities: number;
+  inProgressActivities: number;
+  delayedActivities: number;
+  overallProgress: number; // %
+  plannedProgress: number; // %
+  variance: number; // actual - planned
+  daysRemaining: number;
+  completionRate: number; // %
+}
+
+// Activity status type
+export type ActivityStatus = 'not-started' | 'in-progress' | 'completed' | 'delayed';
+
+// Period type for timeline
+export type PeriodType = 'weekly' | 'monthly' | 'yearly';

@@ -93,12 +93,48 @@ export const INITIAL_TASKS: TaskItem[] = [
 ];
 
 export const COLORS = {
-  primary: '#0f172a', // Slate 900
-  secondary: '#64748b', // Slate 500
-  accent: '#3b82f6', // Blue 500
-  success: '#22c55e', // Green 500
-  warning: '#eab308', // Yellow 500
+  // Primary colors - Deep blue theme
+  primary: '#1e40af', // Blue 800
+  primaryLight: '#3b82f6', // Blue 500
+  primaryDark: '#1e3a8a', // Blue 900
+  
+  // Secondary colors - Emerald green
+  secondary: '#059669', // Emerald 600
+  secondaryLight: '#10b981', // Emerald 500
+  secondaryDark: '#047857', // Emerald 700
+  
+  // Accent colors
+  accent: '#f59e0b', // Amber 500
+  accentLight: '#fbbf24', // Amber 400
+  
+  // Status colors
+  success: '#10b981', // Emerald 500
+  warning: '#f59e0b', // Amber 500
   danger: '#ef4444', // Red 500
-  planLine: '#f97316', // Orange 500 (from PDF)
-  actualLine: '#0ea5e9', // Sky 500 (from PDF)
+  info: '#3b82f6', // Blue 500
+  
+  // Chart colors
+  planLine: '#f97316', // Orange 500 (baseline)
+  actualLine: '#0ea5e9', // Sky 500 (actual)
+  targetBar: '#c084fc', // Purple 400 (weekly target)
+  
+  // Neutral colors
+  slate50: '#f8fafc',
+  slate100: '#f1f5f9',
+  slate200: '#e2e8f0',
+  slate300: '#cbd5e1',
+  slate500: '#64748b',
+  slate700: '#334155',
+  slate800: '#1e293b',
+  slate900: '#0f172a',
+  
+  // Gradients
+  gradientPrimary: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
+  gradientSecondary: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+  gradientAccent: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
+  
+  // Background
+  bgLight: '#ffffff',
+  bgGray: '#f8fafc',
+  bgDark: '#0f172a',
 };
