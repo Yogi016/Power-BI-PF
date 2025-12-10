@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GanttChart } from '../components/GanttChart';
 import { fetchProjects, fetchActivities } from '../lib/supabase';
+import { exportToPDF, exportToExcel } from '../lib/exportUtils';
 import { Project } from '../types';
-import { Loader2, Calendar } from 'lucide-react';
+import { Loader2, Calendar, FileDown, FileSpreadsheet } from 'lucide-react';
 
 export const GanttPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [activities, setActivities] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const ganttRef = useRef<HTMLDivElement>(null);
 
   // Load projects
   useEffect(() => {
@@ -39,6 +42,79 @@ export const GanttPage: React.FC = () => {
     loadActivities();
   }, [selectedProjectId]);
 
+  // Export handlers
+  const handleExportPDF = async () => {
+    if (!selectedProject || activities.length === 0) {
+      alert('Tidak ada data untuk di-export');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const exportData = {
+        projectName: selectedProject.name,
+        pic: selectedProject.pic || '-',
+        activities: activities.map(a => ({
+          code: a.code || '-',
+          activityName: a.activityName || a.activity || '-',
+          startDate: a.startDate || '-',
+          endDate: a.endDate || '-',
+          status: a.status || 'not-started',
+          weight: a.weight || 0,
+          progress: a.progress,
+        })),
+        metrics: {
+          totalProgress: activities.reduce((sum, a) => sum + (a.progress || 0), 0) / activities.length,
+          completedActivities: activities.filter(a => a.status === 'completed').length,
+          totalActivities: activities.length,
+        },
+      };
+
+      await exportToPDF(exportData, ganttRef.current || undefined);
+    } catch (error) {
+      console.error('Export PDF error:', error);
+      alert('Gagal export PDF. Silakan coba lagi.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleExportExcel = () => {
+    if (!selectedProject || activities.length === 0) {
+      alert('Tidak ada data untuk di-export');
+      return;
+    }
+
+    setExporting(true);
+    try {
+      const exportData = {
+        projectName: selectedProject.name,
+        pic: selectedProject.pic || '-',
+        activities: activities.map(a => ({
+          code: a.code || '-',
+          activityName: a.activityName || a.activity || '-',
+          startDate: a.startDate || '-',
+          endDate: a.endDate || '-',
+          status: a.status || 'not-started',
+          weight: a.weight || 0,
+          progress: a.progress,
+        })),
+        metrics: {
+          totalProgress: activities.reduce((sum, a) => sum + (a.progress || 0), 0) / activities.length,
+          completedActivities: activities.filter(a => a.status === 'completed').length,
+          totalActivities: activities.length,
+        },
+      };
+
+      exportToExcel(exportData);
+    } catch (error) {
+      console.error('Export Excel error:', error);
+      alert('Gagal export Excel. Silakan coba lagi.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const selectedProject = projects.find(p => p.id === selectedProjectId);
 
   if (loading) {
@@ -68,12 +144,37 @@ export const GanttPage: React.FC = () => {
           </div>
           
           <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <label className="block text-sm font-semibold text-white mb-3 flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-              </svg>
-              Pilih Project
-            </label>
+            <div className="flex items-center justify-between mb-3">
+              <label className="block text-sm font-semibold text-white flex items-center gap-2">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+                </svg>
+                Pilih Project
+              </label>
+              
+              {/* Export Buttons */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleExportPDF}
+                  disabled={exporting || !selectedProjectId || activities.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
+                  title="Export to PDF"
+                >
+                  <FileDown size={16} />
+                  <span className="hidden sm:inline">PDF</span>
+                </button>
+                <button
+                  onClick={handleExportExcel}
+                  disabled={exporting || !selectedProjectId || activities.length === 0}
+                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
+                  title="Export to Excel"
+                >
+                  <FileSpreadsheet size={16} />
+                  <span className="hidden sm:inline">Excel</span>
+                </button>
+              </div>
+            </div>
+            
             <select
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(e.target.value)}
@@ -89,16 +190,18 @@ export const GanttPage: React.FC = () => {
         </div>
 
         {/* Gantt Chart */}
-        {selectedProjectId && (
-          <GanttChart
-            projectId={selectedProjectId}
-            activities={activities}
-            onActivityUpdate={() => {
-              // Reload activities after update
-              fetchActivities(selectedProjectId).then(setActivities);
-            }}
-          />
-        )}
+        <div ref={ganttRef}>
+          {selectedProjectId && (
+            <GanttChart
+              projectId={selectedProjectId}
+              activities={activities}
+              onActivityUpdate={() => {
+                // Reload activities after update
+                fetchActivities(selectedProjectId).then(setActivities);
+              }}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
