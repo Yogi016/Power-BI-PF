@@ -83,9 +83,10 @@ export interface KPIMetric {
 
 export enum PageView {
   DASHBOARD = 'dashboard',
-  MANAGE_DATA = 'manage-data',
-  WEEKLY_PROGRESS = 'weekly-progress',
+  MANAGE_DATA = 'manage_data',
+  WEEKLY_PROGRESS = 'weekly_progress',
   GANTT = 'gantt',
+  CALENDAR = 'calendar',
 }
 
 export interface ProjectFilterState {
@@ -123,3 +124,26 @@ export type ActivityStatus = 'not-started' | 'in-progress' | 'completed' | 'dela
 
 // Period type for timeline
 export type PeriodType = 'weekly' | 'monthly' | 'yearly';
+
+// Calendar Types
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: Date;
+  end: Date;
+  resource: {
+    activityId: string;
+    projectId: string;
+    projectName: string;
+    status: string;
+    pic: string;
+    code: string;
+    weight: number;
+  };
+}
+
+export enum CalendarViewMode {
+  MONTH = 'month',
+  WEEK = 'week',
+  DAY = 'day',
+}

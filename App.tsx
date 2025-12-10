@@ -7,6 +7,7 @@ import { ManageData } from './pages/ManageData';
 import { ManageDataNew } from './pages/ManageDataNew';
 import { WeeklyProgressPage } from './pages/WeeklyProgressPage';
 import { GanttPage } from './pages/GanttPage';
+import { CalendarPage } from './pages/CalendarPage';
 import { PageView } from './types';
 
 const App: React.FC = () => {
@@ -23,6 +24,8 @@ const App: React.FC = () => {
           <WeeklyProgressPage />
         ) : activePage === PageView.GANTT ? (
           <GanttPage />
+        ) : activePage === PageView.CALENDAR ? (
+          <CalendarPage />
         ) : (
           useNewManageData ? <ManageDataNew /> : <ManageData />
         )}
