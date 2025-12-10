@@ -149,6 +149,31 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden w-full lg:ml-0">
+        {/* Desktop Header */}
+        <header className="hidden lg:flex bg-white border-b border-slate-200 px-6 py-4 items-center justify-between shadow-sm">
+          <div className="flex items-center gap-4">
+            <img
+              src="/pf-logo.png"
+              alt="Pertamina"
+              className="h-10 w-auto object-contain"
+              loading="lazy"
+            />
+            <div>
+              <h1 className="text-lg font-bold text-slate-800">Project Fungsi Lingkungan</h1>
+              <p className="text-xs text-slate-500">Project Management Dashboard</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-sm font-bold text-slate-800">Admin User</p>
+              <p className="text-xs text-slate-500">Project Manager</p>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-blue-100 border-2 border-blue-200 flex items-center justify-center text-blue-700 font-bold">
+              AU
+            </div>
+          </div>
+        </header>
+
         {/* Mobile Header */}
         <header className="lg:hidden bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between sticky top-0 z-30 shadow-sm">
           <button
