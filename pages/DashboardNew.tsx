@@ -8,7 +8,8 @@ import { FilterPanel } from '../components/FilterPanel';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { FilterState, applyFilters, getDefaultFilters, saveFilters, loadFilters } from '../lib/filterUtils';
-import { Loader2, TrendingUp } from 'lucide-react';
+import { generateWeeklyReport } from '../lib/weeklyReportUtils';
+import { Loader2, TrendingUp, FileText } from 'lucide-react';
 
 export const DashboardNew: React.FC = () => {
   // State
@@ -19,6 +20,7 @@ export const DashboardNew: React.FC = () => {
   const [sCurveData, setSCurveData] = useState<SCurveDataPoint[]>([]);
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
+  const [generatingReport, setGeneratingReport] = useState(false);
   
   // Filters state
   const [filters, setFilters] = useState<FilterState>(() => {
@@ -99,33 +101,61 @@ export const DashboardNew: React.FC = () => {
     return Array.from(years).sort();
   }, [sCurveData]);
 
-  // Filter S-Curve data by year
-  const filteredSCurveData = useMemo(() => {
+  // Filter S-Curve data by selected year
+  const displayData = useMemo(() => {
     if (!selectedYear) return sCurveData;
     return sCurveData.filter(d => d.year === selectedYear);
   }, [sCurveData, selectedYear]);
 
+  // Calculate display metrics (aggregate if no project selected)
+  const displayMetrics = useMemo(() => {
+    if (selectedProject) return metrics || {
+      totalActivities: 0,
+      completedActivities: 0,
+      inProgressActivities: 0,
+      delayedActivities: 0,
+      overallProgress: 0,
+      plannedProgress: 0,
+      variance: 0,
+      daysRemaining: 0,
+      completionRate: 0,
+    };
+    
+    // Aggregate metrics from all filtered projects
+    // This is a simplified version - you might want more sophisticated aggregation
+    return null;
+  }, [selectedProject, metrics]);
+
+  // Handle weekly report generation
+  const handleGenerateReport = async () => {
+    if (!selectedProjectId) {
+      alert('Please select a project first');
+      return;
+    }
+
+    setGeneratingReport(true);
+    try {
+      await generateWeeklyReport(selectedProjectId);
+      alert('Weekly report generated successfully!');
+    } catch (error) {
+      console.error('Error generating report:', error);
+      alert('Failed to generate report. Please try again.');
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
+
   // Convert S-Curve data to chart format
   const chartData = useMemo(() => {
-    return filteredSCurveData.map(d => ({
+    return displayData.map(d => ({
       month: d.periodLabel,
       plan: d.baseline,
       actual: d.actual,
+      variance: d.variance,
+      daysRemaining: 0,
+      completionRate: 0,
     }));
-  }, [filteredSCurveData]);
-
-  // Default metrics if none available
-  const displayMetrics: ProjectMetrics = metrics || {
-    totalActivities: 0,
-    completedActivities: 0,
-    inProgressActivities: 0,
-    delayedActivities: 0,
-    overallProgress: 0,
-    plannedProgress: 0,
-    variance: 0,
-    daysRemaining: 0,
-    completionRate: 0,
-  };
+  }, [displayData]);
 
   if (loading) {
     return (
@@ -199,6 +229,27 @@ export const DashboardNew: React.FC = () => {
               availableYears={availableYears}
               onYearChange={setSelectedYear}
             />
+            
+            {/* Generate Weekly Report Button */}
+            {selectedProjectId && (
+              <button
+                onClick={handleGenerateReport}
+                disabled={generatingReport}
+                className="mt-4 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-lg disabled:cursor-not-allowed"
+              >
+                {generatingReport ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <FileText size={20} />
+                    Generate Weekly Report
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
