@@ -53,6 +53,7 @@ export const ManageDataNew: React.FC = () => {
     weight: number;
     startDate: string;
     endDate: string;
+    status: string;
   }>>([]);
 
   // Load projects
@@ -100,7 +101,7 @@ export const ManageDataNew: React.FC = () => {
       if (supabase) {
         const { data } = await supabase
           .from('activities')
-          .select('code, activity_name, weight, start_date, end_date')
+          .select('code, activity_name, weight, start_date, end_date, status')
           .eq('project_id', project.id);
         
         if (data) {
@@ -110,6 +111,7 @@ export const ManageDataNew: React.FC = () => {
             weight: a.weight || 0,
             startDate: a.start_date || '',
             endDate: a.end_date || '',
+            status: a.status || 'not-started',
           })));
         }
       }
@@ -150,7 +152,7 @@ export const ManageDataNew: React.FC = () => {
             activityName: activity.activityName,
             pic: formData.pic || '',
             weight: activity.weight,
-            status: 'not-started',
+            status: (activity.status || 'not-started') as 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold',
             startDate: activity.startDate || null,
             endDate: activity.endDate || null,
           });
@@ -180,7 +182,7 @@ export const ManageDataNew: React.FC = () => {
             activityName: activity.activityName,
             pic: formData.pic || editingProject.pic,
             weight: activity.weight,
-            status: 'not-started',
+            status: (activity.status || 'not-started') as 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold',
             startDate: activity.startDate || null,
             endDate: activity.endDate || null,
           });
@@ -219,7 +221,17 @@ export const ManageDataNew: React.FC = () => {
 
   // Activity management functions
   const addActivity = () => {
-    setActivities([...activities, { code: '', activityName: '', weight: 0, startDate: '', endDate: '' }]);
+    setActivities([
+      ...activities,
+      {
+        code: '',
+        activityName: '',
+        weight: 0,
+        startDate: '',
+        endDate: '',
+        status: 'not-started',
+      },
+    ]);
   };
 
   const updateActivity = (index: number, field: string, value: any) => {
@@ -461,6 +473,7 @@ export const ManageDataNew: React.FC = () => {
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Nama Activity</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Start Date</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">End Date</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Status</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
                         <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
                       </tr>
@@ -501,6 +514,19 @@ export const ManageDataNew: React.FC = () => {
                               onChange={(e) => updateActivity(index, 'endDate', e.target.value)}
                               className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                             />
+                          </td>
+                          <td className="px-3 py-2">
+                            <select
+                              value={activity.status || 'not-started'}
+                              onChange={(e) => updateActivity(index, 'status', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            >
+                              <option value="not-started">Belum Dimulai</option>
+                              <option value="in-progress">Sedang Berjalan</option>
+                              <option value="completed">Selesai</option>
+                              <option value="delayed">Terlambat</option>
+                              <option value="on-hold">Ditunda</option>
+                            </select>
                           </td>
                           <td className="px-3 py-2">
                             <input

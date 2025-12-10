@@ -507,7 +507,7 @@ export async function createActivity(
     endWeek?: number;
     startDate?: string;
     endDate?: string;
-    status?: 'not-started' | 'in-progress' | 'completed' | 'delayed';
+    status?: 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold';
   }
 ): Promise<boolean> {
   if (!supabase) return false;
