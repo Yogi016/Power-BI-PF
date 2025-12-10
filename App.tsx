@@ -16,7 +16,7 @@ const App: React.FC = () => {
 
   return (
     <DataProvider>
-      <Layout activePage={activePage} onNavigate={setActivePage}>
+      <Layout activePage={activePage} onPageChange={setActivePage}>
         {activePage === PageView.DASHBOARD ? (
           useNewDashboard ? <DashboardNew /> : <Dashboard />
         ) : activePage === PageView.WEEKLY_PROGRESS ? (

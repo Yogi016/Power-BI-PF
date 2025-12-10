@@ -129,48 +129,48 @@ export const GanttPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-[1800px] mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
+      <div className="max-w-[1800px] mx-auto space-y-4 sm:space-y-6">
         {/* Enhanced Project Selector */}
-        <div className="bg-gradient-to-r from-blue-600 to-emerald-600 rounded-xl p-6 shadow-lg">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center">
-              <Calendar size={24} className="text-white" />
+        <div className="bg-gradient-to-r from-blue-600 to-emerald-600 rounded-xl p-4 sm:p-6 shadow-lg">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
+              <Calendar size={20} className="sm:w-6 sm:h-6 text-white" />
             </div>
-            <div>
-              <h2 className="text-2xl font-bold text-white">Gantt Chart Timeline</h2>
-              <p className="text-blue-100 text-sm">Visualisasi timeline project dengan drag-to-reschedule</p>
+            <div className="flex-1">
+              <h2 className="text-xl sm:text-2xl font-bold text-white">Gantt Chart Timeline</h2>
+              <p className="text-blue-100 text-xs sm:text-sm">Visualisasi timeline project dengan drag-to-reschedule</p>
             </div>
           </div>
           
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-            <div className="flex items-center justify-between mb-3">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-white/20">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
               <label className="block text-sm font-semibold text-white flex items-center gap-2">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
                 </svg>
                 Pilih Project
               </label>
               
               {/* Export Buttons */}
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
                 <button
                   onClick={handleExportPDF}
                   disabled={exporting || !selectedProjectId || activities.length === 0}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
                   title="Export to PDF"
                 >
                   <FileDown size={16} />
-                  <span className="hidden sm:inline">PDF</span>
+                  <span>PDF</span>
                 </button>
                 <button
                   onClick={handleExportExcel}
                   disabled={exporting || !selectedProjectId || activities.length === 0}
-                  className="flex items-center gap-2 px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
+                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
                   title="Export to Excel"
                 >
                   <FileSpreadsheet size={16} />
-                  <span className="hidden sm:inline">Excel</span>
+                  <span>Excel</span>
                 </button>
               </div>
             </div>
@@ -178,7 +178,7 @@ export const GanttPage: React.FC = () => {
             <select
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full px-4 py-3 bg-white border-2 border-blue-200 rounded-lg text-slate-900 font-medium focus:ring-4 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all shadow-sm hover:shadow-md"
+              className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border-2 border-blue-200 rounded-lg text-slate-900 text-sm sm:text-base font-medium focus:ring-4 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all shadow-sm hover:shadow-md"
             >
               {projects.map(project => (
                 <option key={project.id} value={project.id} className="py-2">
