@@ -1206,3 +1206,93 @@ export async function deleteWorkDailyData(workProjectId: string, date: string): 
   }
 }
 
+// =====================================================
+// WORK PLAN SCHEDULE OPERATIONS
+// =====================================================
+
+import { WorkPlanSchedule } from '../types';
+
+/**
+ * Fetch work plan schedule for a project
+ */
+export async function fetchWorkPlanSchedule(workProjectId: string): Promise<WorkPlanSchedule[]> {
+  if (!supabase) {
+    console.warn('Supabase client not initialized');
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('work_plan_schedule')
+      .select('*')
+      .eq('work_project_id', workProjectId)
+      .order('day_index', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      id: row.id,
+      workProjectId: row.work_project_id,
+      dayIndex: row.day_index,
+      date: row.date,
+      dailyTarget: row.daily_target,
+      weight: parseFloat(row.weight),
+      planCumulative: row.plan_cumulative,
+    }));
+  } catch (error) {
+    console.error('Error fetching work plan schedule:', error);
+    return [];
+  }
+}
+
+/**
+ * Batch upsert work plan schedule
+ */
+export async function batchUpsertWorkPlanSchedule(
+  scheduleData: Omit<WorkPlanSchedule, 'id'>[]
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const records = scheduleData.map(s => ({
+      work_project_id: s.workProjectId,
+      day_index: s.dayIndex,
+      date: s.date,
+      daily_target: s.dailyTarget,
+      weight: s.weight,
+      plan_cumulative: s.planCumulative,
+    }));
+
+    const { error } = await supabase
+      .from('work_plan_schedule')
+      .upsert(records, {
+        onConflict: 'work_project_id,day_index'
+      });
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error batch upserting work plan schedule:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete all plan schedule for a project
+ */
+export async function deleteWorkPlanSchedule(workProjectId: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('work_plan_schedule')
+      .delete()
+      .eq('work_project_id', workProjectId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting work plan schedule:', error);
+    return false;
+  }
+}

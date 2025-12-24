@@ -195,3 +195,13 @@ export interface WorkMetrics {
   tambahanManpower: number;
 }
 
+// Daily plan schedule for defining target per day
+export interface WorkPlanSchedule {
+  id?: string;
+  workProjectId: string;
+  dayIndex: number;
+  date: string;
+  dailyTarget: number;
+  weight: number; // Percentage (0-100)
+  planCumulative: number;
+}

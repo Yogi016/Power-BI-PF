@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { WorkProject, WorkDailyData, WorkMetrics } from '../types';
+import { WorkProject, WorkDailyData, WorkMetrics, WorkPlanSchedule } from '../types';
 import { WorkSCurveChart } from '../components/WorkSCurveChart';
 import { 
   fetchWorkProjects, 
@@ -7,7 +7,9 @@ import {
   createWorkProject,
   updateWorkProject,
   deleteWorkProject,
-  upsertWorkDailyData
+  upsertWorkDailyData,
+  fetchWorkPlanSchedule,
+  batchUpsertWorkPlanSchedule
 } from '../lib/supabase';
 import { 
   Plus, 
@@ -117,6 +119,7 @@ export const WorkPage: React.FC = () => {
   // Projects and data
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [dailyDataMap, setDailyDataMap] = useState<Record<string, WorkDailyData[]>>({});
+  const [planScheduleMap, setPlanScheduleMap] = useState<Record<string, WorkPlanSchedule[]>>({}); // Plan schedule per project
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [useDemo, setUseDemo] = useState(false);
   
@@ -136,11 +139,14 @@ export const WorkPage: React.FC = () => {
     actionPlan: '',
   });
   
-  // Daily data form
+  // Plan schedule for form
+  const [formPlanSchedule, setFormPlanSchedule] = useState<WorkPlanSchedule[]>([]);
+  
+  // Daily data form - simplified: only input daily planting
   const [dailyFormData, setDailyFormData] = useState({
     date: '',
-    planCumulative: 0,
-    actualCumulative: 0,
+    dayIndex: 0,
+    dailyPlanting: 0, // User inputs daily planting, cumulative auto-calculated
   });
 
   // Delete confirmation
@@ -156,13 +162,19 @@ export const WorkPage: React.FC = () => {
         setProjects(projectsData);
         setUseDemo(false);
         
-        // Load daily data for all projects
+        // Load daily data and plan schedule for all projects
         const dailyMap: Record<string, WorkDailyData[]> = {};
+        const scheduleMap: Record<string, WorkPlanSchedule[]> = {};
+        
         for (const project of projectsData) {
           const dailyData = await fetchWorkDailyData(project.id);
           dailyMap[project.id] = dailyData;
+          
+          const schedule = await fetchWorkPlanSchedule(project.id);
+          scheduleMap[project.id] = schedule;
         }
         setDailyDataMap(dailyMap);
+        setPlanScheduleMap(scheduleMap);
         
         if (!selectedProjectId || !projectsData.find(p => p.id === selectedProjectId)) {
           setSelectedProjectId(projectsData[0].id);
@@ -210,16 +222,20 @@ export const WorkPage: React.FC = () => {
     [dailyDataMap, selectedProjectId]
   );
 
+  // Get plan schedule for selected project
+  const selectedPlanSchedule = useMemo(() => 
+    planScheduleMap[selectedProjectId] || [],
+    [planScheduleMap, selectedProjectId]
+  );
+
   // Calculate metrics
   const metrics = useMemo((): WorkMetrics | null => {
     if (!selectedProject || selectedDailyData.length === 0) return null;
 
     const actualData = selectedDailyData.filter(d => d.actualCumulative > 0);
     const latestActual = actualData[actualData.length - 1];
-    const latestPlan = selectedDailyData.find(d => d.dayIndex === latestActual?.dayIndex);
     
     const realTotalToday = latestActual?.actualCumulative || 0;
-    const planToday = latestPlan?.planCumulative || 0;
     
     // Day of Work = Hari Berjalan (elapsed days from start date)
     const startDate = new Date(selectedProject.startDate);
@@ -229,7 +245,13 @@ export const WorkPage: React.FC = () => {
     const endDate = new Date(selectedProject.endDate);
     const sisaHariKerja = Math.max(0, Math.ceil((endDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
     
-    const planPercentage = planToday > 0 ? (planToday / selectedProject.target) * 100 : 0;
+    // Plan % = 100% if planSchedule covers the full target (schedule is complete)
+    const lastPlanDay = selectedPlanSchedule.length > 0 
+      ? selectedPlanSchedule[selectedPlanSchedule.length - 1] 
+      : null;
+    const planPercentage = lastPlanDay && lastPlanDay.planCumulative >= selectedProject.target 
+      ? 100 
+      : (lastPlanDay?.planCumulative || 0) / selectedProject.target * 100;
     const realisasiPercentage = (realTotalToday / selectedProject.target) * 100;
     
     const averagePenanamanPerDay = dayOfWork > 0 ? realTotalToday / dayOfWork : 0;
@@ -265,6 +287,43 @@ export const WorkPage: React.FC = () => {
     setTimeout(() => setNotification(null), 3000);
   };
 
+  // Helper: Generate plan schedule from start/end dates and target
+  const generatePlanSchedule = (startDate: string, endDate: string, target: number, projectId: string = ''): WorkPlanSchedule[] => {
+    if (!startDate || !endDate || target <= 0) return [];
+    
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (totalDays <= 0) return [];
+    
+    const schedule: WorkPlanSchedule[] = [];
+    const dailyTarget = Math.floor(target / totalDays);
+    const remainder = target - (dailyTarget * totalDays);
+    
+    let cumulative = 0;
+    for (let i = 0; i < totalDays; i++) {
+      const currentDate = new Date(start);
+      currentDate.setDate(start.getDate() + i);
+      
+      // Add remainder to first day
+      const dayTarget = i === 0 ? dailyTarget + remainder : dailyTarget;
+      cumulative += dayTarget;
+      const weight = parseFloat(((dayTarget / target) * 100).toFixed(2));
+      
+      schedule.push({
+        workProjectId: projectId,
+        dayIndex: i + 1,
+        date: currentDate.toISOString().split('T')[0],
+        dailyTarget: dayTarget,
+        weight: weight,
+        planCumulative: cumulative,
+      });
+    }
+    
+    return schedule;
+  };
+
   // CRUD Handlers
   const handleCreateProject = () => {
     setEditingProject(null);
@@ -279,6 +338,7 @@ export const WorkPage: React.FC = () => {
       obstacle: '',
       actionPlan: '',
     });
+    setFormPlanSchedule([]);
     setShowProjectForm(true);
   };
 
@@ -313,6 +373,14 @@ export const WorkPage: React.FC = () => {
       if (editingProject) {
         const success = await updateWorkProject(editingProject.id, projectFormData as WorkProject);
         if (success) {
+          // Save plan schedule
+          if (formPlanSchedule.length > 0) {
+            const scheduleWithProjectId = formPlanSchedule.map(s => ({
+              ...s,
+              workProjectId: editingProject.id,
+            }));
+            await batchUpsertWorkPlanSchedule(scheduleWithProjectId);
+          }
           showNotification('success', 'Project berhasil diupdate');
           await loadData();
           setShowProjectForm(false);
@@ -322,6 +390,14 @@ export const WorkPage: React.FC = () => {
       } else {
         const newProject = await createWorkProject(projectFormData as Omit<WorkProject, 'id' | 'createdAt' | 'updatedAt'>);
         if (newProject) {
+          // Save plan schedule
+          if (formPlanSchedule.length > 0) {
+            const scheduleWithProjectId = formPlanSchedule.map(s => ({
+              ...s,
+              workProjectId: newProject.id,
+            }));
+            await batchUpsertWorkPlanSchedule(scheduleWithProjectId);
+          }
           showNotification('success', 'Project berhasil dibuat');
           await loadData();
           setSelectedProjectId(newProject.id);
@@ -357,9 +433,9 @@ export const WorkPage: React.FC = () => {
   const handleOpenDailyDataForm = () => {
     if (!selectedProject) return;
     setDailyFormData({
-      date: new Date().toISOString().split('T')[0],
-      planCumulative: 0,
-      actualCumulative: 0,
+      date: '',
+      dayIndex: 0,
+      dailyPlanting: 0,
     });
     setShowDailyDataForm(true);
   };
@@ -375,15 +451,28 @@ export const WorkPage: React.FC = () => {
       return;
     }
 
-    const dateObj = new Date(dailyFormData.date);
-    const dayIndex = dateObj.getDate();
+    const dayIndex = dailyFormData.dayIndex;
+    
+    // Get plan cumulative from plan schedule
+    const planSchedule = planScheduleMap[selectedProject.id] || [];
+    const planForDay = planSchedule.find(p => p.dayIndex === dayIndex);
+    const planCumulative = planForDay?.planCumulative || 0;
+    
+    // Calculate actual cumulative from previous days + today's daily planting
+    const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
+    const previousDays = sortedData.filter(d => d.dayIndex < dayIndex);
+    const previousCumulative = previousDays.length > 0 
+      ? previousDays[previousDays.length - 1].actualCumulative 
+      : 0;
+    
+    const actualCumulative = previousCumulative + dailyFormData.dailyPlanting;
 
     const success = await upsertWorkDailyData({
       workProjectId: selectedProject.id,
       date: dailyFormData.date,
       dayIndex,
-      planCumulative: dailyFormData.planCumulative,
-      actualCumulative: dailyFormData.actualCumulative,
+      planCumulative: planCumulative,
+      actualCumulative: actualCumulative,
     });
 
     if (success) {
@@ -600,6 +689,92 @@ export const WorkPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Plan Schedule Table Section */}
+              <div className="mt-6 border-t pt-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h4 className="font-bold text-slate-800 flex items-center gap-2">
+                    📋 Rencana Harian
+                    {formPlanSchedule.length > 0 && (
+                      <span className="text-sm font-normal text-emerald-600">
+                        (Total: {formPlanSchedule.reduce((sum, s) => sum + s.weight, 0).toFixed(1)}%)
+                      </span>
+                    )}
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (projectFormData.startDate && projectFormData.endDate && projectFormData.target) {
+                        const schedule = generatePlanSchedule(
+                          projectFormData.startDate,
+                          projectFormData.endDate,
+                          projectFormData.target
+                        );
+                        setFormPlanSchedule(schedule);
+                      } else {
+                        showNotification('error', 'Isi tanggal mulai, selesai, dan target pohon lebih dahulu');
+                      }
+                    }}
+                    className="text-sm bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg"
+                  >
+                    Generate Rencana
+                  </button>
+                </div>
+
+                {formPlanSchedule.length === 0 ? (
+                  <div className="text-center text-slate-500 py-4 bg-slate-50 rounded-lg">
+                    Klik "Generate Rencana" untuk membuat jadwal harian otomatis
+                  </div>
+                ) : (
+                  <div className="max-h-64 overflow-y-auto border rounded-lg">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-100 sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Hari</th>
+                          <th className="px-3 py-2 text-left font-medium text-slate-600">Tanggal</th>
+                          <th className="px-3 py-2 text-right font-medium text-slate-600">Target Harian</th>
+                          <th className="px-3 py-2 text-right font-medium text-slate-600">Bobot</th>
+                          <th className="px-3 py-2 text-right font-medium text-slate-600">Kumulatif</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {formPlanSchedule.map((item, idx) => (
+                          <tr key={idx} className="border-t hover:bg-slate-50">
+                            <td className="px-3 py-2 text-slate-700">{item.dayIndex}</td>
+                            <td className="px-3 py-2 text-slate-600">{item.date}</td>
+                            <td className="px-3 py-2 text-right">
+                              <input
+                                type="number"
+                                value={item.dailyTarget}
+                                onChange={(e) => {
+                                  const newTarget = Number(e.target.value);
+                                  const newSchedule = [...formPlanSchedule];
+                                  newSchedule[idx].dailyTarget = newTarget;
+                                  
+                                  // Recalculate weight and cumulative for this and all following days
+                                  const total = projectFormData.target || 1;
+                                  let cumulative = 0;
+                                  for (let i = 0; i < newSchedule.length; i++) {
+                                    cumulative += newSchedule[i].dailyTarget;
+                                    newSchedule[i].planCumulative = cumulative;
+                                    newSchedule[i].weight = parseFloat(((newSchedule[i].dailyTarget / total) * 100).toFixed(2));
+                                  }
+                                  setFormPlanSchedule(newSchedule);
+                                }}
+                                className="w-24 px-2 py-1 border rounded text-right"
+                              />
+                            </td>
+                            <td className="px-3 py-2 text-right text-slate-600">{item.weight.toFixed(1)}%</td>
+                            <td className="px-3 py-2 text-right font-medium text-emerald-600">
+                              {item.planCumulative.toLocaleString('id-ID')}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={handleSaveProject}
@@ -667,11 +842,20 @@ export const WorkPage: React.FC = () => {
                     onChange={(e) => {
                       const selected = daysList.find(d => d.date === e.target.value);
                       const existingData = selectedDailyData.find(d => d.date === e.target.value);
+                      
+                      // Calculate existing daily planting from cumulative difference
+                      let existingDaily = 0;
+                      if (existingData && selected) {
+                        const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
+                        const prevDay = sortedData.filter(d => d.dayIndex < selected.dayIndex).pop();
+                        const prevCumulative = prevDay?.actualCumulative || 0;
+                        existingDaily = Math.max(0, existingData.actualCumulative - prevCumulative);
+                      }
+                      
                       setDailyFormData({ 
-                        ...dailyFormData, 
                         date: e.target.value,
-                        planCumulative: existingData?.planCumulative || 0,
-                        actualCumulative: existingData?.actualCumulative || 0
+                        dayIndex: selected?.dayIndex || 0,
+                        dailyPlanting: existingDaily
                       });
                     }}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none bg-white"
@@ -689,26 +873,44 @@ export const WorkPage: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Plan Kumulatif</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Penanaman Hari Ini <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="number"
-                    value={dailyFormData.planCumulative}
-                    onChange={(e) => setDailyFormData({ ...dailyFormData, planCumulative: Number(e.target.value) })}
+                    value={dailyFormData.dailyPlanting}
+                    onChange={(e) => setDailyFormData({ ...dailyFormData, dailyPlanting: Number(e.target.value) })}
                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                    placeholder="0"
+                    placeholder="Jumlah bibit ditanam hari ini"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Realisasi Kumulatif</label>
-                  <input
-                    type="number"
-                    value={dailyFormData.actualCumulative}
-                    onChange={(e) => setDailyFormData({ ...dailyFormData, actualCumulative: Number(e.target.value) })}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 outline-none"
-                    placeholder="0"
-                  />
-                </div>
+                {/* Preview of plan and cumulative */}
+                {dailyFormData.date && (
+                  <div className="bg-slate-50 border rounded-lg p-3 space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Plan Kumulatif:</span>
+                      <span className="font-medium text-blue-600">
+                        {(() => {
+                          const planSchedule = planScheduleMap[selectedProject?.id || ''] || [];
+                          const planForDay = planSchedule.find(p => p.dayIndex === dailyFormData.dayIndex);
+                          return planForDay?.planCumulative?.toLocaleString('id-ID') || '0';
+                        })()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-600">Realisasi Kumulatif:</span>
+                      <span className="font-bold text-emerald-600">
+                        {(() => {
+                          const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
+                          const prevDay = sortedData.filter(d => d.dayIndex < dailyFormData.dayIndex).pop();
+                          const prevCumulative = prevDay?.actualCumulative || 0;
+                          return (prevCumulative + dailyFormData.dailyPlanting).toLocaleString('id-ID');
+                        })()}
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="flex gap-3 mt-6">
@@ -868,10 +1070,28 @@ export const WorkPage: React.FC = () => {
                       </div>
                     </div>
                     <div className="bg-blue-50 p-3 rounded-lg">
-                      <div className="text-sm text-slate-600">Real Total Today</div>
+                      <div className="text-sm text-slate-600">Realisasi Kumulatif</div>
                       <div className="text-lg font-bold text-blue-600">
                         {metrics.realTotalToday.toLocaleString('id-ID')} pohon
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar for Realisasi */}
+                  <div className="bg-slate-100 p-3 rounded-lg">
+                    <div className="flex justify-between text-sm mb-1">
+                      <span className="text-slate-600">Progress Realisasi</span>
+                      <span className="font-bold text-emerald-600">{metrics.realisasiPercentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 rounded-full h-3">
+                      <div 
+                        className="bg-gradient-to-r from-emerald-500 to-emerald-600 h-3 rounded-full transition-all"
+                        style={{ width: `${Math.min(100, metrics.realisasiPercentage)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500 mt-1">
+                      <span>0</span>
+                      <span>{selectedProject.target.toLocaleString('id-ID')}</span>
                     </div>
                   </div>
 
@@ -940,6 +1160,7 @@ export const WorkPage: React.FC = () => {
                 data={selectedDailyData}
                 title={`${selectedProject.projectName} ${selectedProject.faseName}`}
                 target={selectedProject.target}
+                planSchedule={planScheduleMap[selectedProject.id] || []}
               />
             )}
           </>

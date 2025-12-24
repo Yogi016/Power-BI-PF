@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useMemo } from 'react';
 import {
   ComposedChart,
   Line,
@@ -10,14 +10,13 @@ import {
   ResponsiveContainer,
   ReferenceLine
 } from 'recharts';
-import { WorkDailyData } from '../types';
-import html2canvas from 'html2canvas';
-import { Download } from 'lucide-react';
+import { WorkDailyData, WorkPlanSchedule } from '../types';
 
 interface Props {
   data: WorkDailyData[];
   title: string;
   target: number;
+  planSchedule?: WorkPlanSchedule[]; // Plan schedule for the Plan line
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -42,91 +41,62 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const WorkSCurveChart: React.FC<Props> = ({ data, title, target }) => {
-  // Calculate prognosa line: continue from last actual with average rate
-  const chartData = data.map((d, idx) => {
-    // Find the last actual value
-    const lastActualIdx = data.findIndex(item => item.actualCumulative === 0 || item.actualCumulative === undefined) - 1;
-    const hasActual = d.actualCumulative > 0;
-    
-    // Calculate prognosa (projection based on current trend)
-    let prognosa = null;
-    if (idx > 0 && data.length > 0) {
-      const actualData = data.filter(item => item.actualCumulative > 0);
-      if (actualData.length > 0) {
-        const lastActual = actualData[actualData.length - 1];
-        const avgDailyRate = lastActual.actualCumulative / actualData.length;
-        const daysFromLastActual = d.dayIndex - lastActual.dayIndex;
-        
-        if (daysFromLastActual > 0) {
-          // Cap prognosa at target - don't exceed target
-          prognosa = Math.min(target, lastActual.actualCumulative + (avgDailyRate * daysFromLastActual));
-        } else if (hasActual) {
-          prognosa = d.actualCumulative;
-        }
-      }
+export const WorkSCurveChart: React.FC<Props> = ({ data, title, target, planSchedule }) => {
+  // Create chart data from planSchedule (full schedule) with actual data overlaid
+  const chartData = useMemo(() => {
+    // If no planSchedule, fall back to dailyData
+    if (!planSchedule || planSchedule.length === 0) {
+      return data.map(d => ({
+        day: d.dayIndex,
+        rencana: d.planCumulative || 0,
+        realisasi: d.actualCumulative > 0 ? d.actualCumulative : null,
+        prognosa: null,
+      }));
     }
+    
+    // Use planSchedule as base - this shows complete Plan line
+    const actualData = data.filter(item => item.actualCumulative > 0);
+    const lastActual = actualData.length > 0 ? actualData[actualData.length - 1] : null;
+    const avgDailyRate = lastActual ? lastActual.actualCumulative / actualData.length : 0;
+    
+    return planSchedule.map((plan) => {
+      // Find actual data for this day - match by date instead of dayIndex
+      const dailyForDay = data.find(d => d.date === plan.date);
+      const hasActual = dailyForDay && dailyForDay.actualCumulative > 0;
+      
+      // Calculate prognosa (projection)
+      let prognosa = null;
+      if (lastActual && plan.dayIndex > lastActual.dayIndex && avgDailyRate > 0) {
+        const daysFromLastActual = plan.dayIndex - lastActual.dayIndex;
+        prognosa = Math.min(target, lastActual.actualCumulative + (avgDailyRate * daysFromLastActual));
+      } else if (hasActual) {
+        prognosa = dailyForDay!.actualCumulative;
+      }
+      
+      return {
+        day: plan.dayIndex,
+        rencana: plan.planCumulative,
+        realisasi: hasActual ? dailyForDay!.actualCumulative : null,
+        prognosa: prognosa,
+      };
+    });
+  }, [data, planSchedule, target]);
 
-    return {
-      day: d.dayIndex,
-      rencana: d.planCumulative,
-      realisasi: hasActual ? d.actualCumulative : null,
-      prognosa: prognosa,
-    };
-  });
-
-  // Find max value for Y axis - use target as baseline, only go higher if plan/actual exceeds
-  const maxValue = Math.max(
-    target,
-    ...data.map(d => d.planCumulative || 0),
-    ...data.map(d => d.actualCumulative || 0)
-  );
+  // Find max value for Y axis - use target as baseline
+  const planMax = planSchedule?.length > 0 
+    ? Math.max(...planSchedule.map(p => p.planCumulative))
+    : 0;
+  const actualMax = data.length > 0 
+    ? Math.max(...data.map(d => d.actualCumulative || 0))
+    : 0;
+  const maxValue = Math.max(target, planMax, actualMax);
   // Round up to nice number, with slight buffer (10%)
   const yAxisMax = Math.ceil(maxValue * 1.1);
 
-  // Ref for chart container
-  const chartRef = useRef<HTMLDivElement>(null);
-  const [downloading, setDownloading] = React.useState(false);
-
-  // Download chart as PNG
-  const handleDownload = async () => {
-    if (!chartRef.current) return;
-    
-    setDownloading(true);
-    try {
-      const canvas = await html2canvas(chartRef.current, {
-        backgroundColor: '#ffffff',
-        scale: 2, // Higher resolution
-      });
-      
-      const link = document.createElement('a');
-      link.download = `scurve-${title.replace(/\s+/g, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.png`;
-      link.href = canvas.toDataURL('image/png');
-      link.click();
-    } catch (error) {
-      console.error('Error downloading chart:', error);
-    }
-    setDownloading(false);
-  };
-
   return (
-    <div className="relative">
-      {/* Download button - outside chart capture area */}
-      <div className="flex justify-end mb-2">
-        <button
-          onClick={handleDownload}
-          disabled={downloading}
-          className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-400 text-white px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
-        >
-          <Download size={16} />
-          {downloading ? 'Downloading...' : 'Download PNG'}
-        </button>
-      </div>
-      
-      {/* Chart area - this is what gets captured */}
-      <div ref={chartRef} className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h3 className="text-lg font-bold text-slate-800 text-center mb-4">{title}</h3>
-        <div className="w-full h-[400px]">
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+      <h3 className="text-lg font-bold text-slate-800 mb-4 text-center">{title}</h3>
+      <div className="w-full h-[400px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={chartData}
@@ -198,7 +168,6 @@ export const WorkSCurveChart: React.FC<Props> = ({ data, title, target }) => {
             />
           </ComposedChart>
         </ResponsiveContainer>
-        </div>
       </div>
     </div>
   );
