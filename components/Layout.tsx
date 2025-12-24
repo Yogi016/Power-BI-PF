@@ -10,7 +10,8 @@ import {
   BarChart3,
   Menu,
   X,
-  Calendar
+  Calendar,
+  Briefcase
 } from 'lucide-react';
 import { PageView } from '../types';
 
@@ -140,6 +141,21 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
           >
             <Calendar size={20} className="flex-shrink-0" />
             {!collapsed && <span className="font-medium">Calendar</span>}
+          </button>
+
+          <button
+            onClick={() => {
+              onPageChange(PageView.WORK);
+              closeMobileMenu();
+            }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
+              activePage === PageView.WORK
+                ? 'bg-blue-600 text-white shadow-lg'
+                : 'text-slate-300 hover:bg-slate-800'
+            } ${collapsed ? 'justify-center' : ''}`}
+          >
+            <Briefcase size={20} className="flex-shrink-0" />
+            {!collapsed && <span className="font-medium">Work</span>}
           </button>
         </nav>
 

@@ -87,6 +87,7 @@ export enum PageView {
   WEEKLY_PROGRESS = 'weekly_progress',
   GANTT = 'gantt',
   CALENDAR = 'calendar',
+  WORK = 'work',
 }
 
 export interface ProjectFilterState {
@@ -147,3 +148,50 @@ export enum CalendarViewMode {
   WEEK = 'week',
   DAY = 'day',
 }
+
+// =====================================================
+// WORK PAGE INTERFACES
+// =====================================================
+
+// Work project (fase) for planting tracking
+export interface WorkProject {
+  id: string;
+  projectName: string; // e.g., "Mahakam"
+  faseName: string; // e.g., "Fase 1", "Fase 3"
+  target: number; // Target pohon
+  startDate: string;
+  endDate: string;
+  manpowerEksisting: number;
+  productivityTarget: number; // bibit/orang/day
+  obstacle?: string;
+  actionPlan?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Daily planting data for S-curve
+export interface WorkDailyData {
+  id: string;
+  workProjectId: string;
+  date: string; // ISO date string
+  dayIndex: number; // Day number in the month (1-31)
+  planCumulative: number; // Rencana penanaman (cumulative)
+  actualCumulative: number; // Realisasi penanaman (cumulative)
+  planDaily?: number; // Plan for this day only
+  actualDaily?: number; // Actual for this day only
+}
+
+// Work metrics calculated from data
+export interface WorkMetrics {
+  planPercentage: number;
+  realisasiPercentage: number;
+  dayOfWork: number;
+  sisaHariKerja: number;
+  realTotalToday: number;
+  averagePenanamanPerDay: number;
+  prognosaPenanamanPerDay: number;
+  averageProductivity: number; // bibit/orang/day
+  prognosManpower: number;
+  tambahanManpower: number;
+}
+

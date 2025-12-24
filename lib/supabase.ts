@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Project, SCurveDataPoint, ActivityData, ProjectMetrics } from '../types';
+import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData } from '../types';
 
 // =====================================================
 // PROJECT OPERATIONS
@@ -911,3 +911,298 @@ export async function fetchAllProjectsSCurveData(
     return [];
   }
 }
+
+// =====================================================
+// WORK PAGE OPERATIONS
+// =====================================================
+
+/**
+ * Fetch all work projects
+ */
+export async function fetchWorkProjects(): Promise<WorkProject[]> {
+  if (!supabase) {
+    console.warn('Supabase client not initialized');
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('work_projects')
+      .select('*')
+      .order('project_name', { ascending: true })
+      .order('fase_name', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      id: row.id,
+      projectName: row.project_name,
+      faseName: row.fase_name,
+      target: row.target,
+      startDate: row.start_date,
+      endDate: row.end_date,
+      manpowerEksisting: row.manpower_eksisting,
+      productivityTarget: row.productivity_target,
+      obstacle: row.obstacle,
+      actionPlan: row.action_plan,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching work projects:', error);
+    return [];
+  }
+}
+
+/**
+ * Fetch single work project by ID
+ */
+export async function fetchWorkProjectById(projectId: string): Promise<WorkProject | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('work_projects')
+      .select('*')
+      .eq('id', projectId)
+      .single();
+
+    if (error) throw error;
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      projectName: data.project_name,
+      faseName: data.fase_name,
+      target: data.target,
+      startDate: data.start_date,
+      endDate: data.end_date,
+      manpowerEksisting: data.manpower_eksisting,
+      productivityTarget: data.productivity_target,
+      obstacle: data.obstacle,
+      actionPlan: data.action_plan,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error('Error fetching work project:', error);
+    return null;
+  }
+}
+
+/**
+ * Create new work project
+ */
+export async function createWorkProject(projectData: Omit<WorkProject, 'id' | 'createdAt' | 'updatedAt'>): Promise<WorkProject | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('work_projects')
+      .insert({
+        project_name: projectData.projectName,
+        fase_name: projectData.faseName,
+        target: projectData.target,
+        start_date: projectData.startDate,
+        end_date: projectData.endDate,
+        manpower_eksisting: projectData.manpowerEksisting,
+        productivity_target: projectData.productivityTarget,
+        obstacle: projectData.obstacle,
+        action_plan: projectData.actionPlan,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      projectName: data.project_name,
+      faseName: data.fase_name,
+      target: data.target,
+      startDate: data.start_date,
+      endDate: data.end_date,
+      manpowerEksisting: data.manpower_eksisting,
+      productivityTarget: data.productivity_target,
+      obstacle: data.obstacle,
+      actionPlan: data.action_plan,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error('Error creating work project:', error);
+    return null;
+  }
+}
+
+/**
+ * Update work project
+ */
+export async function updateWorkProject(
+  projectId: string,
+  updates: Partial<Omit<WorkProject, 'id' | 'createdAt' | 'updatedAt'>>
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const updateData: any = {};
+    if (updates.projectName !== undefined) updateData.project_name = updates.projectName;
+    if (updates.faseName !== undefined) updateData.fase_name = updates.faseName;
+    if (updates.target !== undefined) updateData.target = updates.target;
+    if (updates.startDate !== undefined) updateData.start_date = updates.startDate;
+    if (updates.endDate !== undefined) updateData.end_date = updates.endDate;
+    if (updates.manpowerEksisting !== undefined) updateData.manpower_eksisting = updates.manpowerEksisting;
+    if (updates.productivityTarget !== undefined) updateData.productivity_target = updates.productivityTarget;
+    if (updates.obstacle !== undefined) updateData.obstacle = updates.obstacle;
+    if (updates.actionPlan !== undefined) updateData.action_plan = updates.actionPlan;
+    updateData.updated_at = new Date().toISOString();
+
+    const { error } = await supabase
+      .from('work_projects')
+      .update(updateData)
+      .eq('id', projectId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating work project:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete work project (cascades to daily data)
+ */
+export async function deleteWorkProject(projectId: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('work_projects')
+      .delete()
+      .eq('id', projectId);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting work project:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetch daily data for a work project
+ */
+export async function fetchWorkDailyData(workProjectId: string): Promise<WorkDailyData[]> {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('work_daily_data')
+      .select('*')
+      .eq('work_project_id', workProjectId)
+      .order('day_index', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      id: row.id,
+      workProjectId: row.work_project_id,
+      date: row.date,
+      dayIndex: row.day_index,
+      planCumulative: row.plan_cumulative,
+      actualCumulative: row.actual_cumulative || 0,
+      planDaily: row.plan_daily,
+      actualDaily: row.actual_daily,
+    }));
+  } catch (error) {
+    console.error('Error fetching work daily data:', error);
+    return [];
+  }
+}
+
+/**
+ * Upsert (create or update) daily data
+ */
+export async function upsertWorkDailyData(
+  dailyData: Omit<WorkDailyData, 'id'>
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('work_daily_data')
+      .upsert({
+        work_project_id: dailyData.workProjectId,
+        date: dailyData.date,
+        day_index: dailyData.dayIndex,
+        plan_cumulative: dailyData.planCumulative,
+        actual_cumulative: dailyData.actualCumulative,
+        plan_daily: dailyData.planDaily,
+        actual_daily: dailyData.actualDaily,
+      }, {
+        onConflict: 'work_project_id,date'
+      });
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error upserting work daily data:', error);
+    return false;
+  }
+}
+
+/**
+ * Batch upsert daily data
+ */
+export async function batchUpsertWorkDailyData(
+  dailyDataArray: Omit<WorkDailyData, 'id'>[]
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const records = dailyDataArray.map(d => ({
+      work_project_id: d.workProjectId,
+      date: d.date,
+      day_index: d.dayIndex,
+      plan_cumulative: d.planCumulative,
+      actual_cumulative: d.actualCumulative,
+      plan_daily: d.planDaily,
+      actual_daily: d.actualDaily,
+    }));
+
+    const { error } = await supabase
+      .from('work_daily_data')
+      .upsert(records, {
+        onConflict: 'work_project_id,date'
+      });
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error batch upserting work daily data:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete daily data for a specific date
+ */
+export async function deleteWorkDailyData(workProjectId: string, date: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('work_daily_data')
+      .delete()
+      .eq('work_project_id', workProjectId)
+      .eq('date', date);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting work daily data:', error);
+    return false;
+  }
+}
+
