@@ -503,10 +503,11 @@ export async function createActivity(
     subCategory?: string;
     pic: string;
     weight?: number;
+    evidence?: string;
     startWeek?: number;
     endWeek?: number;
-    startDate?: string;
-    endDate?: string;
+    startDate?: string | null;
+    endDate?: string | null;
     status?: 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold';
   }
 ): Promise<boolean> {
@@ -523,6 +524,7 @@ export async function createActivity(
         sub_category: activityData.subCategory,
         pic: activityData.pic,
         weight: activityData.weight || 0,
+        evidence: activityData.evidence || null,
         start_week: activityData.startWeek,
         end_week: activityData.endWeek,
         start_date: activityData.startDate,
@@ -550,6 +552,7 @@ export async function updateActivity(
     subCategory: string;
     pic: string;
     weight: number;
+    evidence: string;
     startWeek: number;
     endWeek: number;
     startDate: string;
@@ -567,6 +570,7 @@ export async function updateActivity(
     if (updates.subCategory !== undefined) updateData.sub_category = updates.subCategory;
     if (updates.pic !== undefined) updateData.pic = updates.pic;
     if (updates.weight !== undefined) updateData.weight = updates.weight;
+    if (updates.evidence !== undefined) updateData.evidence = updates.evidence;
     if (updates.startWeek !== undefined) updateData.start_week = updates.startWeek;
     if (updates.endWeek !== undefined) updateData.end_week = updates.endWeek;
     if (updates.startDate !== undefined) updateData.start_date = updates.startDate;

@@ -51,6 +51,7 @@ export const ManageDataNew: React.FC = () => {
     code: string;
     activityName: string;
     weight: number;
+    evidence: string;
     startDate: string;
     endDate: string;
     status: string;
@@ -101,7 +102,7 @@ export const ManageDataNew: React.FC = () => {
       if (supabase) {
         const { data } = await supabase
           .from('activities')
-          .select('code, activity_name, weight, start_date, end_date, status')
+          .select('code, activity_name, weight, evidence, start_date, end_date, status')
           .eq('project_id', project.id);
         
         if (data) {
@@ -109,6 +110,7 @@ export const ManageDataNew: React.FC = () => {
             code: a.code,
             activityName: a.activity_name,
             weight: a.weight || 0,
+            evidence: a.evidence || '',
             startDate: a.start_date || '',
             endDate: a.end_date || '',
             status: a.status || 'not-started',
@@ -152,6 +154,7 @@ export const ManageDataNew: React.FC = () => {
             activityName: activity.activityName,
             pic: formData.pic || '',
             weight: activity.weight,
+            evidence: activity.evidence || '',
             status: (activity.status || 'not-started') as 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold',
             startDate: activity.startDate || null,
             endDate: activity.endDate || null,
@@ -182,6 +185,7 @@ export const ManageDataNew: React.FC = () => {
             activityName: activity.activityName,
             pic: formData.pic || editingProject.pic,
             weight: activity.weight,
+            evidence: activity.evidence || '',
             status: (activity.status || 'not-started') as 'not-started' | 'in-progress' | 'completed' | 'delayed' | 'on-hold',
             startDate: activity.startDate || null,
             endDate: activity.endDate || null,
@@ -227,6 +231,7 @@ export const ManageDataNew: React.FC = () => {
         code: '',
         activityName: '',
         weight: 0,
+        evidence: '',
         startDate: '',
         endDate: '',
         status: 'not-started',
@@ -475,6 +480,7 @@ export const ManageDataNew: React.FC = () => {
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">End Date</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Status</th>
                         <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
+                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Evidence</th>
                         <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
                       </tr>
                     </thead>
@@ -540,6 +546,15 @@ export const ManageDataNew: React.FC = () => {
                               placeholder="0"
                             />
                           </td>
+                          <td className="px-3 py-2">
+                            <input
+                              type="url"
+                              value={activity.evidence || ''}
+                              onChange={(e) => updateActivity(index, 'evidence', e.target.value)}
+                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              placeholder="https://..."
+                            />
+                          </td>
                           <td className="px-3 py-2 text-center">
                             <button
                               type="button"
@@ -552,7 +567,7 @@ export const ManageDataNew: React.FC = () => {
                         </tr>
                       ))}
                       <tr className="bg-slate-50 font-semibold">
-                        <td colSpan={4} className="px-3 py-2 text-right">Total Bobot:</td>
+                        <td colSpan={5} className="px-3 py-2 text-right">Total Bobot:</td>
                         <td className="px-3 py-2">
                           <span className={`${
                             Math.abs(activities.reduce((sum, a) => sum + a.weight, 0) - 100) < 0.1
@@ -562,7 +577,7 @@ export const ManageDataNew: React.FC = () => {
                             {activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%
                           </span>
                         </td>
-                        <td></td>
+                        <td colSpan={2}></td>
                       </tr>
                     </tbody>
                   </table>
