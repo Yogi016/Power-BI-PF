@@ -54,29 +54,47 @@ export const WorkSCurveChart: React.FC<Props> = ({ data, title, target, planSche
       }));
     }
     
-    // Use planSchedule as base - this shows complete Plan line
-    const actualData = data.filter(item => item.actualCumulative > 0);
+    // Sort data by dayIndex to ensure correct processing
+    const sortedData = [...data].sort((a, b) => a.dayIndex - b.dayIndex);
+    const actualData = sortedData.filter(item => item.actualCumulative > 0);
     const lastActual = actualData.length > 0 ? actualData[actualData.length - 1] : null;
+
+    // Calculate average daily rate strictly for projection
     const avgDailyRate = lastActual ? lastActual.actualCumulative / actualData.length : 0;
     
+    // Track cumulative value to fill gaps
+    let currentCumulative = 0;
+    
     return planSchedule.map((plan) => {
-      // Find actual data for this day - match by date instead of dayIndex
-      const dailyForDay = data.find(d => d.date === plan.date);
+      // Find actual data for this day
+      const dailyForDay = sortedData.find(d => d.date === plan.date);
       const hasActual = dailyForDay && dailyForDay.actualCumulative > 0;
+      
+      // Update current cumulative if we have actual data
+      if (hasActual) {
+        currentCumulative = dailyForDay!.actualCumulative;
+      }
+      
+      // Determine if we should show realization for this day
+      // Show if:
+      // 1. We have actual data for this day OR
+      // 2. We have a previous cumulative value AND this day is before or same as the last recorded actual day
+      const shouldShowRealisasi = hasActual || (currentCumulative > 0 && lastActual && plan.dayIndex <= lastActual.dayIndex);
       
       // Calculate prognosa (projection)
       let prognosa = null;
       if (lastActual && plan.dayIndex > lastActual.dayIndex && avgDailyRate > 0) {
         const daysFromLastActual = plan.dayIndex - lastActual.dayIndex;
         prognosa = Math.min(target, lastActual.actualCumulative + (avgDailyRate * daysFromLastActual));
-      } else if (hasActual) {
-        prognosa = dailyForDay!.actualCumulative;
+      } else if (shouldShowRealisasi) {
+        // Tie prognosa to actual line
+        prognosa = hasActual ? dailyForDay!.actualCumulative : currentCumulative;
       }
       
       return {
         day: plan.dayIndex,
         rencana: plan.planCumulative,
-        realisasi: hasActual ? dailyForDay!.actualCumulative : null,
+        realisasi: shouldShowRealisasi ? (hasActual ? dailyForDay!.actualCumulative : currentCumulative) : null,
         prognosa: prognosa,
       };
     });
