@@ -5,7 +5,6 @@ import { Dashboard } from './pages/Dashboard';
 import { DashboardNew } from './pages/DashboardNew';
 import { ManageData } from './pages/ManageData';
 import { ManageDataNew } from './pages/ManageDataNew';
-import { WeeklyProgressPage } from './pages/WeeklyProgressPage';
 import { GanttPage } from './pages/GanttPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { WorkPage } from './pages/WorkPage';
@@ -35,8 +34,6 @@ const App: React.FC = () => {
           ) : (
             <Dashboard />
           )
-        ) : activePage === PageView.WEEKLY_PROGRESS ? (
-          <WeeklyProgressPage />
         ) : activePage === PageView.GANTT ? (
           <GanttPage />
         ) : activePage === PageView.CALENDAR ? (

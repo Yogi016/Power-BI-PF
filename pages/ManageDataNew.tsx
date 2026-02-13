@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Project, SCurveDataPoint } from '../types';
+import { Project } from '../types';
 import {
   fetchProjects,
   createProject,
   updateProject,
   deleteProject,
-  fetchSCurveData,
   upsertSCurveBaseline,
   upsertSCurveActual,
   createActivity,
@@ -22,6 +21,7 @@ import {
   AlertCircle,
   Building2,
   TrendingUp,
+  Wand2,
 } from 'lucide-react';
 
 interface ManageDataNewProps {
@@ -40,44 +40,299 @@ interface ActivityFormRow {
 }
 
 interface MonthlySCurveEditorRow {
+  year: number;
   monthIndex: number;
   monthLabel: string;
+  periodLabel: string;
+  periodBaseline: number;
+  periodActual: number;
   cumulativeBaseline: number;
   cumulativeActual: number;
 }
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-const CURRENT_YEAR = new Date().getFullYear();
+interface SCurveDraftValue {
+  periodBaseline: number;
+  periodActual: number;
+}
 
-const createEmptySCurveRows = (): MonthlySCurveEditorRow[] => {
-  return MONTHS.map((monthLabel, idx) => ({
-    monthIndex: idx + 1,
-    monthLabel,
-    cumulativeBaseline: 0,
-    cumulativeActual: 0,
-  }));
+interface TimelinePeriod {
+  year: number;
+  monthIndex: number;
+  monthLabel: string;
+}
+
+interface ActivitySyncResult {
+  success: boolean;
+  errorMessage?: string;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+const ACTIVITY_STATUS_PROGRESS: Record<string, number> = {
+  'not-started': 0,
+  'on-hold': 0,
+  'in-progress': 50,
+  delayed: 25,
+  completed: 100,
+};
+const MAX_PERIOD_ACTUAL = 100;
+const MAX_CUMULATIVE_ACTUAL = 100;
+const CURRENT_YEAR = new Date().getFullYear();
+const DAY_MS = 1000 * 60 * 60 * 24;
+
+const periodKey = (year: number, monthIndex: number) => `${year}-${monthIndex}`;
+
+const parseProjectDate = (value?: string): Date | null => {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-const mapSCurveDataToRows = (data: SCurveDataPoint[], year: number): MonthlySCurveEditorRow[] => {
-  const byMonth = new Map<number, SCurveDataPoint>();
+const toUtcDay = (date: Date): number => {
+  return Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS);
+};
 
-  data
-    .filter((d) => d.year === year)
-    .forEach((d) => {
-      byMonth.set(d.periodIndex, d);
+const inclusiveDayDiff = (start: Date, end: Date): number => {
+  return Math.max(1, toUtcDay(end) - toUtcDay(start) + 1);
+};
+
+const overlapDaysInclusive = (
+  startA: Date,
+  endA: Date,
+  startB: Date,
+  endB: Date
+): number => {
+  const start = Math.max(toUtcDay(startA), toUtcDay(startB));
+  const end = Math.min(toUtcDay(endA), toUtcDay(endB));
+  if (end < start) return 0;
+  return end - start + 1;
+};
+
+const clamp = (value: number, min: number, max: number): number => {
+  return Math.max(min, Math.min(max, value));
+};
+
+const round2 = (value: number): number => {
+  return Number(value.toFixed(2));
+};
+
+const normalizeProjectDateRange = (
+  startDate?: string,
+  endDate?: string
+): { start: Date; end: Date } => {
+  const parsedStart = parseProjectDate(startDate);
+  const parsedEnd = parseProjectDate(endDate);
+
+  const fallbackStart = new Date(CURRENT_YEAR, new Date().getMonth(), 1);
+  const start = parsedStart || parsedEnd || fallbackStart;
+  const end = parsedEnd || parsedStart || fallbackStart;
+
+  if (start.getTime() <= end.getTime()) {
+    return { start, end };
+  }
+
+  return { start: end, end: start };
+};
+
+const getTimelinePeriods = (startDate?: string, endDate?: string): TimelinePeriod[] => {
+  const { start, end } = normalizeProjectDateRange(startDate, endDate);
+  const periods: TimelinePeriod[] = [];
+
+  let cursorYear = start.getFullYear();
+  let cursorMonth = start.getMonth() + 1;
+  const endYear = end.getFullYear();
+  const endMonth = end.getMonth() + 1;
+
+  while (cursorYear < endYear || (cursorYear === endYear && cursorMonth <= endMonth)) {
+    periods.push({
+      year: cursorYear,
+      monthIndex: cursorMonth,
+      monthLabel: MONTHS[cursorMonth - 1],
     });
 
-  return MONTHS.map((monthLabel, idx) => {
-    const monthIndex = idx + 1;
-    const monthData = byMonth.get(monthIndex);
+    if (cursorMonth === 12) {
+      cursorMonth = 1;
+      cursorYear += 1;
+    } else {
+      cursorMonth += 1;
+    }
+  }
+
+  return periods;
+};
+
+const buildRowsForTimeline = (
+  startDate: string | undefined,
+  endDate: string | undefined,
+  draftMap: Record<string, SCurveDraftValue>
+): MonthlySCurveEditorRow[] => {
+  const periods = getTimelinePeriods(startDate, endDate);
+  let cumulativeBaseline = 0;
+  let cumulativeActual = 0;
+
+  return periods.map((period) => {
+    const values = draftMap[periodKey(period.year, period.monthIndex)] || {
+      periodBaseline: 0,
+      periodActual: 0,
+    };
+
+    const periodBaseline = Number.isFinite(values.periodBaseline) ? values.periodBaseline : 0;
+    const periodActual = Number.isFinite(values.periodActual) ? values.periodActual : 0;
+
+    cumulativeBaseline = round2(cumulativeBaseline + periodBaseline);
+    cumulativeActual = round2(cumulativeActual + periodActual);
 
     return {
-      monthIndex,
-      monthLabel,
-      cumulativeBaseline: Number(monthData?.baseline) || 0,
-      cumulativeActual: Number(monthData?.actual) || 0,
+      year: period.year,
+      monthIndex: period.monthIndex,
+      monthLabel: period.monthLabel,
+      periodLabel: `${period.monthLabel}-${period.year}`,
+      periodBaseline,
+      periodActual,
+      cumulativeBaseline,
+      cumulativeActual,
     };
   });
+};
+
+const getPeriodDateRange = (period: TimelinePeriod): { start: Date; end: Date } => {
+  return {
+    start: new Date(period.year, period.monthIndex - 1, 1),
+    end: new Date(period.year, period.monthIndex, 0),
+  };
+};
+
+const generateSigmoidBaseline = (periodCount: number): number[] => {
+  if (periodCount <= 0) return [];
+  if (periodCount === 1) return [100];
+
+  const raw: number[] = [];
+  for (let idx = 0; idx < periodCount; idx += 1) {
+    const progress = (idx + 1) / periodCount;
+    raw.push(1 / (1 + Math.exp(-10 * (progress - 0.5))));
+  }
+
+  const minRaw = raw[0];
+  const maxRaw = raw[raw.length - 1];
+  const denom = maxRaw - minRaw || 1;
+
+  let prev = 0;
+  const normalized = raw.map((value, idx) => {
+    const scaled = ((value - minRaw) / denom) * 100;
+    const clamped = clamp(scaled, prev, 100);
+    const rounded = round2(clamped);
+    prev = rounded;
+    return idx === periodCount - 1 ? 100 : rounded;
+  });
+
+  return normalized;
+};
+
+const getActivityCompletionRatio = (status?: string): number => {
+  const key = (status || '').toLowerCase();
+  const progress = ACTIVITY_STATUS_PROGRESS[key] ?? 0;
+  return progress / 100;
+};
+
+const buildAutoSCurvePeriods = (
+  periods: TimelinePeriod[],
+  activities: ActivityFormRow[],
+  startDate?: string,
+  endDate?: string
+): { periodBaseline: number[]; periodActual: number[] } => {
+  if (periods.length === 0) {
+    return { periodBaseline: [], periodActual: [] };
+  }
+
+  const projectRange = normalizeProjectDateRange(startDate, endDate);
+  const projectStart = projectRange.start;
+  const projectEnd = projectRange.end;
+  const baselineContributions = new Array(periods.length).fill(0);
+  const actualContributions = new Array(periods.length).fill(0);
+
+  const activityPool = activities.filter((activity) => activity.weight > 0);
+  const totalWeight = activityPool.reduce((sum, activity) => sum + activity.weight, 0);
+  let usedActivityModel = false;
+
+  if (activityPool.length > 0 && totalWeight > 0) {
+    const weightScale = 100 / totalWeight;
+
+    activityPool.forEach((activity) => {
+      const rawStart = parseProjectDate(activity.startDate) || projectStart;
+      const rawEnd = parseProjectDate(activity.endDate) || projectEnd;
+      const activityStart = rawStart <= rawEnd ? rawStart : rawEnd;
+      const activityEnd = rawStart <= rawEnd ? rawEnd : rawStart;
+      const activityDurationDays = inclusiveDayDiff(activityStart, activityEnd);
+      const normalizedWeight = activity.weight * weightScale;
+      const completionRatio = getActivityCompletionRatio(activity.status);
+
+      periods.forEach((period, idx) => {
+        const periodRange = getPeriodDateRange(period);
+        const overlap = overlapDaysInclusive(activityStart, activityEnd, periodRange.start, periodRange.end);
+        if (overlap <= 0) return;
+
+        const weightedPortion = (overlap / activityDurationDays) * normalizedWeight;
+        baselineContributions[idx] += weightedPortion;
+        actualContributions[idx] += weightedPortion * completionRatio;
+        usedActivityModel = true;
+      });
+    });
+  }
+
+  const totalContribution = baselineContributions.reduce((sum, value) => sum + value, 0);
+  const cumulativeBaseline: number[] = [];
+  const cumulativeActual: number[] = [];
+
+  if (usedActivityModel && totalContribution > 0) {
+    const scalingFactor = 100 / totalContribution;
+    let running = 0;
+    let runningActual = 0;
+
+    baselineContributions.forEach((value, idx) => {
+      running += value * scalingFactor;
+      runningActual += actualContributions[idx] * scalingFactor;
+      const rounded = round2(clamp(running, 0, 100));
+      const roundedActual = round2(clamp(runningActual, 0, MAX_CUMULATIVE_ACTUAL));
+      cumulativeBaseline.push(idx === baselineContributions.length - 1 ? 100 : rounded);
+      cumulativeActual.push(roundedActual);
+    });
+  } else {
+    cumulativeBaseline.push(...generateSigmoidBaseline(periods.length));
+    cumulativeActual.push(...periods.map(() => 0));
+  }
+
+  const periodBaseline = cumulativeBaseline.map((value, idx) => {
+    const previous = idx === 0 ? 0 : cumulativeBaseline[idx - 1];
+    return round2(Math.max(0, value - previous));
+  });
+
+  const periodActual = cumulativeActual.map((value, idx) => {
+    const previous = idx === 0 ? 0 : cumulativeActual[idx - 1];
+    return round2(clamp(Math.max(0, value - previous), 0, MAX_PERIOD_ACTUAL));
+  });
+
+  return {
+    periodBaseline,
+    periodActual,
+  };
+};
+
+const buildDraftMapFromActivities = (
+  startDate: string | undefined,
+  endDate: string | undefined,
+  activities: ActivityFormRow[]
+): Record<string, SCurveDraftValue> => {
+  const periods = getTimelinePeriods(startDate, endDate);
+  const { periodBaseline, periodActual } = buildAutoSCurvePeriods(periods, activities, startDate, endDate);
+
+  const draft: Record<string, SCurveDraftValue> = {};
+  periods.forEach((period, idx) => {
+    draft[periodKey(period.year, period.monthIndex)] = {
+      periodBaseline: periodBaseline[idx] ?? 0,
+      periodActual: periodActual[idx] ?? 0,
+    };
+  });
+
+  return draft;
 };
 
 export const ManageDataNew: React.FC<ManageDataNewProps> = ({
@@ -109,12 +364,12 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
   // Activities state for the project being created/edited
   const [activities, setActivities] = useState<ActivityFormRow[]>([]);
+  const [activitiesDirty, setActivitiesDirty] = useState(false);
+  const [savingActivities, setSavingActivities] = useState(false);
 
   // S-Curve editor state
-  const [sCurveSourceData, setSCurveSourceData] = useState<SCurveDataPoint[]>([]);
-  const [selectedSCurveYear, setSelectedSCurveYear] = useState<number>(CURRENT_YEAR);
-  const [availableSCurveYears, setAvailableSCurveYears] = useState<number[]>([CURRENT_YEAR]);
-  const [sCurveRows, setSCurveRows] = useState<MonthlySCurveEditorRow[]>(createEmptySCurveRows);
+  const [sCurveDraftMap, setSCurveDraftMap] = useState<Record<string, SCurveDraftValue>>({});
+  const [sCurveRows, setSCurveRows] = useState<MonthlySCurveEditorRow[]>([]);
 
   // Load projects
   useEffect(() => {
@@ -148,22 +403,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const resetSCurveEditor = (year = CURRENT_YEAR) => {
-    setSCurveSourceData([]);
-    setSelectedSCurveYear(year);
-    setAvailableSCurveYears([year]);
-    setSCurveRows(createEmptySCurveRows());
-  };
+  const resetSCurveEditor = (startDate?: string, endDate?: string, sourceActivities: ActivityFormRow[] = []) => {
+    const draft = buildDraftMapFromActivities(startDate, endDate, sourceActivities);
 
-  const applySCurveDataToEditor = (data: SCurveDataPoint[], preferredYear?: number) => {
-    const years = Array.from(new Set(data.map((d) => d.year))).sort((a, b) => a - b);
-    const targetYear = preferredYear ?? (years.length > 0 ? years[years.length - 1] : CURRENT_YEAR);
-    const allYears = Array.from(new Set([...years, CURRENT_YEAR, targetYear])).sort((a, b) => a - b);
-
-    setSCurveSourceData(data);
-    setAvailableSCurveYears(allYears);
-    setSelectedSCurveYear(targetYear);
-    setSCurveRows(mapSCurveDataToRows(data, targetYear));
+    setSCurveDraftMap(draft);
+    setSCurveRows(buildRowsForTimeline(startDate, endDate, draft));
   };
 
   const loadActivitiesForProject = async (projectId: string): Promise<ActivityFormRow[]> => {
@@ -189,6 +433,9 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   };
 
   const handleCreate = () => {
+    const startDate = new Date().toISOString().split('T')[0];
+    const endDate = new Date().toISOString().split('T')[0];
+
     setIsCreating(true);
     setEditingProject(null);
     setFormData({
@@ -197,13 +444,14 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       description: '',
       category: 'Environmental',
       location: '',
-      startDate: new Date().toISOString().split('T')[0],
-      endDate: new Date().toISOString().split('T')[0],
+      startDate,
+      endDate,
       status: 'active',
       budget: undefined,
     });
     setActivities([]);
-    resetSCurveEditor(CURRENT_YEAR);
+    setActivitiesDirty(false);
+    resetSCurveEditor(startDate, endDate);
     setLoadingSCurve(false);
   };
 
@@ -214,18 +462,17 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setLoadingSCurve(true);
 
     try {
-      const [projectActivities, projectSCurve] = await Promise.all([
-        loadActivitiesForProject(project.id),
-        fetchSCurveData(project.id, 'monthly'),
-      ]);
+      const projectActivities = await loadActivitiesForProject(project.id);
 
       setActivities(projectActivities);
-      applySCurveDataToEditor(projectSCurve);
+      setActivitiesDirty(false);
+      resetSCurveEditor(project.startDate, project.endDate, projectActivities);
     } catch (error) {
       console.error('Error loading project detail:', error);
       setActivities([]);
-      resetSCurveEditor(CURRENT_YEAR);
-      showNotification('error', 'Gagal memuat activities atau data S-Curve project');
+      setActivitiesDirty(false);
+      resetSCurveEditor(project.startDate, project.endDate, []);
+      showNotification('error', 'Gagal memuat activities project');
     } finally {
       setLoadingSCurve(false);
     }
@@ -236,117 +483,146 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setEditingProject(null);
     setFormData({});
     setActivities([]);
-    resetSCurveEditor(CURRENT_YEAR);
+    setActivitiesDirty(false);
+    setSavingActivities(false);
+    setSCurveDraftMap({});
+    setSCurveRows([]);
     setLoadingSCurve(false);
   };
 
-  const handleSCurveYearChange = (year: number) => {
-    setSelectedSCurveYear(year);
+  useEffect(() => {
+    if (!isCreating && !editingProject) return;
+    const draft = buildDraftMapFromActivities(formData.startDate, formData.endDate, activities);
+    setSCurveDraftMap(draft);
+  }, [formData.startDate, formData.endDate, isCreating, editingProject, activities]);
 
-    if (sCurveSourceData.length > 0) {
-      setSCurveRows(mapSCurveDataToRows(sCurveSourceData, year));
-      return;
-    }
+  useEffect(() => {
+    if (!isCreating && !editingProject) return;
+    setSCurveRows(buildRowsForTimeline(formData.startDate, formData.endDate, sCurveDraftMap));
+  }, [formData.startDate, formData.endDate, sCurveDraftMap, isCreating, editingProject]);
 
-    setSCurveRows(createEmptySCurveRows());
-  };
-
-  const updateSCurveValue = (
-    monthIndex: number,
-    field: 'cumulativeBaseline' | 'cumulativeActual',
-    value: string
-  ) => {
-    const parsedValue = Number.parseFloat(value);
-    const numericValue = Number.isFinite(parsedValue) ? parsedValue : 0;
-
-    setSCurveRows((prev) =>
-      prev.map((row) =>
-        row.monthIndex === monthIndex
-          ? {
-              ...row,
-              [field]: numericValue,
-            }
-          : row
-      )
-    );
-  };
-
-  const validateSCurveRows = (): string | null => {
-    if (sCurveRows.length === 0) {
+  const validateSCurveRows = (draftOverride?: Record<string, SCurveDraftValue>): string | null => {
+    const periods = getTimelinePeriods(formData.startDate, formData.endDate);
+    if (periods.length === 0) {
       return 'Data S-Curve bulanan tidak tersedia';
     }
 
+    const draftMap = draftOverride || sCurveDraftMap;
     let hasNonZero = false;
-    let previousBaseline = 0;
-    let previousActual = 0;
+    let cumulativeBaseline = 0;
+    let cumulativeActual = 0;
 
-    for (const row of sCurveRows) {
-      const baseline = row.cumulativeBaseline;
-      const actual = row.cumulativeActual;
+    for (const period of periods) {
+      const values = draftMap[periodKey(period.year, period.monthIndex)] || {
+        periodBaseline: 0,
+        periodActual: 0,
+      };
+      const periodBaseline = values.periodBaseline;
+      const periodActual = values.periodActual;
 
-      if (!Number.isFinite(baseline) || baseline < 0 || baseline > 100) {
-        return `Baseline bulan ${row.monthLabel} harus di antara 0 sampai 100`;
+      if (!Number.isFinite(periodBaseline) || periodBaseline < 0 || periodBaseline > 100) {
+        return `Baseline periode ${period.monthLabel}-${period.year} harus di antara 0 sampai 100`;
       }
 
-      if (!Number.isFinite(actual) || actual < 0 || actual > 100) {
-        return `Realisasi bulan ${row.monthLabel} harus di antara 0 sampai 100`;
+      if (!Number.isFinite(periodActual) || periodActual < 0 || periodActual > MAX_PERIOD_ACTUAL) {
+        return `Realisasi periode ${period.monthLabel}-${period.year} harus di antara 0 sampai ${MAX_PERIOD_ACTUAL}`;
       }
 
-      if (baseline < previousBaseline) {
-        return `Baseline kumulatif bulan ${row.monthLabel} tidak boleh lebih kecil dari bulan sebelumnya`;
+      cumulativeBaseline = round2(cumulativeBaseline + periodBaseline);
+      cumulativeActual = round2(cumulativeActual + periodActual);
+
+      if (cumulativeBaseline > 100) {
+        return `Total baseline kumulatif melewati 100% pada periode ${period.monthLabel}-${period.year}`;
       }
 
-      if (actual < previousActual) {
-        return `Realisasi kumulatif bulan ${row.monthLabel} tidak boleh lebih kecil dari bulan sebelumnya`;
+      if (cumulativeActual > MAX_CUMULATIVE_ACTUAL) {
+        return `Total realisasi kumulatif melewati ${MAX_CUMULATIVE_ACTUAL}% pada periode ${period.monthLabel}-${period.year}`;
       }
 
-      if (baseline > 0 || actual > 0) {
+      if (periodBaseline > 0 || periodActual > 0) {
         hasNonZero = true;
       }
-
-      previousBaseline = baseline;
-      previousActual = actual;
     }
 
     if (!hasNonZero) {
-      return 'Minimal satu nilai baseline atau realisasi harus lebih dari 0';
+      return 'Minimal satu nilai baseline periode atau realisasi periode harus lebih dari 0';
     }
 
     return null;
   };
 
-  const saveSCurveForProject = async (projectId: string): Promise<boolean> => {
-    const validationError = validateSCurveRows();
+  const saveSCurveForProject = async (
+    projectId: string,
+    draftOverride?: Record<string, SCurveDraftValue>
+  ): Promise<boolean> => {
+    const draftMap = draftOverride || sCurveDraftMap;
+    const validationError = validateSCurveRows(draftMap);
     if (validationError) {
       showNotification('error', validationError);
       return false;
     }
 
-    let previousBaseline = 0;
-    const baselinePayload = sCurveRows.map((row) => {
-      const cumulativeBaseline = Number(row.cumulativeBaseline.toFixed(2));
-      const periodBaseline = Number((cumulativeBaseline - previousBaseline).toFixed(2));
-      previousBaseline = cumulativeBaseline;
+    const periods = getTimelinePeriods(formData.startDate, formData.endDate);
+    if (periods.length === 0) {
+      showNotification('error', 'Rentang tanggal project tidak valid untuk S-Curve');
+      return false;
+    }
+
+    if (supabase) {
+      const { error: deleteBaselineError } = await supabase
+        .from('s_curve_baseline')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('period_type', 'monthly');
+
+      if (deleteBaselineError) {
+        showNotification('error', 'Gagal membersihkan baseline S-Curve lama');
+        return false;
+      }
+
+      const { error: deleteActualError } = await supabase
+        .from('s_curve_actual')
+        .delete()
+        .eq('project_id', projectId)
+        .eq('period_type', 'monthly');
+
+      if (deleteActualError) {
+        showNotification('error', 'Gagal membersihkan realisasi S-Curve lama');
+        return false;
+      }
+    }
+
+    let cumulativeBaseline = 0;
+    const baselinePayload = periods.map((period) => {
+      const values = draftMap[periodKey(period.year, period.monthIndex)] || {
+        periodBaseline: 0,
+        periodActual: 0,
+      };
+      const periodBaseline = Number(values.periodBaseline.toFixed(2));
+      cumulativeBaseline = Number((cumulativeBaseline + periodBaseline).toFixed(2));
 
       return {
-        periodLabel: row.monthLabel,
-        periodIndex: row.monthIndex,
-        year: selectedSCurveYear,
+        periodLabel: period.monthLabel,
+        periodIndex: period.monthIndex,
+        year: period.year,
         cumulativeBaseline,
         periodBaseline,
       };
     });
 
-    let previousActual = 0;
-    const actualPayload = sCurveRows.map((row) => {
-      const cumulativeActual = Number(row.cumulativeActual.toFixed(2));
-      const periodActual = Number((cumulativeActual - previousActual).toFixed(2));
-      previousActual = cumulativeActual;
+    let cumulativeActual = 0;
+    const actualPayload = periods.map((period) => {
+      const values = draftMap[periodKey(period.year, period.monthIndex)] || {
+        periodBaseline: 0,
+        periodActual: 0,
+      };
+      const periodActual = Number(values.periodActual.toFixed(2));
+      cumulativeActual = Number((cumulativeActual + periodActual).toFixed(2));
 
       return {
-        periodLabel: row.monthLabel,
-        periodIndex: row.monthIndex,
-        year: selectedSCurveYear,
+        periodLabel: period.monthLabel,
+        periodIndex: period.monthIndex,
+        year: period.year,
         cumulativeActual,
         periodActual,
       };
@@ -367,16 +643,112 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     return true;
   };
 
+  const getActivitiesWeightError = (): string | null => {
+    for (let index = 0; index < activities.length; index += 1) {
+      const activity = activities[index];
+      if (!Number.isFinite(activity.weight) || activity.weight < 0 || activity.weight > 100) {
+        const label = activity.code || activity.activityName || `Baris ${index + 1}`;
+        return `Bobot activity "${label}" harus di antara 0 sampai 100`;
+      }
+    }
+    return null;
+  };
+
+  const syncActivitiesForProject = async (projectId: string, picValue: string): Promise<ActivitySyncResult> => {
+    if (!supabase) {
+      return {
+        success: false,
+        errorMessage: 'Koneksi Supabase tidak tersedia',
+      };
+    }
+
+    const { error: deleteError } = await supabase.from('activities').delete().eq('project_id', projectId);
+    if (deleteError) {
+      console.error('Error deleting old activities:', deleteError);
+      return {
+        success: false,
+        errorMessage: deleteError.message || 'Gagal menghapus data activity lama',
+      };
+    }
+
+    for (const activity of activities) {
+      const created = await createActivity(projectId, {
+        code: activity.code,
+        activityName: activity.activityName,
+        pic: picValue,
+        weight: activity.weight,
+        evidence: activity.evidence || '',
+        status: (activity.status || 'not-started') as
+          | 'not-started'
+          | 'in-progress'
+          | 'completed'
+          | 'delayed'
+          | 'on-hold',
+        startDate: activity.startDate || null,
+        endDate: activity.endDate || null,
+      });
+
+      if (!created) {
+        return {
+          success: false,
+          errorMessage: `Gagal menyimpan activity "${activity.code || activity.activityName || 'tanpa nama'}"`,
+        };
+      }
+    }
+
+    return {
+      success: true,
+    };
+  };
+
+  const handleSaveActivities = async () => {
+    if (!editingProject) {
+      showNotification('error', 'Simpan project terlebih dahulu sebelum menyimpan activities');
+      return;
+    }
+
+    const activitiesWeightError = getActivitiesWeightError();
+    if (activitiesWeightError) {
+      showNotification('error', activitiesWeightError);
+      return;
+    }
+
+    if (!activitiesDirty) {
+      showNotification('success', 'Tidak ada perubahan activity untuk disimpan');
+      return;
+    }
+
+    setSavingActivities(true);
+    const syncResult = await syncActivitiesForProject(editingProject.id, formData.pic || editingProject.pic);
+    setSavingActivities(false);
+
+    if (!syncResult.success) {
+      showNotification('error', `Gagal menyimpan activities: ${syncResult.errorMessage || 'Unknown error'}`);
+      return;
+    }
+
+    const draftFromActivities = buildDraftMapFromActivities(formData.startDate, formData.endDate, activities);
+    setSCurveDraftMap(draftFromActivities);
+    setSCurveRows(buildRowsForTimeline(formData.startDate, formData.endDate, draftFromActivities));
+
+    const sCurveSaved = await saveSCurveForProject(editingProject.id, draftFromActivities);
+    if (!sCurveSaved) {
+      return;
+    }
+
+    setActivitiesDirty(false);
+    showNotification('success', 'Activities dan S-Curve berhasil disimpan');
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.pic || !formData.startDate || !formData.endDate) {
       showNotification('error', 'Nama, PIC, dan tanggal wajib diisi');
       return;
     }
 
-    // Validate activities total weight
-    const totalWeight = activities.reduce((sum, a) => sum + a.weight, 0);
-    if (activities.length > 0 && Math.abs(totalWeight - 100) > 0.1) {
-      showNotification('error', `Total bobot activities harus 100% (saat ini: ${totalWeight.toFixed(1)}%)`);
+    const activitiesWeightError = getActivitiesWeightError();
+    if (activitiesWeightError) {
+      showNotification('error', activitiesWeightError);
       return;
     }
 
@@ -387,29 +759,20 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         return;
       }
 
-      if (activities.length > 0) {
-        for (const activity of activities) {
-          await createActivity(newProject.id, {
-            code: activity.code,
-            activityName: activity.activityName,
-            pic: formData.pic || '',
-            weight: activity.weight,
-            evidence: activity.evidence || '',
-            status: (activity.status || 'not-started') as
-              | 'not-started'
-              | 'in-progress'
-              | 'completed'
-              | 'delayed'
-              | 'on-hold',
-            startDate: activity.startDate || null,
-            endDate: activity.endDate || null,
-          });
-        }
+      const syncResult = await syncActivitiesForProject(newProject.id, formData.pic || '');
+      if (!syncResult.success) {
+        showNotification('error', `Gagal menyimpan activities: ${syncResult.errorMessage || 'Unknown error'}`);
+        return;
       }
 
-      const sCurveSaved = await saveSCurveForProject(newProject.id);
+      const draftFromActivities = buildDraftMapFromActivities(formData.startDate, formData.endDate, activities);
+      setSCurveDraftMap(draftFromActivities);
+      setSCurveRows(buildRowsForTimeline(formData.startDate, formData.endDate, draftFromActivities));
+
+      const sCurveSaved = await saveSCurveForProject(newProject.id, draftFromActivities);
       if (!sCurveSaved) return;
 
+      setActivitiesDirty(false);
       showNotification('success', 'Project dan S-Curve berhasil dibuat');
       loadProjects();
       handleCancel();
@@ -424,32 +787,20 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       return;
     }
 
-    if (supabase) {
-      // Update activities (delete all and recreate for simplicity)
-      await supabase.from('activities').delete().eq('project_id', editingProject.id);
-
-      for (const activity of activities) {
-        await createActivity(editingProject.id, {
-          code: activity.code,
-          activityName: activity.activityName,
-          pic: formData.pic || editingProject.pic,
-          weight: activity.weight,
-          evidence: activity.evidence || '',
-          status: (activity.status || 'not-started') as
-            | 'not-started'
-            | 'in-progress'
-            | 'completed'
-            | 'delayed'
-            | 'on-hold',
-          startDate: activity.startDate || null,
-          endDate: activity.endDate || null,
-        });
-      }
+    const syncResult = await syncActivitiesForProject(editingProject.id, formData.pic || editingProject.pic);
+    if (!syncResult.success) {
+      showNotification('error', `Gagal menyimpan activities: ${syncResult.errorMessage || 'Unknown error'}`);
+      return;
     }
 
-    const sCurveSaved = await saveSCurveForProject(editingProject.id);
+    const draftFromActivities = buildDraftMapFromActivities(formData.startDate, formData.endDate, activities);
+    setSCurveDraftMap(draftFromActivities);
+    setSCurveRows(buildRowsForTimeline(formData.startDate, formData.endDate, draftFromActivities));
+
+    const sCurveSaved = await saveSCurveForProject(editingProject.id, draftFromActivities);
     if (!sCurveSaved) return;
 
+    setActivitiesDirty(false);
     showNotification('success', 'Project dan S-Curve berhasil diupdate');
     loadProjects();
     handleCancel();
@@ -490,16 +841,45 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         status: 'not-started',
       },
     ]);
+    setActivitiesDirty(true);
   };
 
   const updateActivity = (index: number, field: keyof ActivityFormRow, value: string | number) => {
     const updated = [...activities];
     updated[index] = { ...updated[index], [field]: value } as ActivityFormRow;
     setActivities(updated);
+    setActivitiesDirty(true);
   };
 
   const removeActivity = (index: number) => {
     setActivities(activities.filter((_, i) => i !== index));
+    setActivitiesDirty(true);
+  };
+
+  const generateAutoWeights = () => {
+    if (activities.length === 0) {
+      showNotification('error', 'Tambahkan minimal 1 activity terlebih dahulu');
+      return;
+    }
+
+    const totalUnits = 1000; // 100.0% in 0.1% units
+    const totalActivities = activities.length;
+    const baseUnits = Math.floor(totalUnits / totalActivities);
+    let remainder = totalUnits - baseUnits * totalActivities;
+
+    const redistributed = activities.map((activity) => {
+      const units = baseUnits + (remainder > 0 ? 1 : 0);
+      if (remainder > 0) remainder -= 1;
+
+      return {
+        ...activity,
+        weight: Number((units / 10).toFixed(1)),
+      };
+    });
+
+    setActivities(redistributed);
+    setActivitiesDirty(true);
+    showNotification('success', `Bobot otomatis diperbarui ke total 100% (${totalActivities} activity)`);
   };
 
   if (loading) {
@@ -711,15 +1091,48 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Activities</h3>
                   <p className="text-sm text-slate-600">Tambahkan kegiatan untuk project ini (opsional)</p>
+                  {editingProject && activitiesDirty && (
+                    <p className="text-xs text-amber-600 mt-1">Perubahan activity belum disimpan.</p>
+                  )}
                 </div>
-                <button
-                  type="button"
-                  onClick={addActivity}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-                >
-                  <Plus size={16} />
-                  Tambah Activity
-                </button>
+                <div className="flex items-center gap-2">
+                  {editingProject && (
+                    <button
+                      type="button"
+                      onClick={handleSaveActivities}
+                      disabled={!activitiesDirty || savingActivities}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        !activitiesDirty || savingActivities
+                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`}
+                    >
+                      {savingActivities ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                      Simpan Activities
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={generateAutoWeights}
+                    disabled={activities.length === 0}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                      activities.length === 0
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    }`}
+                  >
+                    <Wand2 size={16} />
+                    Generate Bobot 100%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={addActivity}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Plus size={16} />
+                    Tambah Activity
+                  </button>
+                </div>
               </div>
 
               {activities.length > 0 && (
@@ -824,13 +1237,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                           Total Bobot:
                         </td>
                         <td className="px-3 py-2">
-                          <span
-                            className={`${
-                              Math.abs(activities.reduce((sum, a) => sum + a.weight, 0) - 100) < 0.1
-                                ? 'text-green-600'
-                                : 'text-red-600'
-                            }`}
-                          >
+                          <span className="text-slate-700">
                             {activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%
                           </span>
                         </td>
@@ -846,95 +1253,16 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                   Belum ada activity. Klik "Tambah Activity" untuk menambahkan.
                 </div>
               )}
-            </div>
-
-            {/* S-Curve Section */}
-            <div className="mt-6 border-t border-slate-200 pt-6">
-              <div className="flex flex-wrap justify-between items-center gap-3 mb-4">
-                <div>
-                  <h3 className="text-lg font-bold text-slate-900">S-Curve Bulanan</h3>
-                  <p className="text-sm text-slate-600">
-                    Isi nilai kumulatif baseline dan realisasi per bulan untuk project ini.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="text-sm font-medium text-slate-700">Tahun</label>
-                  <select
-                    value={selectedSCurveYear}
-                    onChange={(e) => handleSCurveYearChange(Number(e.target.value))}
-                    className="px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                  >
-                    {availableSCurveYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              {loadingSCurve ? (
-                <div className="flex items-center justify-center py-10 border-2 border-dashed border-slate-200 rounded-lg">
-                  <Loader2 size={24} className="animate-spin text-blue-600" />
-                  <span className="ml-2 text-sm text-slate-600">Memuat data S-Curve...</span>
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Bulan</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Baseline Kumulatif (%)</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Realisasi Kumulatif (%)</th>
-                        <th className="px-3 py-2 text-right font-semibold text-slate-700">Variance</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {sCurveRows.map((row) => {
-                        const variance = row.cumulativeActual - row.cumulativeBaseline;
-
-                        return (
-                          <tr key={`${selectedSCurveYear}-${row.monthIndex}`} className="hover:bg-slate-50">
-                            <td className="px-3 py-2 font-medium text-slate-900">{row.monthLabel}</td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.1"
-                                value={row.cumulativeBaseline}
-                                onChange={(e) => updateSCurveValue(row.monthIndex, 'cumulativeBaseline', e.target.value)}
-                                className="w-28 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              />
-                            </td>
-                            <td className="px-3 py-2">
-                              <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.1"
-                                value={row.cumulativeActual}
-                                onChange={(e) => updateSCurveValue(row.monthIndex, 'cumulativeActual', e.target.value)}
-                                className="w-28 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              />
-                            </td>
-                            <td className="px-3 py-2 text-right font-medium">
-                              <span className={variance >= 0 ? 'text-emerald-600' : 'text-red-600'}>
-                                {variance >= 0 ? '+' : ''}
-                                {variance.toFixed(1)}%
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
-              )}
 
               <p className="mt-3 text-xs text-slate-500">
-                Validasi: nilai 0-100, kumulatif tidak boleh turun dari bulan sebelumnya, dan minimal satu nilai harus lebih dari 0.
+                Tip: gunakan tombol "Generate Bobot 100%" untuk membagi bobot otomatis agar total selalu tepat 100%.
               </p>
+            </div>
+
+            <div className="mt-6 border-t border-slate-200 pt-6">
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+                S-Curve bulanan dihitung otomatis dari bobot, rentang tanggal, dan status di tabel Activities saat data disimpan.
+              </div>
             </div>
 
             <div className="flex gap-3 mt-6">

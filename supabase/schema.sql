@@ -207,6 +207,12 @@ CREATE POLICY "Allow public insert on s_curve_baseline" ON s_curve_baseline FOR 
 CREATE POLICY "Allow public update on s_curve_baseline" ON s_curve_baseline FOR UPDATE USING (true);
 CREATE POLICY "Allow public insert on s_curve_actual" ON s_curve_actual FOR INSERT WITH CHECK (true);
 CREATE POLICY "Allow public update on s_curve_actual" ON s_curve_actual FOR UPDATE USING (true);
+CREATE POLICY "Allow public delete on projects" ON projects FOR DELETE USING (true);
+CREATE POLICY "Allow public delete on activities" ON activities FOR DELETE USING (true);
+CREATE POLICY "Allow public delete on weekly_progress" ON weekly_progress FOR DELETE USING (true);
+CREATE POLICY "Allow public delete on monthly_progress" ON monthly_progress FOR DELETE USING (true);
+CREATE POLICY "Allow public delete on s_curve_baseline" ON s_curve_baseline FOR DELETE USING (true);
+CREATE POLICY "Allow public delete on s_curve_actual" ON s_curve_actual FOR DELETE USING (true);
 
 -- =====================================================
 -- VIEWS: Helpful views untuk query yang sering digunakan

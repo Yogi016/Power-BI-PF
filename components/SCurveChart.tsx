@@ -21,6 +21,13 @@ interface Props {
   yearLabel?: string | null;
 }
 
+const CHART_MAX_PERCENT = 100;
+
+const clampPercent = (value: number): number => {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(CHART_MAX_PERCENT, value));
+};
+
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
@@ -47,19 +54,20 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
   // Convert weekly data to chart format
   const chartData = showWeekly && weeklyData 
     ? weeklyData.map((w, idx) => {
-        const prev = idx === 0 ? 0 : weeklyData[idx - 1].baseline;
-        const weeklyTarget = Math.max(0, w.baseline - prev);
+        const clampedBaseline = clampPercent(w.baseline);
+        const prev = idx === 0 ? 0 : clampPercent(weeklyData[idx - 1].baseline);
+        const weeklyTarget = Math.max(0, clampedBaseline - prev);
         return {
           period: `${w.week} (${w.year})`,
-          plan: w.baseline,
-          actual: w.actual,
+          plan: clampedBaseline,
+          actual: clampPercent(w.actual),
           weeklyTarget,
         };
       })
     : data?.map(d => ({
         period: `${d.month}${yearLabel ? ` (${yearLabel})` : ''}`,
-        plan: d.plan,
-        actual: d.actual,
+        plan: clampPercent(d.plan),
+        actual: clampPercent(d.actual),
       })) || [];
 
   // Untuk weekly data, kita perlu mengurangi jumlah tick yang ditampilkan
@@ -101,7 +109,8 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             axisLine={false}
             tickLine={false}
             tick={{ fill: '#64748b', fontSize: 12 }}
-            domain={[0, 120]}
+            domain={[0, CHART_MAX_PERCENT]}
+            ticks={[0, 20, 40, 60, 80, 100]}
             tickFormatter={(value) => `${value}%`}
           />
           <Tooltip content={<CustomTooltip />} />
