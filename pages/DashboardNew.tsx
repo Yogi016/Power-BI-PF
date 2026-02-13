@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ProjectHeader } from '../components/ProjectHeader';
 import { ProgressMetrics } from '../components/ProgressMetrics';
 import { SCurveChart } from '../components/SCurveChart';
@@ -7,7 +7,8 @@ import { ProjectSelector } from '../components/ProjectSelector';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport } from '../lib/weeklyReportUtils';
-import { Loader2, TrendingUp, FileText, Database } from 'lucide-react';
+import html2canvas from 'html2canvas';
+import { Loader2, TrendingUp, FileText, Database, Download } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -23,6 +24,8 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [downloadingChart, setDownloadingChart] = useState(false);
+  const sCurveChartRef = useRef<HTMLDivElement | null>(null);
 
   // Load projects on mount
   useEffect(() => {
@@ -143,6 +146,40 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     }));
   }, [displayData]);
 
+  const sanitizeFileNamePart = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  const handleDownloadChartPng = async () => {
+    if (!chartData.length || !sCurveChartRef.current) return;
+
+    setDownloadingChart(true);
+    try {
+      const canvas = await html2canvas(sCurveChartRef.current, {
+        backgroundColor: '#ffffff',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const projectPart = selectedProject?.name ? sanitizeFileNamePart(selectedProject.name) : 'semua-project';
+      const periodPart = selectedPeriod === 'monthly' ? 'bulanan' : selectedPeriod === 'weekly' ? 'mingguan' : 'tahunan';
+      const yearPart = selectedYear ? `-${selectedYear}` : '';
+
+      const link = document.createElement('a');
+      link.href = canvas.toDataURL('image/png');
+      link.download = `diagram-s-curve-${projectPart}-${periodPart}${yearPart}.png`;
+      link.click();
+    } catch (error) {
+      console.error('Error downloading S-Curve chart:', error);
+      alert('Gagal mengunduh diagram S-Curve. Silakan coba lagi.');
+    } finally {
+      setDownloadingChart(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -238,23 +275,40 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
 
         {/* S-Curve Chart */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold text-slate-900 mb-2">
-              Diagram S-Curve {!selectedProjectId && '- Semua Project'}
-            </h2>
-            <p className="text-slate-600">
-              {selectedProjectId 
-                ? 'Grafik perbandingan progress baseline (rencana) vs actual (realisasi)'
-                : 'Grafik rata-rata progress dari semua project'}
-            </p>
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 mb-2">
+                Diagram S-Curve {!selectedProjectId && '- Semua Project'}
+              </h2>
+              <p className="text-slate-600">
+                {selectedProjectId 
+                  ? 'Grafik perbandingan progress baseline (rencana) vs actual (realisasi)'
+                  : 'Grafik rata-rata progress dari semua project'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleDownloadChartPng}
+              disabled={!chartData.length || downloadingChart}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+                !chartData.length || downloadingChart
+                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                  : 'bg-slate-900 hover:bg-slate-800 text-white'
+              }`}
+            >
+              {downloadingChart ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+              {downloadingChart ? 'Mengunduh...' : 'Unduh PNG'}
+            </button>
           </div>
 
           {chartData.length > 0 ? (
-            <SCurveChart 
-              data={chartData}
-              showWeekly={selectedPeriod === 'weekly'}
-              yearLabel={selectedYear?.toString()}
-            />
+            <div ref={sCurveChartRef}>
+              <SCurveChart 
+                data={chartData}
+                showWeekly={selectedPeriod === 'weekly'}
+                yearLabel={selectedYear?.toString()}
+              />
+            </div>
           ) : (
             <div className="h-[400px] flex items-center justify-center bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
               <div className="text-center">
