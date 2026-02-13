@@ -111,7 +111,7 @@ export async function fetchSCurveData(
       .from('s_curve_actual')
       .select('*')
       .eq('project_id', projectId)
-      .eq('period_type', periodType)
+      .eq('period_type', actualPeriodType)
       .order('year', { ascending: true })
       .order('period_index', { ascending: true });
 

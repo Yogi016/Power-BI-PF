@@ -4,14 +4,16 @@ import { ProgressMetrics } from '../components/ProgressMetrics';
 import { SCurveChart } from '../components/SCurveChart';
 import { TimelineSelector } from '../components/TimelineSelector';
 import { ProjectSelector } from '../components/ProjectSelector';
-import { FilterPanel } from '../components/FilterPanel';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
-import { FilterState, applyFilters, getDefaultFilters, saveFilters, loadFilters } from '../lib/filterUtils';
 import { generateWeeklyReport } from '../lib/weeklyReportUtils';
-import { Loader2, TrendingUp, FileText } from 'lucide-react';
+import { Loader2, TrendingUp, FileText, Database } from 'lucide-react';
 
-export const DashboardNew: React.FC = () => {
+interface DashboardNewProps {
+  onOpenManageDataForSCurve?: (projectId: string | null) => void;
+}
+
+export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForSCurve }) => {
   // State
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -21,17 +23,6 @@ export const DashboardNew: React.FC = () => {
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingReport, setGeneratingReport] = useState(false);
-  
-  // Filters state
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const saved = loadFilters('dashboardFilters');
-    return saved || getDefaultFilters();
-  });
-
-  // Save filters to localStorage when changed
-  useEffect(() => {
-    saveFilters('dashboardFilters', filters);
-  }, [filters]);
 
   // Load projects on mount
   useEffect(() => {
@@ -84,15 +75,10 @@ export const DashboardNew: React.FC = () => {
     loadMetrics();
   }, [selectedProjectId]);
 
-  // Apply filters to projects
-  const filteredProjects = useMemo(() => {
-    return applyFilters(projects, filters);
-  }, [projects, filters]);
-
   // Get selected project
   const selectedProject = useMemo(() => {
-    return filteredProjects.find(p => p.id === selectedProjectId) || null;
-  }, [filteredProjects, selectedProjectId]);
+    return projects.find(p => p.id === selectedProjectId) || null;
+  }, [projects, selectedProjectId]);
 
   // Get available years from S-Curve data
   const availableYears = useMemo(() => {
@@ -204,16 +190,10 @@ export const DashboardNew: React.FC = () => {
         {/* Project Header */}
         {selectedProject && <ProjectHeader project={selectedProject} />}
 
-        {/* Filters & Project Selector */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <FilterPanel
-            projects={projects}
-            filters={filters}
-            onFiltersChange={setFilters}
-          />
-          
+        {/* Project Selector & Timeline */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <ProjectSelector
-            projects={filteredProjects}
+            projects={projects}
             selectedProjectId={selectedProjectId}
             onProjectChange={setSelectedProjectId}
           />
@@ -279,34 +259,28 @@ export const DashboardNew: React.FC = () => {
             <div className="h-[400px] flex items-center justify-center bg-slate-50 rounded-lg border-2 border-dashed border-slate-300">
               <div className="text-center">
                 <p className="text-slate-500 font-medium">
-                  Tidak ada data S-Curve untuk project ini
+                  {selectedProjectId
+                    ? `Project ${selectedProject?.name || 'ini'} belum memiliki data S-Curve bulanan`
+                    : 'Belum ada data S-Curve bulanan untuk project yang tersedia'}
                 </p>
                 <p className="text-sm text-slate-400 mt-1">
-                  Silakan tambahkan data di database Supabase
+                  Isi baseline dan realisasi bulanan di halaman Manage Data
                 </p>
+                {selectedProjectId && onOpenManageDataForSCurve && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenManageDataForSCurve(selectedProjectId)}
+                    className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Database size={16} />
+                    Isi S-Curve di Manage Data
+                  </button>
+                )}
               </div>
             </div>
           )}
         </div>
 
-        {/* Info Footer */}
-        <div className="bg-gradient-to-r from-blue-50 to-emerald-50 border border-blue-200 rounded-xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
-              <TrendingUp size={24} className="text-white" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-slate-900 mb-2">
-                Sistem Pemantauan Progress Project
-              </h3>
-              <p className="text-slate-700 text-sm leading-relaxed">
-                Dashboard ini menampilkan informasi real-time dari database Supabase. 
-                Semua data progress, aktivitas, dan metrics diupdate secara otomatis. 
-                Gunakan filter project dan periode untuk melihat detail yang Anda butuhkan.
-              </p>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   );

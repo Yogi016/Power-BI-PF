@@ -15,12 +15,26 @@ const App: React.FC = () => {
   const [activePage, setActivePage] = useState<PageView>(PageView.DASHBOARD);
   const [useNewDashboard, setUseNewDashboard] = useState(true); // Toggle untuk testing
   const [useNewManageData, setUseNewManageData] = useState(true); // Toggle untuk Manage Data
+  const [manageDataFocusProjectId, setManageDataFocusProjectId] = useState<string | null>(null);
+
+  const handleOpenManageDataForSCurve = (projectId: string | null) => {
+    setManageDataFocusProjectId(projectId);
+    setActivePage(PageView.MANAGE_DATA);
+  };
+
+  const handleFocusHandled = () => {
+    setManageDataFocusProjectId(null);
+  };
 
   return (
     <DataProvider>
       <Layout activePage={activePage} onPageChange={setActivePage}>
         {activePage === PageView.DASHBOARD ? (
-          useNewDashboard ? <DashboardNew /> : <Dashboard />
+          useNewDashboard ? (
+            <DashboardNew onOpenManageDataForSCurve={handleOpenManageDataForSCurve} />
+          ) : (
+            <Dashboard />
+          )
         ) : activePage === PageView.WEEKLY_PROGRESS ? (
           <WeeklyProgressPage />
         ) : activePage === PageView.GANTT ? (
@@ -30,7 +44,14 @@ const App: React.FC = () => {
         ) : activePage === PageView.WORK ? (
           <WorkPage />
         ) : (
-          useNewManageData ? <ManageDataNew /> : <ManageData />
+          useNewManageData ? (
+            <ManageDataNew
+              focusProjectId={manageDataFocusProjectId}
+              onFocusHandled={handleFocusHandled}
+            />
+          ) : (
+            <ManageData />
+          )
         )}
       </Layout>
     </DataProvider>
