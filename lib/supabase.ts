@@ -94,7 +94,7 @@ export async function fetchSCurveData(
   try {
     // For yearly, we'll aggregate monthly data
     const actualPeriodType = periodType === 'yearly' ? 'monthly' : periodType;
-    
+
     // Fetch baseline data
     const { data: baselineData, error: baselineError } = await supabase
       .from('s_curve_baseline')
@@ -369,7 +369,7 @@ export async function updateActivityDates(
   try {
     const { error } = await supabase
       .from('activities')
-      .update({ 
+      .update({
         start_date: startDate,
         end_date: endDate,
       })
@@ -884,7 +884,7 @@ export async function fetchAllProjectsSCurveData(
       const avgBaseline = period.baselineValues.length > 0
         ? period.baselineValues.reduce((a, b) => a + b, 0) / period.baselineValues.length
         : 0;
-      
+
       const avgActual = period.actualValues.length > 0
         ? period.actualValues.reduce((a, b) => a + b, 0) / period.actualValues.length
         : 0;
@@ -1293,6 +1293,76 @@ export async function deleteWorkPlanSchedule(workProjectId: string): Promise<boo
     return true;
   } catch (error) {
     console.error('Error deleting work plan schedule:', error);
+    return false;
+  }
+}
+
+// =====================================================
+// EVIDENCE STORAGE OPERATIONS
+// =====================================================
+
+const EVIDENCE_BUCKET = 'evidence';
+
+/**
+ * Upload a file to the evidence storage bucket.
+ * Returns the public URL on success, or null on failure.
+ */
+export async function uploadEvidence(
+  file: File,
+  projectId: string,
+  activityCode: string
+): Promise<string | null> {
+  if (!supabase) return null;
+
+  try {
+    const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const timestamp = Date.now();
+    const safeName = (activityCode || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
+    const filePath = `${projectId}/${safeName}_${timestamp}.${ext}`;
+
+    const { error } = await supabase.storage
+      .from(EVIDENCE_BUCKET)
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: false,
+      });
+
+    if (error) throw error;
+
+    const { data: urlData } = supabase.storage
+      .from(EVIDENCE_BUCKET)
+      .getPublicUrl(filePath);
+
+    return urlData?.publicUrl || null;
+  } catch (error) {
+    console.error('Error uploading evidence:', error);
+    return null;
+  }
+}
+
+/**
+ * Delete an evidence file from storage using its public URL.
+ */
+export async function deleteEvidence(publicUrl: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    // Extract the file path from the public URL
+    // URL format: https://<project>.supabase.co/storage/v1/object/public/evidence/<path>
+    const marker = `/storage/v1/object/public/${EVIDENCE_BUCKET}/`;
+    const idx = publicUrl.indexOf(marker);
+    if (idx === -1) return false;
+
+    const filePath = decodeURIComponent(publicUrl.substring(idx + marker.length));
+
+    const { error } = await supabase.storage
+      .from(EVIDENCE_BUCKET)
+      .remove([filePath]);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting evidence:', error);
     return false;
   }
 }

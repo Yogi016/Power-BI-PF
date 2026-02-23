@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Project } from '../types';
 import {
   fetchProjects,
@@ -8,12 +8,15 @@ import {
   upsertSCurveBaseline,
   upsertSCurveActual,
   createActivity,
+  uploadEvidence,
+  deleteEvidence,
 } from '../lib/supabase';
 import { supabase } from '../lib/supabaseClient';
 import {
   Plus,
   Edit2,
   Trash2,
+  Calendar,
   Save,
   X,
   Loader2,
@@ -22,6 +25,11 @@ import {
   Building2,
   TrendingUp,
   Wand2,
+  Paperclip,
+  Camera,
+  FileText,
+  Image as ImageIcon,
+  ExternalLink,
 } from 'lucide-react';
 
 interface ManageDataNewProps {
@@ -346,6 +354,9 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   const [isCreating, setIsCreating] = useState(false);
   const [notification, setNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
+  // Year filter state
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
 
@@ -370,6 +381,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   // S-Curve editor state
   const [sCurveDraftMap, setSCurveDraftMap] = useState<Record<string, SCurveDraftValue>>({});
   const [sCurveRows, setSCurveRows] = useState<MonthlySCurveEditorRow[]>([]);
+
+  // Evidence upload state
+  const [uploadingEvidence, setUploadingEvidence] = useState<number | null>(null);
+  const evidenceFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
+  const evidenceCameraRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
   // Load projects
   useEffect(() => {
@@ -882,6 +898,45 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     showNotification('success', `Bobot otomatis diperbarui ke total 100% (${totalActivities} activity)`);
   };
 
+  // Evidence upload handler
+  const handleEvidenceUpload = async (index: number, file: File) => {
+    const projectId = editingProject?.id || 'new';
+    const code = activities[index]?.code || `act${index}`;
+
+    setUploadingEvidence(index);
+    try {
+      const url = await uploadEvidence(file, projectId, code);
+      if (url) {
+        updateActivity(index, 'evidence', url);
+        showNotification('success', `File "${file.name}" berhasil diupload`);
+      } else {
+        showNotification('error', 'Gagal mengupload file');
+      }
+    } catch {
+      showNotification('error', 'Terjadi kesalahan saat upload');
+    } finally {
+      setUploadingEvidence(null);
+    }
+  };
+
+  // Evidence delete handler
+  const handleEvidenceDelete = async (index: number) => {
+    const url = activities[index]?.evidence;
+    if (!url) return;
+
+    const confirmed = window.confirm('Yakin ingin menghapus file evidence ini?');
+    if (!confirmed) return;
+
+    const deleted = await deleteEvidence(url);
+    if (deleted) {
+      updateActivity(index, 'evidence', '');
+      showNotification('success', 'Evidence berhasil dihapus');
+    } else {
+      // Still clear the field even if storage delete fails (URL might be manual)
+      updateActivity(index, 'evidence', '');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -900,13 +955,40 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
               <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Data</h1>
               <p className="text-slate-600">Kelola project, activities, dan S-Curve data</p>
             </div>
-            <button
-              onClick={handleCreate}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
-            >
-              <Plus size={20} />
-              Tambah Project
-            </button>
+            <div className="flex items-center gap-3">
+              {/* Year Filter */}
+              {(() => {
+                const availableYears = Array.from(
+                  new Set(projects.map((p) => new Date(p.startDate).getFullYear()))
+                ).sort((a, b) => b - a);
+                return availableYears.length > 1 ? (
+                  <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                    <Calendar size={16} className="text-slate-500" />
+                    <select
+                      value={selectedYear ?? ''}
+                      onChange={(e) =>
+                        setSelectedYear(e.target.value ? Number(e.target.value) : null)
+                      }
+                      className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
+                    >
+                      <option value="">Semua Tahun</option>
+                      {availableYears.map((year) => (
+                        <option key={year} value={year}>
+                          {year}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : null;
+              })()}
+              <button
+                onClick={handleCreate}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+              >
+                <Plus size={20} />
+                Tambah Project
+              </button>
+            </div>
           </div>
         </div>
 
@@ -950,11 +1032,10 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         {/* Notification */}
         {notification && (
           <div
-            className={`mb-6 p-4 rounded-lg flex items-center gap-3 animate-in slide-in-from-top-4 ${
-              notification.type === 'success'
-                ? 'bg-green-50 border border-green-200 text-green-800'
-                : 'bg-red-50 border border-red-200 text-red-800'
-            }`}
+            className={`mb-6 p-4 rounded-lg flex items-center gap-3 animate-in slide-in-from-top-4 ${notification.type === 'success'
+              ? 'bg-green-50 border border-green-200 text-green-800'
+              : 'bg-red-50 border border-red-200 text-red-800'
+              }`}
           >
             {notification.type === 'success' ? (
               <CheckCircle2 size={20} className="text-green-600" />
@@ -1101,11 +1182,10 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                       type="button"
                       onClick={handleSaveActivities}
                       disabled={!activitiesDirty || savingActivities}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        !activitiesDirty || savingActivities
-                          ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                          : 'bg-blue-600 hover:bg-blue-700 text-white'
-                      }`}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${!activitiesDirty || savingActivities
+                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                        : 'bg-blue-600 hover:bg-blue-700 text-white'
+                        }`}
                     >
                       {savingActivities ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                       Simpan Activities
@@ -1115,11 +1195,10 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                     type="button"
                     onClick={generateAutoWeights}
                     disabled={activities.length === 0}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                      activities.length === 0
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                    }`}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activities.length === 0
+                      ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                      : 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                      }`}
                   >
                     <Wand2 size={16} />
                     Generate Bobot 100%
@@ -1213,13 +1292,84 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                             />
                           </td>
                           <td className="px-3 py-2">
-                            <input
-                              type="url"
-                              value={activity.evidence || ''}
-                              onChange={(e) => updateActivity(index, 'evidence', e.target.value)}
-                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              placeholder="https://..."
-                            />
+                            <div className="flex items-center gap-1 min-w-[160px]">
+                              {uploadingEvidence === index ? (
+                                <div className="flex items-center gap-2 text-blue-600">
+                                  <Loader2 size={14} className="animate-spin" />
+                                  <span className="text-xs">Uploading...</span>
+                                </div>
+                              ) : activity.evidence ? (
+                                <div className="flex items-center gap-1">
+                                  {activity.evidence.match(/\.(pdf)$/i) ? (
+                                    <FileText size={14} className="text-red-500 flex-shrink-0" />
+                                  ) : (
+                                    <ImageIcon size={14} className="text-green-500 flex-shrink-0" />
+                                  )}
+                                  <a
+                                    href={activity.evidence}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs text-blue-600 hover:underline truncate max-w-[80px]"
+                                    title={activity.evidence}
+                                  >
+                                    Lihat File
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEvidenceDelete(index)}
+                                    className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0"
+                                    title="Hapus file"
+                                  >
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-1">
+                                  {/* File upload button */}
+                                  <input
+                                    type="file"
+                                    accept=".pdf,image/jpeg,image/png,image/webp"
+                                    className="hidden"
+                                    ref={(el) => { evidenceFileRefs.current[index] = el; }}
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleEvidenceUpload(index, f);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => evidenceFileRefs.current[index]?.click()}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                                    title="Upload PDF atau gambar"
+                                  >
+                                    <Paperclip size={12} />
+                                    File
+                                  </button>
+                                  {/* Camera capture button */}
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    className="hidden"
+                                    ref={(el) => { evidenceCameraRefs.current[index] = el; }}
+                                    onChange={(e) => {
+                                      const f = e.target.files?.[0];
+                                      if (f) handleEvidenceUpload(index, f);
+                                      e.target.value = '';
+                                    }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => evidenceCameraRefs.current[index]?.click()}
+                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors"
+                                    title="Ambil foto dari kamera"
+                                  >
+                                    <Camera size={12} />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
                           <td className="px-3 py-2 text-center">
                             <button
@@ -1286,7 +1436,10 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
         {/* Projects List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {projects.map((project) => (
+          {(selectedYear
+            ? projects.filter((p) => new Date(p.startDate).getFullYear() === selectedYear)
+            : projects
+          ).map((project) => (
             <div
               key={project.id}
               className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow"
@@ -1329,15 +1482,14 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-100">
                 <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${
-                    project.status === 'active'
-                      ? 'bg-green-100 text-green-700'
-                      : project.status === 'completed'
+                  className={`px-3 py-1 rounded-full text-xs font-semibold ${project.status === 'active'
+                    ? 'bg-green-100 text-green-700'
+                    : project.status === 'completed'
                       ? 'bg-blue-100 text-blue-700'
                       : project.status === 'on-hold'
-                      ? 'bg-yellow-100 text-yellow-700'
-                      : 'bg-red-100 text-red-700'
-                  }`}
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'bg-red-100 text-red-700'
+                    }`}
                 >
                   {project.status}
                 </span>
@@ -1376,6 +1528,28 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
             </button>
           </div>
         )}
+
+        {/* Filtered empty state */}
+        {selectedYear &&
+          projects.length > 0 &&
+          projects.filter((p) => new Date(p.startDate).getFullYear() === selectedYear).length === 0 &&
+          !isCreating && (
+            <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 text-center">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Calendar size={32} className="text-slate-400" />
+              </div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Tidak Ada Proyek Tahun {selectedYear}</h3>
+              <p className="text-slate-600 mb-4">
+                Tidak ditemukan proyek dengan tahun anggaran {selectedYear}.
+              </p>
+              <button
+                onClick={() => setSelectedYear(null)}
+                className="inline-flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors"
+              >
+                Tampilkan Semua Tahun
+              </button>
+            </div>
+          )}
       </div>
     </div>
   );

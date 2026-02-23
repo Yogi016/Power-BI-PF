@@ -8,7 +8,7 @@ import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
-import { Loader2, TrendingUp, FileText, Database, Download } from 'lucide-react';
+import { Loader2, TrendingUp, FileText, Database, Download, Calendar } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -20,6 +20,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('monthly');
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [projectYearFilter, setProjectYearFilter] = useState<number | null>(null);
   const [sCurveData, setSCurveData] = useState<SCurveDataPoint[]>([]);
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -33,12 +34,12 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
       setLoading(true);
       const projectsData = await fetchProjects();
       setProjects(projectsData);
-      
+
       // Auto-select first project if available
       if (projectsData.length > 0 && !selectedProjectId) {
         setSelectedProjectId(projectsData[0].id);
       }
-      
+
       setLoading(false);
     };
 
@@ -83,6 +84,30 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
+  // Available years from projects for year filter
+  const availableProjectYears = useMemo(() => {
+    return Array.from(
+      new Set(projects.map((p) => new Date(p.startDate).getFullYear()))
+    ).sort((a, b) => b - a);
+  }, [projects]);
+
+  // Filter projects by year
+  const filteredProjects = useMemo(() => {
+    if (!projectYearFilter) return projects;
+    return projects.filter(
+      (p) => new Date(p.startDate).getFullYear() === projectYearFilter
+    );
+  }, [projects, projectYearFilter]);
+
+  // Auto-select first project when filter changes
+  useEffect(() => {
+    if (projectYearFilter === null) return;
+    const currentStillVisible = filteredProjects.some((p) => p.id === selectedProjectId);
+    if (!currentStillVisible) {
+      setSelectedProjectId(filteredProjects.length > 0 ? filteredProjects[0].id : null);
+    }
+  }, [filteredProjects, projectYearFilter]);
+
   // Get available years from S-Curve data
   const availableYears = useMemo(() => {
     const years = new Set<number>();
@@ -109,7 +134,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
       daysRemaining: 0,
       completionRate: 0,
     };
-    
+
     // Aggregate metrics from all filtered projects
     // This is a simplified version - you might want more sophisticated aggregation
     return null;
@@ -229,12 +254,35 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
 
         {/* Project Selector & Timeline */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <ProjectSelector
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            onProjectChange={setSelectedProjectId}
-          />
-          
+          <div>
+            {availableProjectYears.length > 1 && (
+              <div className="flex items-center justify-end mb-2">
+                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                  <Calendar size={16} className="text-slate-500" />
+                  <select
+                    value={projectYearFilter ?? ''}
+                    onChange={(e) =>
+                      setProjectYearFilter(e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
+                  >
+                    <option value="">Semua Tahun</option>
+                    {availableProjectYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+            <ProjectSelector
+              projects={filteredProjects}
+              selectedProjectId={selectedProjectId}
+              onProjectChange={setSelectedProjectId}
+            />
+          </div>
+
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
               Periode Tampilan
@@ -246,7 +294,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
               availableYears={availableYears}
               onYearChange={setSelectedYear}
             />
-            
+
             {/* Generate Weekly Report Button */}
             {selectedProjectId && (
               <button
@@ -281,7 +329,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
                 Diagram S-Curve {!selectedProjectId && '- Semua Project'}
               </h2>
               <p className="text-slate-600">
-                {selectedProjectId 
+                {selectedProjectId
                   ? 'Grafik perbandingan progress baseline (rencana) vs actual (realisasi)'
                   : 'Grafik rata-rata progress dari semua project'}
               </p>
@@ -290,11 +338,10 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
               type="button"
               onClick={handleDownloadChartPng}
               disabled={!chartData.length || downloadingChart}
-              className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                !chartData.length || downloadingChart
-                  ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                  : 'bg-slate-900 hover:bg-slate-800 text-white'
-              }`}
+              className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${!chartData.length || downloadingChart
+                ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-slate-900 hover:bg-slate-800 text-white'
+                }`}
             >
               {downloadingChart ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
               {downloadingChart ? 'Mengunduh...' : 'Unduh PNG'}
@@ -303,7 +350,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
 
           {chartData.length > 0 ? (
             <div ref={sCurveChartRef}>
-              <SCurveChart 
+              <SCurveChart
                 data={chartData}
                 showWeekly={selectedPeriod === 'weekly'}
                 yearLabel={selectedYear?.toString()}
@@ -335,7 +382,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
           )}
         </div>
 
-      </div>
-    </div>
+      </div >
+    </div >
   );
 };
