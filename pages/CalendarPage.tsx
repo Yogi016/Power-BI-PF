@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar as CalendarIcon, Filter } from 'lucide-react';
+import { Calendar as CalendarIcon, Filter, Loader2 } from 'lucide-react';
 import { CalendarView } from '../components/CalendarView';
 import { CalendarEvent } from '../types';
 import { fetchProjects, fetchActivities } from '../lib/supabase';
@@ -100,7 +100,7 @@ export const CalendarPage: React.FC = () => {
   const handleEventDrop = async (event: CalendarEvent, start: Date, end: Date) => {
     // TODO: Update activity dates in database
     console.log('Event dropped:', event, start, end);
-    
+
     // Optimistic update
     const updatedActivities = activities.map(activity => {
       if (activity.id === event.resource.activityId) {
@@ -112,7 +112,7 @@ export const CalendarPage: React.FC = () => {
       }
       return activity;
     });
-    
+
     setActivities(updatedActivities);
   };
 
@@ -131,105 +131,116 @@ export const CalendarPage: React.FC = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
-      <div className="max-w-[1800px] mx-auto space-y-4 sm:space-y-6">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-emerald-600 rounded-xl p-4 sm:p-6 shadow-lg">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
-              <CalendarIcon size={20} className="sm:w-6 sm:h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl sm:text-2xl font-bold text-white">Calendar View</h2>
-              <p className="text-blue-100 text-xs sm:text-sm">Visualisasi aktivitas dalam format kalender</p>
-            </div>
-          </div>
+    <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2 sm:gap-3">
+            <span className="p-1.5 sm:p-2 bg-slate-100 rounded-lg">
+              <CalendarIcon size={20} className="text-indigo-600 sm:hidden" />
+              <CalendarIcon size={24} className="text-indigo-600 hidden sm:block" />
+            </span>
+            Calendar View
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm sm:text-base">Visualisasi aktivitas dalam format kalender interaktif</p>
+        </div>
+      </div>
 
-          {/* Filters */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-            {/* Project Filter */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-white/20">
-              <label className="block text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                <Filter size={16} />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-4 sm:mb-6 animate-in slide-in-from-bottom-4 duration-500">
+        {/* Project Selector */}
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 sm:p-6 group">
+          <div className="space-y-1 mb-4 flex justify-between items-start">
+            <div>
+              <label className="text-sm font-semibold leading-none tracking-tight text-slate-900">
                 Pilih Project
               </label>
-              <select
-                value={selectedProjectId || ''}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border-2 border-blue-200 rounded-lg text-slate-900 text-sm sm:text-base font-medium focus:ring-4 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all"
-              >
-                {projects.map(project => (
-                  <option key={project.id} value={project.id}>
-                    {project.name} • {project.pic}
-                  </option>
-                ))}
-              </select>
+              <p className="text-sm text-slate-500 mt-1">Filter kalender berdasarkan proyek pengawasan.</p>
             </div>
-
-            {/* Status Filter */}
-            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-white/20">
-              <label className="block text-sm font-semibold text-white mb-2 flex items-center gap-2">
-                <Filter size={16} />
-                Filter Status
-              </label>
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border-2 border-blue-200 rounded-lg text-slate-900 text-sm sm:text-base font-medium focus:ring-4 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all"
-              >
-                {statusOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+            <div className="p-2 bg-slate-50 rounded-md shrink-0 transition-colors group-hover:bg-slate-100">
+              <Filter size={18} className="text-slate-400 group-hover:text-indigo-500 transition-colors" />
             </div>
           </div>
+          <select
+            value={selectedProjectId || ''}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1em] bg-[right_0.75rem_center] bg-no-repeat cursor-pointer group-hover:border-slate-300"
+          >
+            {projects.map(project => (
+              <option key={project.id} value={project.id}>
+                {project.name} • {project.pic}
+              </option>
+            ))}
+          </select>
         </div>
 
-        {/* Calendar */}
-        {loading ? (
-          <div className="bg-white rounded-xl shadow-lg p-12 flex items-center justify-center">
-            <div className="text-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-              <p className="text-slate-600">Memuat kalender...</p>
+        {/* Status Filter */}
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 group">
+          <div className="space-y-1 mb-4 flex justify-between items-start">
+            <div>
+              <label className="text-sm font-semibold leading-none tracking-tight text-slate-900">
+                Filter Status
+              </label>
+              <p className="text-sm text-slate-500 mt-1">Tampilkan aktivitas berdasarkan status saat ini.</p>
+            </div>
+            <div className="p-2 bg-slate-50 rounded-md shrink-0 transition-colors group-hover:bg-slate-100">
+              <Filter size={18} className="text-slate-400 group-hover:text-amber-500 transition-colors" />
             </div>
           </div>
-        ) : (
-          <div className="bg-white rounded-xl shadow-lg overflow-hidden" style={{ minHeight: '700px' }}>
-            <CalendarView
-              events={events}
-              onEventClick={handleEventClick}
-              onEventDrop={handleEventDrop}
-              onSelectSlot={handleSelectSlot}
-            />
-          </div>
-        )}
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="flex h-10 w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1em] bg-[right_0.75rem_center] bg-no-repeat cursor-pointer group-hover:border-slate-300"
+          >
+            {statusOptions.map(option => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
 
-        {/* Legend */}
-        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
-          <h3 className="text-sm font-semibold text-slate-700 mb-3">Status Legend</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-slate-400"></div>
-              <span className="text-xs sm:text-sm text-slate-600">Belum Dimulai</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-blue-500"></div>
-              <span className="text-xs sm:text-sm text-slate-600">Sedang Berjalan</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-green-500"></div>
-              <span className="text-xs sm:text-sm text-slate-600">Selesai</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-red-500"></div>
-              <span className="text-xs sm:text-sm text-slate-600">Terlambat</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 rounded bg-orange-500"></div>
-              <span className="text-xs sm:text-sm text-slate-600">Ditunda</span>
-            </div>
+      {/* Calendar */}
+      {loading ? (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-12 flex items-center justify-center animate-in fade-in duration-500 h-[700px]">
+          <div className="text-center flex flex-col items-center gap-4">
+            <Loader2 className="animate-spin text-slate-400" size={40} />
+            <p className="text-slate-500 font-medium">Memuat kalender kegiatan...</p>
+          </div>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden animate-in slide-in-from-bottom-4 duration-700 p-4" style={{ minHeight: '700px' }}>
+          <CalendarView
+            events={events}
+            onEventClick={handleEventClick}
+            onEventDrop={handleEventDrop}
+            onSelectSlot={handleSelectSlot}
+          />
+        </div>
+      )}
+
+      {/* Legend */}
+      <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-6 animate-in fade-in duration-700 delay-100">
+        <h3 className="text-sm font-semibold text-slate-900 mb-4 border-b border-slate-100 pb-2">Status Legend</h3>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-md bg-slate-400 shadow-sm border border-slate-500/20"></div>
+            <span className="text-sm font-medium text-slate-600">Belum Dimulai</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-md bg-blue-500 shadow-sm border border-blue-600/20"></div>
+            <span className="text-sm font-medium text-slate-600">Sedang Berjalan</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-md bg-green-500 shadow-sm border border-green-600/20"></div>
+            <span className="text-sm font-medium text-slate-600">Selesai</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-md bg-red-500 shadow-sm border border-red-600/20"></div>
+            <span className="text-sm font-medium text-slate-600">Terlambat</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="w-4 h-4 rounded-md bg-orange-500 shadow-sm border border-orange-600/20"></div>
+            <span className="text-sm font-medium text-slate-600">Ditunda</span>
           </div>
         </div>
       </div>

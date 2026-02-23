@@ -19,11 +19,11 @@ export const GanttPage: React.FC = () => {
       setLoading(true);
       const projectsData = await fetchProjects();
       setProjects(projectsData);
-      
+
       if (projectsData.length > 0 && !selectedProjectId) {
         setSelectedProjectId(projectsData[0].id);
       }
-      
+
       setLoading(false);
     };
 
@@ -119,90 +119,99 @@ export const GanttPage: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen">
-        <div className="text-center">
-          <Loader2 size={48} className="animate-spin text-blue-600 mx-auto mb-4" />
-          <p className="text-slate-600 font-medium">Memuat Gantt Chart...</p>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-slate-500" />
+          <p className="text-sm text-slate-500 font-medium">Memuat Gantt Chart...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-3 sm:p-6">
-      <div className="max-w-[1800px] mx-auto space-y-4 sm:space-y-6">
-        {/* Enhanced Project Selector */}
-        <div className="bg-gradient-to-r from-blue-600 to-emerald-600 rounded-xl p-4 sm:p-6 shadow-lg">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0">
-              <Calendar size={20} className="sm:w-6 sm:h-6 text-white" />
-            </div>
-            <div className="flex-1">
-              <h2 className="text-xl sm:text-2xl font-bold text-white">Gantt Chart Timeline</h2>
-              <p className="text-blue-100 text-xs sm:text-sm">Visualisasi timeline project dengan drag-to-reschedule</p>
-            </div>
-          </div>
-          
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 sm:p-4 border border-white/20">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-3">
-              <label className="block text-sm font-semibold text-white flex items-center gap-2">
-                <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
-                </svg>
+    <div className="p-4 sm:p-6 space-y-6 sm:space-y-8 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-6">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-slate-900 flex items-center gap-2 sm:gap-3">
+            <span className="p-1.5 sm:p-2 bg-slate-100 rounded-lg">
+              <Calendar size={20} className="text-indigo-600 sm:hidden" />
+              <Calendar size={24} className="text-indigo-600 hidden sm:block" />
+            </span>
+            Gantt Chart
+          </h1>
+          <p className="text-slate-500 mt-1 text-sm sm:text-base">Visualisasi timeline project dengan drag-to-reschedule</p>
+        </div>
+
+        {/* Export Buttons */}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleExportPDF}
+            disabled={exporting || !selectedProjectId || activities.length === 0}
+            className="group flex items-center justify-center gap-2 rounded-md bg-white border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} className="text-slate-500 group-hover:text-red-600 group-hover:-translate-y-0.5 transition-all" />}
+            <span className="hidden sm:inline">Export PDF</span>
+          </button>
+          <button
+            onClick={handleExportExcel}
+            disabled={exporting || !selectedProjectId || activities.length === 0}
+            className="group flex items-center justify-center gap-2 rounded-md bg-white border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exporting ? <Loader2 size={16} className="animate-spin" /> : <FileSpreadsheet size={16} className="text-slate-500 group-hover:text-green-600 group-hover:-translate-y-0.5 transition-all" />}
+            <span className="hidden sm:inline">Export Excel</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm animate-in slide-in-from-bottom-4 duration-500">
+        <div className="flex flex-col space-y-1.5 p-6 border-b border-slate-100">
+          <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
+            <div className="space-y-1">
+              <label htmlFor="project-select" className="text-sm font-medium leading-none text-slate-700">
                 Pilih Project
               </label>
-              
-              {/* Export Buttons */}
-              <div className="flex items-center gap-2 w-full sm:w-auto">
-                <button
-                  onClick={handleExportPDF}
-                  disabled={exporting || !selectedProjectId || activities.length === 0}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
-                  title="Export to PDF"
-                >
-                  <FileDown size={16} />
-                  <span>PDF</span>
-                </button>
-                <button
-                  onClick={handleExportExcel}
-                  disabled={exporting || !selectedProjectId || activities.length === 0}
-                  className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white/20 hover:bg-white/30 disabled:bg-white/10 disabled:cursor-not-allowed rounded-lg text-white text-sm font-medium transition-all border border-white/30"
-                  title="Export to Excel"
-                >
-                  <FileSpreadsheet size={16} />
-                  <span>Excel</span>
-                </button>
-              </div>
+              <p className="text-[13px] text-slate-500">Pilih proyek untuk melihat timeline detail.</p>
             </div>
-            
             <select
+              id="project-select"
               value={selectedProjectId || ''}
               onChange={(e) => setSelectedProjectId(e.target.value)}
-              className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border-2 border-blue-200 rounded-lg text-slate-900 text-sm sm:text-base font-medium focus:ring-4 focus:ring-blue-300 focus:border-blue-500 outline-none transition-all shadow-sm hover:shadow-md"
+              className="flex h-10 w-full sm:w-[320px] items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm transition-colors placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 appearance-none bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22currentColor%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-[length:1em] bg-[right_0.75rem_center] bg-no-repeat cursor-pointer"
             >
+              <option value="" disabled>Pilih Project...</option>
               {projects.map(project => (
-                <option key={project.id} value={project.id} className="py-2">
-                  {project.name} • {project.pic}
+                <option key={project.id} value={project.id}>
+                  {project.name} {project.pic ? `(${project.pic})` : ''}
                 </option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* Gantt Chart */}
-        <div ref={ganttRef}>
-          {selectedProjectId && (
-            <GanttChart
-              projectId={selectedProjectId}
-              activities={activities}
-              onActivityUpdate={() => {
-                // Reload activities after update
-                fetchActivities(selectedProjectId).then(setActivities);
-              }}
-            />
+        {/* Gantt Chart Container */}
+        <div className="p-3 sm:p-6 overflow-x-auto" ref={ganttRef}>
+          {selectedProjectId ? (
+            <div className="rounded-lg border border-slate-200 overflow-hidden">
+              <GanttChart
+                projectId={selectedProjectId}
+                activities={activities}
+                onActivityUpdate={() => {
+                  fetchActivities(selectedProjectId).then(setActivities);
+                }}
+              />
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="rounded-full bg-slate-100 p-3 mb-4">
+                <Calendar className="h-6 w-6 text-slate-400" />
+              </div>
+              <h3 className="text-sm font-semibold text-slate-900">Belum ada project terpilih</h3>
+              <p className="text-sm text-slate-500 mt-1">Silakan pilih sebuah project dari daftar di atas untuk merender timeline Gantt Chart.</p>
+            </div>
           )}
         </div>
       </div>
     </div>
   );
 };
+
