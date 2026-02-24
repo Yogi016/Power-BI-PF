@@ -87,6 +87,42 @@ export enum PageView {
   GANTT = 'gantt',
   CALENDAR = 'calendar',
   WORK = 'work',
+  LING_SIGN = 'ling_sign',
+}
+
+// =====================================================
+// LING-SIGN INTERFACES
+// =====================================================
+
+export interface LingSignature {
+  id: string;
+  signerName: string;
+  signerRole: string;
+  verificationCode: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SignedDocument {
+  id: string;
+  originalFilename: string;
+  storageUrl?: string;
+  signedAt?: string;
+  createdAt?: string;
+  signatures?: SignedDocumentSignature[];
+}
+
+export interface SignedDocumentSignature {
+  id: string;
+  documentId: string;
+  signatureId?: string;
+  signerName: string;
+  signerRole: string;
+  verificationCode: string;
+  positionX: number;
+  positionY: number;
+  pageNumber: number;
+  signedAt?: string;
 }
 
 export interface ProjectFilterState {

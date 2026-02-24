@@ -1524,3 +1524,270 @@ export async function deleteEvidence(publicUrl: string): Promise<boolean> {
     return false;
   }
 }
+
+// =====================================================
+// LING-SIGN OPERATIONS
+// =====================================================
+
+import { LingSignature, SignedDocument, SignedDocumentSignature } from '../types';
+
+/**
+ * Fetch all digital signatures
+ */
+export async function fetchLingSignatures(): Promise<LingSignature[]> {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('ling_signatures')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      id: row.id,
+      signerName: row.signer_name,
+      signerRole: row.signer_role,
+      verificationCode: row.verification_code,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching ling signatures:', error);
+    return [];
+  }
+}
+
+/**
+ * Create a new digital signature
+ */
+export async function createLingSignature(
+  signerName: string,
+  signerRole: string,
+  verificationCode: string
+): Promise<LingSignature | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase
+      .from('ling_signatures')
+      .insert({
+        signer_name: signerName,
+        signer_role: signerRole,
+        verification_code: verificationCode,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return {
+      id: data.id,
+      signerName: data.signer_name,
+      signerRole: data.signer_role,
+      verificationCode: data.verification_code,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error('Error creating ling signature:', error);
+    return null;
+  }
+}
+
+/**
+ * Update a digital signature
+ */
+export async function updateLingSignature(
+  id: string,
+  signerName: string,
+  signerRole: string
+): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('ling_signatures')
+      .update({
+        signer_name: signerName,
+        signer_role: signerRole,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating ling signature:', error);
+    return false;
+  }
+}
+
+/**
+ * Delete a digital signature
+ */
+export async function deleteLingSignature(id: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { error } = await supabase
+      .from('ling_signatures')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting ling signature:', error);
+    return false;
+  }
+}
+
+/**
+ * Save a signed document record
+ */
+export async function saveSignedDocument(
+  originalFilename: string,
+  signatures: {
+    signatureId: string;
+    signerName: string;
+    signerRole: string;
+    verificationCode: string;
+    positionX: number;
+    positionY: number;
+    pageNumber: number;
+  }[]
+): Promise<SignedDocument | null> {
+  if (!supabase) return null;
+
+  try {
+    // Create document record
+    const { data: docData, error: docError } = await supabase
+      .from('signed_documents')
+      .insert({
+        original_filename: originalFilename,
+        signed_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+
+    if (docError) throw docError;
+
+    // Create signature junction records
+    const sigRecords = signatures.map(s => ({
+      document_id: docData.id,
+      signature_id: s.signatureId,
+      signer_name: s.signerName,
+      signer_role: s.signerRole,
+      verification_code: s.verificationCode,
+      position_x: s.positionX,
+      position_y: s.positionY,
+      page_number: s.pageNumber,
+      signed_at: new Date().toISOString(),
+    }));
+
+    const { error: sigError } = await supabase
+      .from('signed_document_signatures')
+      .insert(sigRecords);
+
+    if (sigError) throw sigError;
+
+    return {
+      id: docData.id,
+      originalFilename: docData.original_filename,
+      storageUrl: docData.storage_url,
+      signedAt: docData.signed_at,
+      createdAt: docData.created_at,
+    };
+  } catch (error) {
+    console.error('Error saving signed document:', error);
+    return null;
+  }
+}
+
+/**
+ * Fetch signed documents with their signatures
+ */
+export async function fetchSignedDocuments(): Promise<SignedDocument[]> {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('signed_documents')
+      .select(`
+        *,
+        signed_document_signatures (*)
+      `)
+      .order('signed_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(row => ({
+      id: row.id,
+      originalFilename: row.original_filename,
+      storageUrl: row.storage_url,
+      signedAt: row.signed_at,
+      createdAt: row.created_at,
+      signatures: (row.signed_document_signatures || []).map((s: any) => ({
+        id: s.id,
+        documentId: s.document_id,
+        signatureId: s.signature_id,
+        signerName: s.signer_name,
+        signerRole: s.signer_role,
+        verificationCode: s.verification_code,
+        positionX: s.position_x,
+        positionY: s.position_y,
+        pageNumber: s.page_number,
+        signedAt: s.signed_at,
+      })),
+    }));
+  } catch (error) {
+    console.error('Error fetching signed documents:', error);
+    return [];
+  }
+}
+
+/**
+ * Verify a signature by verification code
+ */
+export async function verifySignature(code: string): Promise<{
+  valid: boolean;
+  signerName?: string;
+  signerRole?: string;
+  documentName?: string;
+  signedAt?: string;
+} | null> {
+  if (!supabase) return null;
+
+  try {
+    // Search in signed_document_signatures
+    const { data, error } = await supabase
+      .from('signed_document_signatures')
+      .select(`
+        *,
+        signed_documents (original_filename)
+      `)
+      .eq('verification_code', code)
+      .limit(1);
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return { valid: false };
+    }
+
+    const record = data[0];
+    return {
+      valid: true,
+      signerName: record.signer_name,
+      signerRole: record.signer_role,
+      documentName: record.signed_documents?.original_filename,
+      signedAt: record.signed_at,
+    };
+  } catch (error) {
+    console.error('Error verifying signature:', error);
+    return null;
+  }
+}
+

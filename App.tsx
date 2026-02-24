@@ -8,6 +8,7 @@ import { ManageDataNew } from './pages/ManageDataNew';
 import { GanttPage } from './pages/GanttPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { WorkPage } from './pages/WorkPage';
+import { LingSignPage } from './pages/LingSignPage';
 import { PageView } from './types';
 
 const App: React.FC = () => {
@@ -40,6 +41,8 @@ const App: React.FC = () => {
           <CalendarPage />
         ) : activePage === PageView.WORK ? (
           <WorkPage />
+        ) : activePage === PageView.LING_SIGN ? (
+          <LingSignPage />
         ) : (
           useNewManageData ? (
             <ManageDataNew
