@@ -41,11 +41,26 @@ interface ActivityFormRow {
   code: string;
   activityName: string;
   weight: number;
-  evidence: string;
+  evidence: string[];
   startDate: string;
   endDate: string;
   status: string;
 }
+
+/** Backward-compatible parser: handles old single-URL string, JSON array, or null */
+const parseEvidence = (raw: any): string[] => {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [raw];
+    } catch {
+      return raw.trim() ? [raw] : [];
+    }
+  }
+  return [];
+};
 
 interface MonthlySCurveEditorRow {
   year: number;
@@ -441,7 +456,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       code: a.code,
       activityName: a.activity_name,
       weight: a.weight || 0,
-      evidence: a.evidence || '',
+      evidence: parseEvidence(a.evidence),
       startDate: a.start_date || '',
       endDate: a.end_date || '',
       status: a.status || 'not-started',
@@ -693,7 +708,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         activityName: activity.activityName,
         pic: picValue,
         weight: activity.weight,
-        evidence: activity.evidence || '',
+        evidence: JSON.stringify(activity.evidence || []),
         status: (activity.status || 'not-started') as
           | 'not-started'
           | 'in-progress'
@@ -851,7 +866,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         code: '',
         activityName: '',
         weight: 0,
-        evidence: '',
+        evidence: [],
         startDate: '',
         endDate: '',
         status: 'not-started',
@@ -860,7 +875,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setActivitiesDirty(true);
   };
 
-  const updateActivity = (index: number, field: keyof ActivityFormRow, value: string | number) => {
+  const updateActivity = (index: number, field: keyof ActivityFormRow, value: string | number | string[]) => {
     const updated = [...activities];
     updated[index] = { ...updated[index], [field]: value } as ActivityFormRow;
     setActivities(updated);
@@ -898,7 +913,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     showNotification('success', `Bobot otomatis diperbarui ke total 100% (${totalActivities} activity)`);
   };
 
-  // Evidence upload handler
+  // Evidence upload handler — appends to the array
   const handleEvidenceUpload = async (index: number, file: File) => {
     const projectId = editingProject?.id || 'new';
     const code = activities[index]?.code || `act${index}`;
@@ -907,7 +922,9 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     try {
       const url = await uploadEvidence(file, projectId, code);
       if (url) {
-        updateActivity(index, 'evidence', url);
+        const currentFiles = [...(activities[index]?.evidence || [])];
+        currentFiles.push(url);
+        updateActivity(index, 'evidence', currentFiles);
         showNotification('success', `File "${file.name}" berhasil diupload`);
       } else {
         showNotification('error', 'Gagal mengupload file');
@@ -919,22 +936,17 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     }
   };
 
-  // Evidence delete handler
-  const handleEvidenceDelete = async (index: number) => {
-    const url = activities[index]?.evidence;
-    if (!url) return;
+  // Evidence delete handler — removes one URL from the array
+  const handleEvidenceDelete = async (index: number, fileUrl: string) => {
+    if (!fileUrl) return;
 
     const confirmed = window.confirm('Yakin ingin menghapus file evidence ini?');
     if (!confirmed) return;
 
-    const deleted = await deleteEvidence(url);
-    if (deleted) {
-      updateActivity(index, 'evidence', '');
-      showNotification('success', 'Evidence berhasil dihapus');
-    } else {
-      // Still clear the field even if storage delete fails (URL might be manual)
-      updateActivity(index, 'evidence', '');
-    }
+    await deleteEvidence(fileUrl);
+    const currentFiles = (activities[index]?.evidence || []).filter((u) => u !== fileUrl);
+    updateActivity(index, 'evidence', currentFiles);
+    showNotification('success', 'Evidence berhasil dihapus');
   };
 
   if (loading) {
@@ -1178,21 +1190,6 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                   )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {editingProject && (
-                    <button
-                      type="button"
-                      onClick={handleSaveActivities}
-                      disabled={!activitiesDirty || savingActivities}
-                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${!activitiesDirty || savingActivities
-                        ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
-                        : 'bg-blue-600 hover:bg-blue-700 text-white'
-                        }`}
-                    >
-                      {savingActivities ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      <span className="hidden sm:inline">Simpan Activities</span>
-                      <span className="sm:hidden">Simpan</span>
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={generateAutoWeights}
@@ -1324,28 +1321,31 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                             </div>
                           </div>
 
-                          {/* Evidence */}
+                          {/* Evidence — multi-file */}
                           <div>
-                            <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Evidence</label>
-                            <div className="mt-1 flex items-center gap-2">
+                            <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Evidence {activity.evidence.length > 0 && <span className="text-blue-600">({activity.evidence.length})</span>}</label>
+                            <div className="mt-1 space-y-1.5">
+                              {/* Existing files */}
+                              {activity.evidence.map((fileUrl, fileIdx) => (
+                                <div key={fileIdx} className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded-lg">
+                                  {fileUrl.match(/\.(pdf)$/i) ? (
+                                    <FileText size={13} className="text-red-500 flex-shrink-0" />
+                                  ) : (
+                                    <ImageIcon size={13} className="text-green-500 flex-shrink-0" />
+                                  )}
+                                  <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate flex-1" title={fileUrl}>
+                                    File {fileIdx + 1}
+                                  </a>
+                                  <button type="button" onClick={() => handleEvidenceDelete(index, fileUrl)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
+                                    <X size={12} />
+                                  </button>
+                                </div>
+                              ))}
+                              {/* Upload buttons — always visible */}
                               {uploadingEvidence === index ? (
                                 <div className="flex items-center gap-2 text-blue-600">
                                   <Loader2 size={14} className="animate-spin" />
                                   <span className="text-xs">Uploading...</span>
-                                </div>
-                              ) : activity.evidence ? (
-                                <div className="flex items-center gap-2">
-                                  {activity.evidence.match(/\.(pdf)$/i) ? (
-                                    <FileText size={14} className="text-red-500 flex-shrink-0" />
-                                  ) : (
-                                    <ImageIcon size={14} className="text-green-500 flex-shrink-0" />
-                                  )}
-                                  <a href={activity.evidence} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[120px]" title={activity.evidence}>
-                                    Lihat File
-                                  </a>
-                                  <button type="button" onClick={() => handleEvidenceDelete(index)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
-                                    <X size={14} />
-                                  </button>
                                 </div>
                               ) : (
                                 <div className="flex items-center gap-2">
@@ -1414,25 +1414,28 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                               <input type="number" min="0" max="100" step="0.1" value={activity.weight} onChange={(e) => updateActivity(index, 'weight', Number.parseFloat(e.target.value) || 0)} className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="0" />
                             </td>
                             <td className="px-3 py-2">
-                              <div className="flex items-center gap-1 min-w-[160px]">
+                              <div className="min-w-[180px] space-y-1">
+                                {/* Existing files list */}
+                                {activity.evidence.map((fileUrl, fileIdx) => (
+                                  <div key={fileIdx} className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded">
+                                    {fileUrl.match(/\.(pdf)$/i) ? (
+                                      <FileText size={12} className="text-red-500 flex-shrink-0" />
+                                    ) : (
+                                      <ImageIcon size={12} className="text-green-500 flex-shrink-0" />
+                                    )}
+                                    <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate flex-1" title={fileUrl}>
+                                      File {fileIdx + 1}
+                                    </a>
+                                    <button type="button" onClick={() => handleEvidenceDelete(index, fileUrl)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
+                                      <X size={10} />
+                                    </button>
+                                  </div>
+                                ))}
+                                {/* Upload buttons — always visible */}
                                 {uploadingEvidence === index ? (
                                   <div className="flex items-center gap-2 text-blue-600">
                                     <Loader2 size={14} className="animate-spin" />
                                     <span className="text-xs">Uploading...</span>
-                                  </div>
-                                ) : activity.evidence ? (
-                                  <div className="flex items-center gap-1">
-                                    {activity.evidence.match(/\.(pdf)$/i) ? (
-                                      <FileText size={14} className="text-red-500 flex-shrink-0" />
-                                    ) : (
-                                      <ImageIcon size={14} className="text-green-500 flex-shrink-0" />
-                                    )}
-                                    <a href={activity.evidence} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]" title={activity.evidence}>
-                                      Lihat File
-                                    </a>
-                                    <button type="button" onClick={() => handleEvidenceDelete(index)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
-                                      <X size={12} />
-                                    </button>
                                   </div>
                                 ) : (
                                   <div className="flex items-center gap-1">

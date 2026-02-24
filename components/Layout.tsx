@@ -45,15 +45,10 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
       `}>
         <div className="h-16 flex items-center gap-3 border-b border-slate-200 px-4 justify-between shrink-0">
           <img
-            src="/logo.png"
-            alt="Logo"
+            src="/pf-logo.png"
+            alt="Pertamina Foundation"
             className={`${collapsed ? 'h-6 w-6 sm:h-8 sm:w-8 mx-auto' : 'h-6 sm:h-8 w-auto'} object-contain transition-all duration-300`}
             loading="lazy"
-            onError={(e) => {
-              // Fallback if logo.png doesn't exist (assuming previous logo_putih was for dark theme)
-              e.currentTarget.src = "/logo_putih.png";
-              e.currentTarget.classList.add("brightness-0", "invert-0"); // Make it dark if it was white
-            }}
           />
           <button
             onClick={() => setCollapsed(!collapsed)}
