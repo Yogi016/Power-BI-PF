@@ -36,7 +36,7 @@ export async function applySignaturesToPDF(
 
         // Stamp dimensions (scaled)
         const stampWidth = 160 * scale;
-        const stampHeight = 180 * scale;
+        const stampHeight = 160 * scale;
         const x = sig.positionX * width;
         const y = height - sig.positionY * height - stampHeight; // PDF coords are bottom-up
 
@@ -93,25 +93,13 @@ export async function applySignaturesToPDF(
             color: rgb(0.28, 0.33, 0.41),
         });
 
-        // Sign date
-        const dateStr = formatDateIndo(sig.signDate);
-        const dateSize = 6.5 * scale;
-        const dateWidth = helvetica.widthOfTextAtSize(dateStr, dateSize);
-        page.drawText(dateStr, {
-            x: x + (stampWidth - dateWidth) / 2,
-            y: qrY - 38 * scale,
-            size: dateSize,
-            font: helvetica,
-            color: rgb(0.58, 0.64, 0.72),
-        });
-
         // Verification code
         const codeStr = `Kode: ${sig.verificationCode}`;
         const codeSize = 5.5 * scale;
         const codeWidth = helvetica.widthOfTextAtSize(codeStr, codeSize);
         page.drawText(codeStr, {
             x: x + (stampWidth - codeWidth) / 2,
-            y: qrY - 49 * scale,
+            y: qrY - 38 * scale,
             size: codeSize,
             font: helvetica,
             color: rgb(0.39, 0.45, 0.55),

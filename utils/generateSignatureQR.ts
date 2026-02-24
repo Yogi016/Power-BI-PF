@@ -34,7 +34,7 @@ export async function generateSignatureQR(params: {
     // Create canvas to composite QR + logo + text
     const canvas = document.createElement('canvas');
     const canvasWidth = 240;
-    const canvasHeight = 320;
+    const canvasHeight = 290;
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
     const ctx = canvas.getContext('2d')!;
@@ -82,16 +82,10 @@ export async function generateSignatureQR(params: {
     ctx.font = '12px Arial, sans-serif';
     ctx.fillText(signerRole, canvasWidth / 2, textStartY + 20);
 
-    // Date
-    ctx.fillStyle = '#94a3b8';
-    ctx.font = '11px Arial, sans-serif';
-    const formattedDate = formatSignDate(signDate);
-    ctx.fillText(formattedDate, canvasWidth / 2, textStartY + 38);
-
     // Verification code
     ctx.fillStyle = '#64748b';
     ctx.font = '10px monospace';
-    ctx.fillText(`Kode: ${verificationCode}`, canvasWidth / 2, textStartY + 54);
+    ctx.fillText(`Kode: ${verificationCode}`, canvasWidth / 2, textStartY + 38);
 
     return canvas.toDataURL('image/png');
 }

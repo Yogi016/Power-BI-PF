@@ -9,6 +9,7 @@ import { GanttPage } from './pages/GanttPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { WorkPage } from './pages/WorkPage';
 import { LingSignPage } from './pages/LingSignPage';
+import { DokumenPage } from './pages/DokumenPage';
 import { PageView } from './types';
 
 const App: React.FC = () => {
@@ -43,6 +44,8 @@ const App: React.FC = () => {
           <WorkPage />
         ) : activePage === PageView.LING_SIGN ? (
           <LingSignPage />
+        ) : activePage === PageView.DOKUMEN ? (
+          <DokumenPage />
         ) : (
           useNewManageData ? (
             <ManageDataNew

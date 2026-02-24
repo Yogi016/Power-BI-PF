@@ -11,7 +11,8 @@ import {
   X,
   Calendar,
   Briefcase,
-  PenTool
+  PenTool,
+  FileText
 } from 'lucide-react';
 import { PageView } from '../types';
 
@@ -151,6 +152,20 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             <PenTool size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.LING_SIGN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Ling-Sign</span>}
           </button>
+
+          <button
+            onClick={() => {
+              onPageChange(PageView.DOKUMEN);
+              closeMobileMenu();
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.DOKUMEN
+              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              } ${collapsed ? 'justify-center' : ''}`}
+          >
+            <FileText size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DOKUMEN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            {!collapsed && <span>Dokumen</span>}
+          </button>
         </nav>
 
         <div className="p-3 border-t border-slate-200 shrink-0 space-y-1">
@@ -225,6 +240,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               { page: PageView.WORK, icon: <Briefcase size={20} />, label: 'Work' },
               { page: PageView.GANTT, icon: <BarChart3 size={20} />, label: 'Gantt' },
               { page: PageView.LING_SIGN, icon: <PenTool size={20} />, label: 'Ling-Sign' },
+              { page: PageView.DOKUMEN, icon: <FileText size={20} />, label: 'Dokumen' },
             ].map(({ page, icon, label }) => (
               <button
                 key={page}

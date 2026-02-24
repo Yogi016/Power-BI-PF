@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData } from '../types';
+import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem } from '../types';
 
 // =====================================================
 // PROJECT OPERATIONS
@@ -1550,6 +1550,7 @@ export async function fetchLingSignatures(): Promise<LingSignature[]> {
       signerName: row.signer_name,
       signerRole: row.signer_role,
       verificationCode: row.verification_code,
+      sandi: row.sandi || '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     }));
@@ -1565,7 +1566,8 @@ export async function fetchLingSignatures(): Promise<LingSignature[]> {
 export async function createLingSignature(
   signerName: string,
   signerRole: string,
-  verificationCode: string
+  verificationCode: string,
+  sandi: string
 ): Promise<LingSignature | null> {
   if (!supabase) return null;
 
@@ -1576,6 +1578,7 @@ export async function createLingSignature(
         signer_name: signerName,
         signer_role: signerRole,
         verification_code: verificationCode,
+        sandi: sandi,
       })
       .select()
       .single();
@@ -1587,12 +1590,34 @@ export async function createLingSignature(
       signerName: data.signer_name,
       signerRole: data.signer_role,
       verificationCode: data.verification_code,
+      sandi: data.sandi || '',
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };
   } catch (error) {
     console.error('Error creating ling signature:', error);
     return null;
+  }
+}
+
+/**
+ * Verify sandi (PIN) for a signature
+ */
+export async function verifySandi(signatureId: string, sandi: string): Promise<boolean> {
+  if (!supabase) return false;
+
+  try {
+    const { data, error } = await supabase
+      .from('ling_signatures')
+      .select('sandi')
+      .eq('id', signatureId)
+      .single();
+
+    if (error) throw error;
+    return data?.sandi === sandi;
+  } catch (error) {
+    console.error('Error verifying sandi:', error);
+    return false;
   }
 }
 
@@ -1791,3 +1816,228 @@ export async function verifySignature(code: string): Promise<{
   }
 }
 
+// =====================================================
+// DOCUMENT CATEGORY OPERATIONS
+// =====================================================
+
+export async function fetchDocumentCategories(): Promise<DocumentCategory[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('document_categories')
+      .select('*')
+      .order('display_order', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.name,
+      displayOrder: row.display_order,
+      createdAt: row.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching document categories:', error);
+    return [];
+  }
+}
+
+export async function createDocumentCategory(name: string, displayOrder?: number): Promise<DocumentCategory | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('document_categories')
+      .insert({ name, display_order: displayOrder ?? 0 })
+      .select()
+      .single();
+    if (error) throw error;
+    return { id: data.id, name: data.name, displayOrder: data.display_order, createdAt: data.created_at };
+  } catch (error) {
+    console.error('Error creating document category:', error);
+    return null;
+  }
+}
+
+export async function updateDocumentCategory(id: string, name: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('document_categories')
+      .update({ name })
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating document category:', error);
+    return false;
+  }
+}
+
+export async function deleteDocumentCategory(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('document_categories')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting document category:', error);
+    return false;
+  }
+}
+
+// =====================================================
+// DOCUMENT OPERATIONS
+// =====================================================
+
+export async function fetchDocuments(categoryId: string): Promise<DocumentItem[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .eq('category_id', categoryId)
+      .order('display_order', { ascending: true })
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      categoryId: row.category_id,
+      noSurat: row.no_surat,
+      tanggal: row.tanggal,
+      deskripsi: row.deskripsi,
+      jenisDokumen: row.jenis_dokumen,
+      link: row.link,
+      pengisi: row.pengisi,
+      penerbi: row.penerbi,
+      hasSoftfile: row.has_softfile,
+      hasHardfile: row.has_hardfile,
+      keterangan: row.keterangan,
+      displayOrder: row.display_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching documents:', error);
+    return [];
+  }
+}
+
+export async function createDocument(doc: Omit<DocumentItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<DocumentItem | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('documents')
+      .insert({
+        category_id: doc.categoryId,
+        no_surat: doc.noSurat || null,
+        tanggal: doc.tanggal || null,
+        deskripsi: doc.deskripsi || null,
+        jenis_dokumen: doc.jenisDokumen || null,
+        link: doc.link || null,
+        pengisi: doc.pengisi || null,
+        penerbi: doc.penerbi || null,
+        has_softfile: doc.hasSoftfile,
+        has_hardfile: doc.hasHardfile,
+        keterangan: doc.keterangan || null,
+        display_order: doc.displayOrder,
+      })
+      .select()
+      .single();
+    if (error) throw error;
+    return {
+      id: data.id,
+      categoryId: data.category_id,
+      noSurat: data.no_surat,
+      tanggal: data.tanggal,
+      deskripsi: data.deskripsi,
+      jenisDokumen: data.jenis_dokumen,
+      link: data.link,
+      pengisi: data.pengisi,
+      penerbi: data.penerbi,
+      hasSoftfile: data.has_softfile,
+      hasHardfile: data.has_hardfile,
+      keterangan: data.keterangan,
+      displayOrder: data.display_order,
+      createdAt: data.created_at,
+      updatedAt: data.updated_at,
+    };
+  } catch (error) {
+    console.error('Error creating document:', error);
+    return null;
+  }
+}
+
+export async function updateDocument(
+  id: string,
+  updates: Partial<Omit<DocumentItem, 'id' | 'categoryId' | 'createdAt' | 'updatedAt'>>
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const updateData: any = {};
+    if (updates.noSurat !== undefined) updateData.no_surat = updates.noSurat || null;
+    if (updates.tanggal !== undefined) updateData.tanggal = updates.tanggal || null;
+    if (updates.deskripsi !== undefined) updateData.deskripsi = updates.deskripsi || null;
+    if (updates.jenisDokumen !== undefined) updateData.jenis_dokumen = updates.jenisDokumen || null;
+    if (updates.link !== undefined) updateData.link = updates.link || null;
+    if (updates.pengisi !== undefined) updateData.pengisi = updates.pengisi || null;
+    if (updates.penerbi !== undefined) updateData.penerbi = updates.penerbi || null;
+    if (updates.hasSoftfile !== undefined) updateData.has_softfile = updates.hasSoftfile;
+    if (updates.hasHardfile !== undefined) updateData.has_hardfile = updates.hasHardfile;
+    if (updates.keterangan !== undefined) updateData.keterangan = updates.keterangan || null;
+    if (updates.displayOrder !== undefined) updateData.display_order = updates.displayOrder;
+
+    const { error } = await supabase
+      .from('documents')
+      .update(updateData)
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating document:', error);
+    return false;
+  }
+}
+
+export async function deleteDocument(id: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase
+      .from('documents')
+      .delete()
+      .eq('id', id);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting document:', error);
+    return false;
+  }
+}
+
+// =====================================================
+// DOCUMENT FILE UPLOAD
+// =====================================================
+
+export async function uploadDocumentFile(file: File, categoryName: string): Promise<string | null> {
+  if (!supabase) return null;
+  try {
+    const timestamp = Date.now();
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filePath = `${categoryName}/${timestamp}_${safeName}`;
+
+    const { error } = await supabase.storage
+      .from('dokumen')
+      .upload(filePath, file, { upsert: true });
+
+    if (error) throw error;
+
+    const { data: urlData } = supabase.storage
+      .from('dokumen')
+      .getPublicUrl(filePath);
+
+    return urlData.publicUrl;
+  } catch (error) {
+    console.error('Error uploading document file:', error);
+    return null;
+  }
+}

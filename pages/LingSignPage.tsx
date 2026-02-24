@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
     PenTool, Plus, Trash2, Edit3, Upload, FileText, CheckCircle2,
     XCircle, Search, Download, Eye, ChevronRight, Shield, User, Briefcase,
-    Calendar, QrCode, X, AlertCircle, Loader2, GripVertical, Maximize2, Minimize2
+    Calendar, QrCode, X, AlertCircle, Loader2, GripVertical, Maximize2, Minimize2, Lock, Key
 } from 'lucide-react';
 import {
     fetchLingSignatures,
@@ -12,6 +12,7 @@ import {
     saveSignedDocument,
     fetchSignedDocuments,
     verifySignature,
+    verifySandi,
 } from '../lib/supabase';
 import { LingSignature, SignedDocument } from '../types';
 import { generateSignatureQR, generateVerificationCode } from '../utils/generateSignatureQR';
@@ -58,12 +59,12 @@ export const LingSignPage: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto">
+            <div className="flex gap-1 bg-slate-100 rounded-xl p-1 overflow-x-auto scrollbar-hide">
                 {TABS.map(tab => (
                     <button
                         key={tab.id}
                         onClick={() => setActiveTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all whitespace-nowrap flex-1 justify-center ${activeTab === tab.id
+                        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 rounded-lg text-xs sm:text-sm font-medium transition-all whitespace-nowrap flex-1 justify-center min-w-0 ${activeTab === tab.id
                             ? 'bg-white text-emerald-700 shadow-sm'
                             : 'text-slate-500 hover:text-slate-700'
                             }`}
@@ -93,8 +94,12 @@ const SignatureManagerTab: React.FC = () => {
     const [editingId, setEditingId] = useState<string | null>(null);
     const [formName, setFormName] = useState('');
     const [formRole, setFormRole] = useState('');
+    const [formSandi, setFormSandi] = useState('');
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
     const [saving, setSaving] = useState(false);
+    const [deleteModal, setDeleteModal] = useState<{ id: string; name: string } | null>(null);
+    const [deleteSandi, setDeleteSandi] = useState('');
+    const [deleteError, setDeleteError] = useState('');
 
     const loadSignatures = useCallback(async () => {
         setLoading(true);
@@ -126,20 +131,21 @@ const SignatureManagerTab: React.FC = () => {
     }, [formName, formRole]);
 
     const handleSave = async () => {
-        if (!formName.trim() || !formRole.trim()) return;
+        if (!formName.trim() || !formRole.trim() || (!editingId && !formSandi.trim())) return;
         setSaving(true);
 
         if (editingId) {
             await updateLingSignature(editingId, formName.trim(), formRole.trim());
         } else {
             const code = generateVerificationCode();
-            await createLingSignature(formName.trim(), formRole.trim(), code);
+            await createLingSignature(formName.trim(), formRole.trim(), code, formSandi.trim());
         }
 
         setShowForm(false);
         setEditingId(null);
         setFormName('');
         setFormRole('');
+        setFormSandi('');
         setPreviewUrl(null);
         setSaving(false);
         await loadSignatures();
@@ -152,9 +158,23 @@ const SignatureManagerTab: React.FC = () => {
         setShowForm(true);
     };
 
-    const handleDelete = async (id: string) => {
-        if (!confirm('Hapus tanda tangan ini?')) return;
-        await deleteLingSignature(id);
+    const handleDeleteRequest = (sig: LingSignature) => {
+        setDeleteModal({ id: sig.id, name: sig.signerName });
+        setDeleteSandi('');
+        setDeleteError('');
+    };
+
+    const handleDeleteConfirm = async () => {
+        if (!deleteModal) return;
+        const valid = await verifySandi(deleteModal.id, deleteSandi);
+        if (!valid) {
+            setDeleteError('Sandi salah. Silakan coba lagi.');
+            return;
+        }
+        await deleteLingSignature(deleteModal.id);
+        setDeleteModal(null);
+        setDeleteSandi('');
+        setDeleteError('');
         await loadSignatures();
     };
 
@@ -202,10 +222,26 @@ const SignatureManagerTab: React.FC = () => {
                                     className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-sm"
                                 />
                             </div>
+                            {!editingId && (
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1.5">
+                                        <Lock size={14} className="inline mr-1" />
+                                        Sandi (PIN)
+                                    </label>
+                                    <input
+                                        type="password"
+                                        value={formSandi}
+                                        onChange={e => setFormSandi(e.target.value)}
+                                        placeholder="Masukkan PIN untuk keamanan TTD"
+                                        className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 outline-none transition-all text-sm"
+                                    />
+                                    <p className="text-xs text-slate-400 mt-1">Digunakan saat menghapus TTD dan menandatangani dokumen</p>
+                                </div>
+                            )}
                             <div className="flex gap-3 pt-2">
                                 <button
                                     onClick={handleSave}
-                                    disabled={saving || !formName.trim() || !formRole.trim()}
+                                    disabled={saving || !formName.trim() || !formRole.trim() || (!editingId && !formSandi.trim())}
                                     className="px-5 py-2.5 bg-emerald-600 text-white rounded-xl text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
                                 >
                                     {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
@@ -271,9 +307,53 @@ const SignatureManagerTab: React.FC = () => {
                             key={sig.id}
                             signature={sig}
                             onEdit={handleEdit}
-                            onDelete={handleDelete}
+                            onDelete={handleDeleteRequest}
                         />
                     ))}
+                </div>
+            )}
+
+            {/* Delete Confirmation Modal with Sandi */}
+            {deleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-sm animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+                            <Key size={20} className="text-red-500" />
+                            Konfirmasi Hapus TTD
+                        </h3>
+                        <p className="text-sm text-slate-500 mb-4">
+                            Masukkan sandi untuk menghapus TTD <strong>{deleteModal.name}</strong>:
+                        </p>
+                        <input
+                            type="password"
+                            value={deleteSandi}
+                            onChange={e => { setDeleteSandi(e.target.value); setDeleteError(''); }}
+                            placeholder="Masukkan sandi"
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 outline-none transition-all text-sm mb-2"
+                            onKeyDown={e => e.key === 'Enter' && handleDeleteConfirm()}
+                            autoFocus
+                        />
+                        {deleteError && (
+                            <p className="text-xs text-red-500 mb-2 flex items-center gap-1">
+                                <AlertCircle size={12} /> {deleteError}
+                            </p>
+                        )}
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                onClick={handleDeleteConfirm}
+                                disabled={!deleteSandi.trim()}
+                                className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-xl text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+                            >
+                                Hapus TTD
+                            </button>
+                            <button
+                                onClick={() => setDeleteModal(null)}
+                                className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -283,7 +363,7 @@ const SignatureManagerTab: React.FC = () => {
 const SignatureCard: React.FC<{
     signature: LingSignature;
     onEdit: (sig: LingSignature) => void;
-    onDelete: (id: string) => void;
+    onDelete: (sig: LingSignature) => void;
 }> = ({ signature, onEdit, onDelete }) => {
     const [qrPreview, setQrPreview] = useState<string | null>(null);
 
@@ -308,7 +388,7 @@ const SignatureCard: React.FC<{
                     <p className="text-xs text-slate-400 mt-1 font-mono">{signature.verificationCode}</p>
                 </div>
             </div>
-            <div className="px-4 pb-3 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="px-4 pb-3 flex gap-2 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button
                     onClick={() => onEdit(signature)}
                     className="flex-1 px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors flex items-center justify-center gap-1"
@@ -316,7 +396,7 @@ const SignatureCard: React.FC<{
                     <Edit3 size={12} /> Edit
                 </button>
                 <button
-                    onClick={() => onDelete(signature.id)}
+                    onClick={() => onDelete(signature)}
                     className="px-3 py-1.5 text-xs font-medium text-red-600 bg-red-50 rounded-lg hover:bg-red-100 transition-colors flex items-center justify-center gap-1"
                 >
                     <Trash2 size={12} /> Hapus
@@ -343,6 +423,10 @@ const SignDocumentTab: React.FC = () => {
     const fileInputRef = useRef<HTMLInputElement>(null);
     const previewContainerRef = useRef<HTMLDivElement>(null);
     const [containerWidth, setContainerWidth] = useState(0);
+    // Sandi modal for signing
+    const [showSandiModal, setShowSandiModal] = useState(false);
+    const [sandiInputs, setSandiInputs] = useState<Map<string, string>>(new Map());
+    const [sandiErrors, setSandiErrors] = useState<Map<string, string>>(new Map());
 
     useEffect(() => {
         fetchLingSignatures().then(setSignatures);
@@ -438,7 +522,37 @@ const SignDocumentTab: React.FC = () => {
         setSelectedSigs(newMap);
     };
 
-    const handleSign = async () => {
+    const handleSignRequest = () => {
+        if (!pdfFile || selectedSigs.size === 0) return;
+        // Initialize sandi inputs for each selected signature
+        const inputs = new Map<string, string>();
+        for (const [sigId] of selectedSigs) {
+            inputs.set(sigId, '');
+        }
+        setSandiInputs(inputs);
+        setSandiErrors(new Map());
+        setShowSandiModal(true);
+    };
+
+    const handleSignWithSandi = async () => {
+        // Verify all sandi first
+        const errors = new Map<string, string>();
+        for (const [sigId, sandi] of sandiInputs) {
+            const valid = await verifySandi(sigId, sandi);
+            if (!valid) {
+                const sig = signatures.find(s => s.id === sigId);
+                errors.set(sigId, `Sandi salah untuk ${sig?.signerName || 'TTD'}`);
+            }
+        }
+        if (errors.size > 0) {
+            setSandiErrors(errors);
+            return;
+        }
+        setShowSandiModal(false);
+        await performSign();
+    };
+
+    const performSign = async () => {
         if (!pdfFile || selectedSigs.size === 0) return;
         setSigning(true);
 
@@ -689,7 +803,7 @@ const SignDocumentTab: React.FC = () => {
                     {selectedSigs.size > 0 && (
                         <div className="mt-6 flex items-center gap-4">
                             <button
-                                onClick={handleSign}
+                                onClick={handleSignRequest}
                                 disabled={signing}
                                 className="px-6 py-3 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-sm font-medium hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-2 shadow-lg shadow-emerald-500/20"
                             >
@@ -709,6 +823,71 @@ const SignDocumentTab: React.FC = () => {
                             )}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Sandi Verification Modal for Signing */}
+            {showSandiModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
+                        <h3 className="text-lg font-bold text-slate-900 mb-2 flex items-center gap-2">
+                            <Key size={20} className="text-emerald-600" />
+                            Masukkan Sandi untuk Menandatangani
+                        </h3>
+                        <p className="text-sm text-slate-500 mb-4">
+                            Masukkan sandi masing-masing TTD untuk mengotorisasi pembubuhan:
+                        </p>
+                        <div className="space-y-3 max-h-60 overflow-y-auto">
+                            {Array.from(selectedSigs.entries()).map(([sigId]) => {
+                                const sig = signatures.find(s => s.id === sigId);
+                                if (!sig) return null;
+                                const error = sandiErrors.get(sigId);
+                                return (
+                                    <div key={sigId}>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                                            <Lock size={12} className="inline mr-1" />
+                                            {sig.signerName}
+                                        </label>
+                                        <input
+                                            type="password"
+                                            value={sandiInputs.get(sigId) || ''}
+                                            onChange={e => {
+                                                const newInputs = new Map(sandiInputs);
+                                                newInputs.set(sigId, e.target.value);
+                                                setSandiInputs(newInputs);
+                                                const newErrors = new Map(sandiErrors);
+                                                newErrors.delete(sigId);
+                                                setSandiErrors(newErrors);
+                                            }}
+                                            placeholder="Masukkan sandi"
+                                            className={`w-full px-4 py-2 rounded-xl border text-sm outline-none transition-all ${error ? 'border-red-400 focus:border-red-500 focus:ring-2 focus:ring-red-500/20' : 'border-slate-200 focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20'
+                                                }`}
+                                        />
+                                        {error && (
+                                            <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                                <AlertCircle size={11} /> {error}
+                                            </p>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                        <div className="flex gap-2 mt-4">
+                            <button
+                                onClick={handleSignWithSandi}
+                                disabled={Array.from(sandiInputs.values()).some(v => !v.trim())}
+                                className="flex-1 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl text-sm font-medium hover:from-emerald-700 hover:to-teal-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+                            >
+                                <PenTool size={16} /> Konfirmasi & Tandatangani
+                            </button>
+                            <button
+                                onClick={() => setShowSandiModal(false)}
+                                className="px-4 py-2.5 bg-slate-100 text-slate-700 rounded-xl text-sm font-medium hover:bg-slate-200 transition-colors"
+                            >
+                                Batal
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>
@@ -884,8 +1063,8 @@ const HistoryTab: React.FC = () => {
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-slate-900">Riwayat Dokumen Ditandatangani</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <h3 className="text-base sm:text-lg font-bold text-slate-900">Riwayat Dokumen Ditandatangani</h3>
                 <span className="text-sm text-slate-400">{documents.length} dokumen</span>
             </div>
 
@@ -901,26 +1080,24 @@ const HistoryTab: React.FC = () => {
             ) : (
                 <div className="space-y-3">
                     {documents.map(doc => (
-                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition-shadow">
-                            <div className="flex items-start justify-between">
-                                <div className="flex items-start gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
-                                        <FileText size={20} className="text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-medium text-slate-900">{doc.originalFilename}</h4>
-                                        <p className="text-xs text-slate-400 mt-0.5">{formatDate(doc.signedAt)}</p>
-                                    </div>
+                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 hover:shadow-md transition-shadow">
+                            <div className="flex items-start gap-3">
+                                <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center flex-shrink-0">
+                                    <FileText size={20} className="text-blue-600" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <h4 className="font-medium text-slate-900 text-sm sm:text-base break-all leading-snug">{doc.originalFilename}</h4>
+                                    <p className="text-xs text-slate-400 mt-0.5">{formatDate(doc.signedAt)}</p>
                                 </div>
                             </div>
 
                             {/* Signatures on this document */}
                             {doc.signatures && doc.signatures.length > 0 && (
-                                <div className="mt-4 flex flex-wrap gap-2">
+                                <div className="mt-3 flex flex-wrap gap-1.5 sm:gap-2">
                                     {doc.signatures.map(s => (
-                                        <span key={s.id} className="inline-flex items-center gap-1 px-3 py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-xs font-medium">
-                                            <PenTool size={12} />
-                                            {s.signerName} — {s.signerRole}
+                                        <span key={s.id} className="inline-flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 bg-emerald-50 text-emerald-700 rounded-lg text-[11px] sm:text-xs font-medium">
+                                            <PenTool size={11} className="flex-shrink-0" />
+                                            <span className="break-all">{s.signerName} — {s.signerRole}</span>
                                         </span>
                                     ))}
                                 </div>
@@ -995,21 +1172,21 @@ const VerifyTab: React.FC = () => {
             </div>
 
             {/* Input */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
                 <label className="block text-sm font-medium text-slate-700 mb-2">Kode Verifikasi</label>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                     <input
                         type="text"
                         value={code}
                         onChange={e => setCode(e.target.value.toUpperCase())}
                         placeholder="Contoh: A3F2-B8K1-C4M7"
-                        className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-sm font-mono tracking-wider text-center text-lg"
+                        className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all font-mono tracking-wider text-center text-sm sm:text-lg"
                         onKeyDown={e => e.key === 'Enter' && handleVerify()}
                     />
                     <button
                         onClick={() => handleVerify()}
                         disabled={loading || !code.trim()}
-                        className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
                     >
                         {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
                         Verifikasi

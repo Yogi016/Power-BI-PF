@@ -88,6 +88,7 @@ export enum PageView {
   CALENDAR = 'calendar',
   WORK = 'work',
   LING_SIGN = 'ling_sign',
+  DOKUMEN = 'dokumen',
 }
 
 // =====================================================
@@ -99,6 +100,7 @@ export interface LingSignature {
   signerName: string;
   signerRole: string;
   verificationCode: string;
+  sandi: string;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -239,4 +241,33 @@ export interface WorkPlanSchedule {
   dailyTarget: number;
   weight: number; // Percentage (0-100)
   planCumulative: number;
+}
+
+// =====================================================
+// DOKUMEN PAGE INTERFACES
+// =====================================================
+
+export interface DocumentCategory {
+  id: string;
+  name: string;
+  displayOrder: number;
+  createdAt?: string;
+}
+
+export interface DocumentItem {
+  id: string;
+  categoryId: string;
+  noSurat?: string;
+  tanggal?: string;
+  deskripsi?: string;
+  jenisDokumen?: string;
+  link?: string;
+  pengisi?: string;
+  penerbi?: string;
+  hasSoftfile: boolean;
+  hasHardfile: boolean;
+  keterangan?: string;
+  displayOrder: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
