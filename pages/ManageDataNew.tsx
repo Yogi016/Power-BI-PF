@@ -10,8 +10,10 @@ import {
   createActivity,
   uploadEvidence,
   deleteEvidence,
+  fetchSCurveData,
 } from '../lib/supabase';
 import { supabase } from '../lib/supabaseClient';
+import { generateProjectPDF, type SignatureInfo, type ProjectPDFData } from '../utils/generateProjectPDF';
 import {
   Plus,
   Edit2,
@@ -30,6 +32,7 @@ import {
   FileText,
   Image as ImageIcon,
   ExternalLink,
+  Download,
 } from 'lucide-react';
 
 interface ManageDataNewProps {
@@ -401,6 +404,14 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   const [uploadingEvidence, setUploadingEvidence] = useState<number | null>(null);
   const evidenceFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const evidenceCameraRefs = useRef<Record<number, HTMLInputElement | null>>({});
+
+  // PDF Download state
+  const [pdfModalProject, setPdfModalProject] = useState<Project | null>(null);
+  const [pdfSignatures, setPdfSignatures] = useState<{ headName: string; vpName: string }>({
+    headName: '',
+    vpName: '',
+  });
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   // Load projects
   useEffect(() => {
@@ -858,6 +869,75 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setDeleteConfirm(null);
   };
 
+  // PDF Download handler
+  const handleDownloadPDF = (project: Project) => {
+    setPdfModalProject(project);
+    setPdfSignatures({ headName: '', vpName: '' });
+  };
+
+  const handleGeneratePDF = async () => {
+    if (!pdfModalProject || !supabase) return;
+
+    setGeneratingPDF(true);
+    try {
+      // Fetch activities for the project
+      const { data: actData, error: actError } = await supabase
+        .from('activities')
+        .select('code, activity_name, weight, start_date, end_date, status')
+        .eq('project_id', pdfModalProject.id)
+        .order('code', { ascending: true });
+
+      if (actError) throw actError;
+
+      const actList = (actData || []).map((a: any) => ({
+        code: a.code || '',
+        activityName: a.activity_name || '',
+        startDate: a.start_date || '',
+        endDate: a.end_date || '',
+        status: a.status || 'not-started',
+        weight: a.weight || 0,
+      }));
+
+      // Build signatures array
+      const signatures: SignatureInfo[] = [];
+      if (pdfSignatures.headName.trim()) {
+        signatures.push({ name: pdfSignatures.headName.trim(), role: 'Project Head Lingkungan' });
+      }
+      if (pdfSignatures.vpName.trim()) {
+        signatures.push({ name: pdfSignatures.vpName.trim(), role: 'VP Lingkungan' });
+      }
+
+      const pdfData: ProjectPDFData = {
+        id: pdfModalProject.id,
+        name: pdfModalProject.name,
+        pic: pdfModalProject.pic,
+        description: pdfModalProject.description,
+        category: pdfModalProject.category,
+        location: pdfModalProject.location,
+        startDate: pdfModalProject.startDate,
+        endDate: pdfModalProject.endDate,
+        status: pdfModalProject.status,
+        budget: pdfModalProject.budget,
+        activities: actList,
+        sCurveData: (await fetchSCurveData(pdfModalProject.id, 'monthly')).map((p) => ({
+          periodLabel: p.periodLabel,
+          baseline: p.baseline,
+          actual: p.actual,
+        })),
+        signatures,
+      };
+
+      await generateProjectPDF(pdfData);
+      showNotification('success', `PDF "${pdfModalProject.name}" dibuka di tab baru`);
+    } catch (err) {
+      console.error('Error generating PDF:', err);
+      showNotification('error', 'Gagal membuat PDF');
+    } finally {
+      setGeneratingPDF(false);
+      setPdfModalProject(null);
+    }
+  };
+
   // Activity management functions
   const addActivity = () => {
     setActivities([
@@ -1056,6 +1136,68 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
               <AlertCircle size={20} className="text-red-600" />
             )}
             <span className="text-sm font-medium">{notification.message}</span>
+          </div>
+        )}
+
+        {/* PDF Signature Modal */}
+        {pdfModalProject && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 animate-in fade-in duration-200">
+            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-md w-full mx-4 animate-in zoom-in-95 duration-200">
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
+                  <Download size={24} className="text-emerald-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Download PDF</h3>
+                  <p className="text-sm text-slate-500 line-clamp-1">{pdfModalProject.name}</p>
+                </div>
+              </div>
+
+              <p className="text-sm text-slate-600 mb-4">
+                Isi nama penandatangan untuk menyertakan tanda tangan digital dengan QR code verifikasi. Kosongkan jika tidak perlu.
+              </p>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Project Head Lingkungan</label>
+                  <input
+                    type="text"
+                    value={pdfSignatures.headName}
+                    onChange={(e) => setPdfSignatures({ ...pdfSignatures, headName: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                    placeholder="Nama penandatangan"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">VP Lingkungan</label>
+                  <input
+                    type="text"
+                    value={pdfSignatures.vpName}
+                    onChange={(e) => setPdfSignatures({ ...pdfSignatures, vpName: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none text-sm"
+                    placeholder="Nama penandatangan"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={handleGeneratePDF}
+                  disabled={generatingPDF}
+                  className="flex-1 flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 text-white px-4 py-2.5 rounded-lg font-medium transition-colors"
+                >
+                  {generatingPDF ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+                  {generatingPDF ? 'Membuat PDF...' : 'Download PDF'}
+                </button>
+                <button
+                  onClick={() => setPdfModalProject(null)}
+                  disabled={generatingPDF}
+                  className="flex-1 bg-slate-200 hover:bg-slate-300 disabled:bg-slate-100 text-slate-700 px-4 py-2.5 rounded-lg font-medium transition-colors"
+                >
+                  Batal
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -1571,6 +1713,13 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                   {project.status}
                 </span>
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => handleDownloadPDF(project)}
+                    className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                    title="Download PDF"
+                  >
+                    <Download size={16} />
+                  </button>
                   <button
                     onClick={() => handleEdit(project)}
                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
