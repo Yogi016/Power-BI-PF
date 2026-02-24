@@ -946,16 +946,16 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
+    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
       <div className="max-w-[1400px] mx-auto">
         {/* Header */}
         <div className="mb-6">
-          <div className="flex justify-between items-start">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
             <div>
-              <h1 className="text-3xl font-bold text-slate-900 mb-2">Manage Data</h1>
-              <p className="text-slate-600">Kelola project, activities, dan S-Curve data</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Manage Data</h1>
+              <p className="text-sm sm:text-base text-slate-600">Kelola project, activities, dan S-Curve data</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               {/* Year Filter */}
               {(() => {
                 const availableYears = Array.from(
@@ -983,10 +983,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
               })()}
               <button
                 onClick={handleCreate}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm"
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
               >
-                <Plus size={20} />
-                Tambah Project
+                <Plus size={18} />
+                <span className="hidden sm:inline">Tambah Project</span>
+                <span className="sm:hidden">Tambah</span>
               </button>
             </div>
           </div>
@@ -1168,7 +1169,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
             {/* Activities Section */}
             <div className="mt-6 border-t border-slate-200 pt-6">
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                 <div>
                   <h3 className="text-lg font-bold text-slate-900">Activities</h3>
                   <p className="text-sm text-slate-600">Tambahkan kegiatan untuk project ini (opsional)</p>
@@ -1176,226 +1177,299 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                     <p className="text-xs text-amber-600 mt-1">Perubahan activity belum disimpan.</p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {editingProject && (
                     <button
                       type="button"
                       onClick={handleSaveActivities}
                       disabled={!activitiesDirty || savingActivities}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${!activitiesDirty || savingActivities
+                      className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${!activitiesDirty || savingActivities
                         ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                         : 'bg-blue-600 hover:bg-blue-700 text-white'
                         }`}
                     >
-                      {savingActivities ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      Simpan Activities
+                      {savingActivities ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      <span className="hidden sm:inline">Simpan Activities</span>
+                      <span className="sm:hidden">Simpan</span>
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={generateAutoWeights}
                     disabled={activities.length === 0}
-                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activities.length === 0
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${activities.length === 0
                       ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
                       : 'bg-indigo-600 hover:bg-indigo-700 text-white'
                       }`}
                   >
-                    <Wand2 size={16} />
-                    Generate Bobot 100%
+                    <Wand2 size={14} />
+                    <span className="hidden sm:inline">Generate Bobot 100%</span>
+                    <span className="sm:hidden">Bobot 100%</span>
                   </button>
                   <button
                     type="button"
                     onClick={addActivity}
-                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
+                    className="flex items-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors"
                   >
-                    <Plus size={16} />
-                    Tambah Activity
+                    <Plus size={14} />
+                    Tambah
                   </button>
                 </div>
               </div>
 
               {activities.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Kode</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Nama Activity</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Start Date</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">End Date</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Status</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
-                        <th className="px-3 py-2 text-left font-semibold text-slate-700">Evidence</th>
-                        <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {activities.map((activity, index) => (
-                        <tr key={index} className="hover:bg-slate-50">
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              value={activity.code}
-                              onChange={(e) => updateActivity(index, 'code', e.target.value)}
-                              className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              placeholder="A"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="text"
-                              value={activity.activityName}
-                              onChange={(e) => updateActivity(index, 'activityName', e.target.value)}
-                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              placeholder="Nama kegiatan"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="date"
-                              value={activity.startDate}
-                              onChange={(e) => updateActivity(index, 'startDate', e.target.value)}
-                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="date"
-                              value={activity.endDate}
-                              onChange={(e) => updateActivity(index, 'endDate', e.target.value)}
-                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <select
-                              value={activity.status || 'not-started'}
-                              onChange={(e) => updateActivity(index, 'status', e.target.value)}
-                              className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                <>
+                  {/* ===== MOBILE: Card-based activity layout ===== */}
+                  <div className="md:hidden space-y-3 px-1">
+                    {activities.map((activity, index) => {
+                      const statusLabels: Record<string, string> = {
+                        'not-started': 'Belum Dimulai',
+                        'in-progress': 'Sedang Berjalan',
+                        'completed': 'Selesai',
+                        'delayed': 'Terlambat',
+                        'on-hold': 'Ditunda',
+                      };
+                      const statusColors: Record<string, string> = {
+                        'not-started': 'bg-slate-100 text-slate-600',
+                        'in-progress': 'bg-blue-100 text-blue-700',
+                        'completed': 'bg-green-100 text-green-700',
+                        'delayed': 'bg-red-100 text-red-700',
+                        'on-hold': 'bg-amber-100 text-amber-700',
+                      };
+                      return (
+                        <div key={index} className="border border-slate-200 rounded-xl bg-white p-4 space-y-3 shadow-sm">
+                          {/* Header: Code + Status + Delete */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="text"
+                                value={activity.code}
+                                onChange={(e) => updateActivity(index, 'code', e.target.value)}
+                                className="w-14 px-2 py-1 border border-slate-300 rounded text-sm font-mono font-bold text-center focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                placeholder="A"
+                              />
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[activity.status] || 'bg-slate-100 text-slate-600'}`}>
+                                {statusLabels[activity.status] || activity.status}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeActivity(index)}
+                              className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus"
                             >
-                              <option value="not-started">Belum Dimulai</option>
-                              <option value="in-progress">Sedang Berjalan</option>
-                              <option value="completed">Selesai</option>
-                              <option value="delayed">Terlambat</option>
-                              <option value="on-hold">Ditunda</option>
-                            </select>
-                          </td>
-                          <td className="px-3 py-2">
-                            <input
-                              type="number"
-                              min="0"
-                              max="100"
-                              step="0.1"
-                              value={activity.weight}
-                              onChange={(e) => updateActivity(index, 'weight', Number.parseFloat(e.target.value) || 0)}
-                              className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                              placeholder="0"
-                            />
-                          </td>
-                          <td className="px-3 py-2">
-                            <div className="flex items-center gap-1 min-w-[160px]">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+
+                          {/* Activity Name - full width */}
+                          <input
+                            type="text"
+                            value={activity.activityName}
+                            onChange={(e) => updateActivity(index, 'activityName', e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                            placeholder="Nama kegiatan"
+                          />
+
+                          {/* Dates row */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Mulai</label>
+                              <input
+                                type="date"
+                                value={activity.startDate}
+                                onChange={(e) => updateActivity(index, 'startDate', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Selesai</label>
+                              <input
+                                type="date"
+                                value={activity.endDate}
+                                onChange={(e) => updateActivity(index, 'endDate', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Status + Weight row */}
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Status</label>
+                              <select
+                                value={activity.status || 'not-started'}
+                                onChange={(e) => updateActivity(index, 'status', e.target.value)}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                              >
+                                <option value="not-started">Belum Dimulai</option>
+                                <option value="in-progress">Sedang Berjalan</option>
+                                <option value="completed">Selesai</option>
+                                <option value="delayed">Terlambat</option>
+                                <option value="on-hold">Ditunda</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Bobot (%)</label>
+                              <input
+                                type="number"
+                                min="0"
+                                max="100"
+                                step="0.1"
+                                value={activity.weight}
+                                onChange={(e) => updateActivity(index, 'weight', Number.parseFloat(e.target.value) || 0)}
+                                className="w-full px-2 py-1.5 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Evidence */}
+                          <div>
+                            <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Evidence</label>
+                            <div className="mt-1 flex items-center gap-2">
                               {uploadingEvidence === index ? (
                                 <div className="flex items-center gap-2 text-blue-600">
                                   <Loader2 size={14} className="animate-spin" />
                                   <span className="text-xs">Uploading...</span>
                                 </div>
                               ) : activity.evidence ? (
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-2">
                                   {activity.evidence.match(/\.(pdf)$/i) ? (
                                     <FileText size={14} className="text-red-500 flex-shrink-0" />
                                   ) : (
                                     <ImageIcon size={14} className="text-green-500 flex-shrink-0" />
                                   )}
-                                  <a
-                                    href={activity.evidence}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="text-xs text-blue-600 hover:underline truncate max-w-[80px]"
-                                    title={activity.evidence}
-                                  >
+                                  <a href={activity.evidence} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[120px]" title={activity.evidence}>
                                     Lihat File
                                   </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleEvidenceDelete(index)}
-                                    className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0"
-                                    title="Hapus file"
-                                  >
-                                    <X size={12} />
+                                  <button type="button" onClick={() => handleEvidenceDelete(index)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
+                                    <X size={14} />
                                   </button>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-1">
-                                  {/* File upload button */}
-                                  <input
-                                    type="file"
-                                    accept=".pdf,image/jpeg,image/png,image/webp"
-                                    className="hidden"
-                                    ref={(el) => { evidenceFileRefs.current[index] = el; }}
-                                    onChange={(e) => {
-                                      const f = e.target.files?.[0];
-                                      if (f) handleEvidenceUpload(index, f);
-                                      e.target.value = '';
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => evidenceFileRefs.current[index]?.click()}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                                    title="Upload PDF atau gambar"
-                                  >
-                                    <Paperclip size={12} />
-                                    File
+                                <div className="flex items-center gap-2">
+                                  <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
+                                  <button type="button" onClick={() => evidenceFileRefs.current[index]?.click()} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors" title="Upload file">
+                                    <Paperclip size={12} /> File
                                   </button>
-                                  {/* Camera capture button */}
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    className="hidden"
-                                    ref={(el) => { evidenceCameraRefs.current[index] = el; }}
-                                    onChange={(e) => {
-                                      const f = e.target.files?.[0];
-                                      if (f) handleEvidenceUpload(index, f);
-                                      e.target.value = '';
-                                    }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => evidenceCameraRefs.current[index]?.click()}
-                                    className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors"
-                                    title="Ambil foto dari kamera"
-                                  >
-                                    <Camera size={12} />
+                                  <input type="file" accept="image/*" capture="environment" className="hidden" ref={(el) => { evidenceCameraRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
+                                  <button type="button" onClick={() => evidenceCameraRefs.current[index]?.click()} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors" title="Kamera">
+                                    <Camera size={12} /> Foto
                                   </button>
                                 </div>
                               )}
                             </div>
-                          </td>
-                          <td className="px-3 py-2 text-center">
-                            <button
-                              type="button"
-                              onClick={() => removeActivity(index)}
-                              className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </td>
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Total Weight - Mobile */}
+                    <div className="flex items-center justify-between px-4 py-2 bg-slate-50 rounded-lg border border-slate-200">
+                      <span className="text-sm font-semibold text-slate-700">Total Bobot:</span>
+                      <span className="text-sm font-bold text-slate-900">{activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%</span>
+                    </div>
+                  </div>
+
+                  {/* ===== DESKTOP: Original table layout ===== */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-slate-50 border-b border-slate-200">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Kode</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Nama Activity</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Start Date</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">End Date</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Status</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Bobot (%)</th>
+                          <th className="px-3 py-2 text-left font-semibold text-slate-700">Evidence</th>
+                          <th className="px-3 py-2 text-center font-semibold text-slate-700">Aksi</th>
                         </tr>
-                      ))}
-                      <tr className="bg-slate-50 font-semibold">
-                        <td colSpan={5} className="px-3 py-2 text-right">
-                          Total Bobot:
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className="text-slate-700">
-                            {activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%
-                          </span>
-                        </td>
-                        <td colSpan={2}></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {activities.map((activity, index) => (
+                          <tr key={index} className="hover:bg-slate-50">
+                            <td className="px-3 py-2">
+                              <input type="text" value={activity.code} onChange={(e) => updateActivity(index, 'code', e.target.value)} className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="A" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="text" value={activity.activityName} onChange={(e) => updateActivity(index, 'activityName', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="Nama kegiatan" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="date" value={activity.startDate} onChange={(e) => updateActivity(index, 'startDate', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="date" value={activity.endDate} onChange={(e) => updateActivity(index, 'endDate', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <select value={activity.status || 'not-started'} onChange={(e) => updateActivity(index, 'status', e.target.value)} className="w-full px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none">
+                                <option value="not-started">Belum Dimulai</option>
+                                <option value="in-progress">Sedang Berjalan</option>
+                                <option value="completed">Selesai</option>
+                                <option value="delayed">Terlambat</option>
+                                <option value="on-hold">Ditunda</option>
+                              </select>
+                            </td>
+                            <td className="px-3 py-2">
+                              <input type="number" min="0" max="100" step="0.1" value={activity.weight} onChange={(e) => updateActivity(index, 'weight', Number.parseFloat(e.target.value) || 0)} className="w-20 px-2 py-1 border border-slate-300 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" placeholder="0" />
+                            </td>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-1 min-w-[160px]">
+                                {uploadingEvidence === index ? (
+                                  <div className="flex items-center gap-2 text-blue-600">
+                                    <Loader2 size={14} className="animate-spin" />
+                                    <span className="text-xs">Uploading...</span>
+                                  </div>
+                                ) : activity.evidence ? (
+                                  <div className="flex items-center gap-1">
+                                    {activity.evidence.match(/\.(pdf)$/i) ? (
+                                      <FileText size={14} className="text-red-500 flex-shrink-0" />
+                                    ) : (
+                                      <ImageIcon size={14} className="text-green-500 flex-shrink-0" />
+                                    )}
+                                    <a href={activity.evidence} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate max-w-[80px]" title={activity.evidence}>
+                                      Lihat File
+                                    </a>
+                                    <button type="button" onClick={() => handleEvidenceDelete(index)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1">
+                                    <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
+                                    <button type="button" onClick={() => evidenceFileRefs.current[index]?.click()} className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors" title="Upload PDF atau gambar">
+                                      <Paperclip size={12} /> File
+                                    </button>
+                                    <input type="file" accept="image/*" capture="environment" className="hidden" ref={(el) => { evidenceCameraRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
+                                    <button type="button" onClick={() => evidenceCameraRefs.current[index]?.click()} className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors" title="Ambil foto dari kamera">
+                                      <Camera size={12} />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <button type="button" onClick={() => removeActivity(index)} className="p-1 text-red-600 hover:bg-red-50 rounded transition-colors">
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr className="bg-slate-50 font-semibold">
+                          <td colSpan={5} className="px-3 py-2 text-right">
+                            Total Bobot:
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="text-slate-700">
+                              {activities.reduce((sum, a) => sum + a.weight, 0).toFixed(1)}%
+                            </span>
+                          </td>
+                          <td colSpan={2}></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
               )}
 
               {activities.length === 0 && (

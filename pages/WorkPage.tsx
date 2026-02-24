@@ -171,7 +171,16 @@ export const WorkPage: React.FC = () => {
           const dailyData = await fetchWorkDailyData(project.id);
           dailyMap[project.id] = dailyData;
 
-          const schedule = await fetchWorkPlanSchedule(project.id);
+          // Load plan schedule and validate against project date range
+          let schedule = await fetchWorkPlanSchedule(project.id);
+          const totalDays = Math.ceil(
+            (new Date(project.endDate).getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)
+          ) + 1;
+
+          // If schedule is stale (doesn't match current project dates), regenerate
+          if (schedule.length === 0 || schedule.length !== totalDays) {
+            schedule = generatePlanSchedule(project.startDate, project.endDate, project.target, project.id);
+          }
           scheduleMap[project.id] = schedule;
         }
         setDailyDataMap(dailyMap);
@@ -479,19 +488,35 @@ export const WorkPage: React.FC = () => {
       return;
     }
 
-    const dayIndex = dailyFormData.dayIndex;
+    // Compute sequential dayIndex from project start date (NOT day-of-month)
+    const projectStart = new Date(selectedProject.startDate);
+    const formDate = new Date(dailyFormData.date);
+    const dayIndex = Math.ceil((formDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
-    // Get plan cumulative from plan schedule
+    // Get plan cumulative: match by DATE (not dayIndex) for reliability
     const planSchedule = planScheduleMap[selectedProject.id] || [];
-    const planForDay = planSchedule.find(p => p.dayIndex === dayIndex);
+    const normalizedFormDate = dailyFormData.date?.split('T')[0] || dailyFormData.date;
+    const planForDay = planSchedule.find(p => {
+      const pDate = p.date?.split('T')[0] || p.date;
+      return pDate === normalizedFormDate;
+    }) || planSchedule.find(p => p.dayIndex === dayIndex);
     const planCumulative = planForDay?.planCumulative || 0;
 
-    // Calculate actual cumulative from previous days + today's daily planting
-    const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
-    const previousDays = sortedData.filter(d => d.dayIndex < dayIndex);
-    const previousCumulative = previousDays.length > 0
-      ? previousDays[previousDays.length - 1].actualCumulative
-      : 0;
+    // Calculate actual cumulative from ALL previous days sorted by DATE
+    const sortedByDate = [...selectedDailyData]
+      .filter(d => {
+        const dDate = d.date?.split('T')[0] || d.date;
+        return dDate !== normalizedFormDate;
+      })
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    // Sum up cumulative from the last entry before this date
+    let previousCumulative = 0;
+    for (const d of sortedByDate) {
+      if (new Date(d.date) < formDate) {
+        previousCumulative = d.actualCumulative || previousCumulative;
+      }
+    }
 
     const actualCumulative = previousCumulative + dailyFormData.dailyPlanting;
 
@@ -501,6 +526,7 @@ export const WorkPage: React.FC = () => {
       dayIndex,
       planCumulative: planCumulative,
       actualCumulative: actualCumulative,
+      actualDaily: dailyFormData.dailyPlanting,
     });
 
     if (success) {
@@ -853,15 +879,18 @@ export const WorkPage: React.FC = () => {
           const daysList: { date: string; dayIndex: number; label: string; hasData: boolean }[] = [];
 
           const currentDate = new Date(startDate);
+          let dayCounter = 1; // Sequential day counter from project start
           while (currentDate <= endDate) {
             const dateStr = currentDate.toISOString().split('T')[0];
-            const dayIndex = currentDate.getDate();
-            const existingData = selectedDailyData.find(d => d.date === dateStr);
+            const existingData = selectedDailyData.find(d => {
+              const dDate = d.date?.split('T')[0] || d.date;
+              return dDate === dateStr;
+            });
 
             daysList.push({
               date: dateStr,
-              dayIndex,
-              label: `Hari ${dayIndex} - ${currentDate.toLocaleDateString('id-ID', {
+              dayIndex: dayCounter,
+              label: `Hari ${dayCounter} · ${currentDate.toLocaleDateString('id-ID', {
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short'
@@ -869,6 +898,7 @@ export const WorkPage: React.FC = () => {
               hasData: !!existingData
             });
 
+            dayCounter++;
             currentDate.setDate(currentDate.getDate() + 1);
           }
 
@@ -891,15 +921,28 @@ export const WorkPage: React.FC = () => {
                       value={dailyFormData.date}
                       onChange={(e) => {
                         const selected = daysList.find(d => d.date === e.target.value);
-                        const existingData = selectedDailyData.find(d => d.date === e.target.value);
+                        const existingData = selectedDailyData.find(d => {
+                          const dDate = d.date?.split('T')[0] || d.date;
+                          return dDate === e.target.value;
+                        });
 
-                        // Calculate existing daily planting from cumulative difference
+                        // Get existing daily planting value
                         let existingDaily = 0;
-                        if (existingData && selected) {
-                          const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
-                          const prevDay = sortedData.filter(d => d.dayIndex < selected.dayIndex).pop();
-                          const prevCumulative = prevDay?.actualCumulative || 0;
-                          existingDaily = Math.max(0, existingData.actualCumulative - prevCumulative);
+                        if (existingData) {
+                          // Prefer actualDaily (raw daily value) if available
+                          if (existingData.actualDaily != null && existingData.actualDaily > 0) {
+                            existingDaily = existingData.actualDaily;
+                          } else {
+                            // Fallback: compute from cumulative diff sorted by date
+                            const sortedData = [...selectedDailyData]
+                              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                            const prevDay = sortedData.filter(d => {
+                              const dDate = d.date?.split('T')[0] || d.date;
+                              return dDate < e.target.value;
+                            }).pop();
+                            const prevCumulative = prevDay?.actualCumulative || 0;
+                            existingDaily = Math.max(0, existingData.actualCumulative - prevCumulative);
+                          }
                         }
 
                         setDailyFormData({
@@ -943,7 +986,11 @@ export const WorkPage: React.FC = () => {
                         <span className="font-medium text-blue-600">
                           {(() => {
                             const planSchedule = planScheduleMap[selectedProject?.id || ''] || [];
-                            const planForDay = planSchedule.find(p => p.dayIndex === dailyFormData.dayIndex);
+                            const normalizedDate = dailyFormData.date?.split('T')[0] || dailyFormData.date;
+                            const planForDay = planSchedule.find(p => {
+                              const pDate = p.date?.split('T')[0] || p.date;
+                              return pDate === normalizedDate;
+                            }) || planSchedule.find(p => p.dayIndex === dailyFormData.dayIndex);
                             return planForDay?.planCumulative?.toLocaleString('id-ID') || '0';
                           })()}
                         </span>
@@ -952,8 +999,13 @@ export const WorkPage: React.FC = () => {
                         <span className="text-slate-600">Realisasi Kumulatif:</span>
                         <span className="font-bold text-emerald-600">
                           {(() => {
-                            const sortedData = [...selectedDailyData].sort((a, b) => a.dayIndex - b.dayIndex);
-                            const prevDay = sortedData.filter(d => d.dayIndex < dailyFormData.dayIndex).pop();
+                            const sortedData = [...selectedDailyData]
+                              .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                            const normalizedFormDate = dailyFormData.date?.split('T')[0] || dailyFormData.date;
+                            const prevDay = sortedData.filter(d => {
+                              const dDate = d.date?.split('T')[0] || d.date;
+                              return dDate < normalizedFormDate;
+                            }).pop();
                             const prevCumulative = prevDay?.actualCumulative || 0;
                             return (prevCumulative + dailyFormData.dailyPlanting).toLocaleString('id-ID');
                           })()}
@@ -1027,24 +1079,26 @@ export const WorkPage: React.FC = () => {
         {selectedProject && (
           <>
             {/* Project Actions - Always visible when project selected */}
-            <div className="flex justify-end gap-2 mb-4 animate-in fade-in duration-500">
+            <div className="flex flex-wrap justify-end gap-2 mb-4 animate-in fade-in duration-500">
               <button
                 onClick={() => handleEditProject(selectedProject)}
-                className="group flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
               >
                 <Edit2 size={14} className="text-slate-500 group-hover:text-blue-600 transition-colors" />
-                Edit Project
+                <span className="hidden sm:inline">Edit Project</span>
+                <span className="sm:hidden">Edit</span>
               </button>
               <button
                 onClick={handleOpenDailyDataForm}
-                className="group flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
               >
                 <Plus size={14} className="text-slate-500 group-hover:text-emerald-600 group-hover:rotate-90 transition-all" />
-                Input Data Harian
+                <span className="hidden sm:inline">Input Data Harian</span>
+                <span className="sm:hidden">Input</span>
               </button>
               <button
                 onClick={() => setDeleteConfirm({ id: selectedProject.id, name: `${selectedProject.projectName} - ${selectedProject.faseName}` })}
-                className="group flex items-center gap-2 rounded-md bg-white border border-slate-200 px-3 py-1.5 text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:border-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-red-600 shadow-sm transition-colors hover:bg-red-50 hover:border-red-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
               >
                 <Trash2 size={14} className="text-red-500 group-hover:scale-110 transition-transform" />
                 Hapus
@@ -1083,36 +1137,36 @@ export const WorkPage: React.FC = () => {
                       </h3>
                     </div>
                     <div className="p-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-blue-50 p-3 rounded-lg">
-                          <div className="text-sm text-slate-600">Plan</div>
-                          <div className="text-xl font-bold text-blue-600">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-blue-50 p-2.5 sm:p-3 rounded-lg">
+                          <div className="text-xs sm:text-sm text-slate-600">Plan</div>
+                          <div className="text-lg sm:text-xl font-bold text-blue-600">
                             {metrics.planPercentage.toFixed(1)}%
                           </div>
                         </div>
-                        <div className="bg-orange-50 p-3 rounded-lg">
-                          <div className="text-sm text-slate-600">Realisasi</div>
-                          <div className="text-xl font-bold text-orange-600">
+                        <div className="bg-orange-50 p-2.5 sm:p-3 rounded-lg">
+                          <div className="text-xs sm:text-sm text-slate-600">Realisasi</div>
+                          <div className="text-lg sm:text-xl font-bold text-orange-600">
                             {metrics.realisasiPercentage.toFixed(1)}%
                           </div>
                         </div>
                       </div>
 
-                      <div className="bg-slate-50 p-3 rounded-lg">
-                        <div className="flex justify-between">
+                      <div className="bg-slate-50 p-2.5 sm:p-3 rounded-lg">
+                        <div className="flex justify-between text-sm">
                           <span className="text-slate-600">Day of Work</span>
                           <span className="font-bold">{metrics.dayOfWork} hari</span>
                         </div>
                       </div>
 
                       <div className="border-t pt-3 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">AVERAGE penanaman/day</span>
-                          <span className="font-semibold">{metrics.averagePenanamanPerDay.toLocaleString('id-ID', { maximumFractionDigits: 0 })} bibit/day</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">AVG penanaman/day</span>
+                          <span className="font-semibold whitespace-nowrap">{metrics.averagePenanamanPerDay.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">PROGNOSA penanaman/day</span>
-                          <span className="font-semibold">{metrics.prognosaPenanamanPerDay.toLocaleString('id-ID', { maximumFractionDigits: 0 })} bibit/day</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">PROGNOSA/day</span>
+                          <span className="font-semibold whitespace-nowrap">{metrics.prognosaPenanamanPerDay.toLocaleString('id-ID', { maximumFractionDigits: 0 })}</span>
                         </div>
                       </div>
                     </div>
@@ -1120,18 +1174,18 @@ export const WorkPage: React.FC = () => {
 
                   {/* Right Card */}
                   <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-                    <div className="p-4 space-y-3">
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-emerald-50 p-3 rounded-lg">
-                          <div className="text-sm text-slate-600">Target</div>
-                          <div className="text-lg font-bold text-emerald-600">
-                            {selectedProject.target.toLocaleString('id-ID')} pohon
+                    <div className="p-3 sm:p-4 space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-emerald-50 p-2.5 sm:p-3 rounded-lg">
+                          <div className="text-xs sm:text-sm text-slate-600">Target</div>
+                          <div className="text-base sm:text-lg font-bold text-emerald-600">
+                            {selectedProject.target.toLocaleString('id-ID')}
                           </div>
                         </div>
-                        <div className="bg-blue-50 p-3 rounded-lg">
-                          <div className="text-sm text-slate-600">Realisasi Kumulatif</div>
-                          <div className="text-lg font-bold text-blue-600">
-                            {metrics.realTotalToday.toLocaleString('id-ID')} pohon
+                        <div className="bg-blue-50 p-2.5 sm:p-3 rounded-lg">
+                          <div className="text-xs sm:text-sm text-slate-600">Realisasi</div>
+                          <div className="text-base sm:text-lg font-bold text-blue-600">
+                            {metrics.realTotalToday.toLocaleString('id-ID')}
                           </div>
                         </div>
                       </div>
@@ -1154,31 +1208,31 @@ export const WorkPage: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="bg-amber-50 p-3 rounded-lg">
-                        <div className="flex justify-between">
+                      <div className="bg-amber-50 p-2.5 sm:p-3 rounded-lg">
+                        <div className="flex justify-between text-sm gap-2">
                           <span className="text-slate-600">Sisa Hari Kerja</span>
-                          <span className="font-bold text-amber-700">{metrics.sisaHariKerja} sisa hari kerja</span>
+                          <span className="font-bold text-amber-700 whitespace-nowrap">{metrics.sisaHariKerja} hari</span>
                         </div>
                       </div>
 
                       <div className="border-t pt-3 space-y-2">
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Average Productivity</span>
-                          <span className="font-semibold">{metrics.averageProductivity.toFixed(0)} bibit/orang/day</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">Avg Productivity</span>
+                          <span className="font-semibold whitespace-nowrap">{metrics.averageProductivity.toFixed(0)} /org/day</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Manpower Eksisting</span>
-                          <span className="font-semibold">{selectedProject.manpowerEksisting} orang</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">Manpower Eksisting</span>
+                          <span className="font-semibold whitespace-nowrap">{selectedProject.manpowerEksisting} orang</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Productivity Target</span>
-                          <span className="font-semibold">{selectedProject.productivityTarget} bibit/orang/day</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">Productivity Target</span>
+                          <span className="font-semibold whitespace-nowrap">{selectedProject.productivityTarget} /org/day</span>
                         </div>
-                        <div className="flex justify-between text-sm">
-                          <span className="text-slate-600">Prognosa Manpower</span>
-                          <span className="font-semibold">{metrics.prognosManpower} orang/day</span>
+                        <div className="flex justify-between text-xs sm:text-sm gap-2">
+                          <span className="text-slate-600 truncate">Prognosa Manpower</span>
+                          <span className="font-semibold whitespace-nowrap">{metrics.prognosManpower} org/day</span>
                         </div>
-                        <div className="flex justify-between text-sm bg-red-50 p-2 rounded">
+                        <div className="flex justify-between text-xs sm:text-sm bg-red-50 p-2 rounded gap-2">
                           <span className="text-red-700 font-medium">Tambahan Manpower</span>
                           <span className="font-bold text-red-700">{metrics.tambahanManpower}</span>
                         </div>

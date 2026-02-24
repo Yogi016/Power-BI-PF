@@ -936,9 +936,9 @@ export async function fetchWorkProjects(): Promise<WorkProject[]> {
 
     return (data || []).map(row => ({
       id: row.id,
-      projectName: row.project_name,
-      faseName: row.fase_name,
-      target: row.target,
+      projectName: row.project_name || row.name || '',
+      faseName: row.fase_name || row.phase || '',
+      target: row.target || row.target_pohon || 0,
       startDate: row.start_date,
       endDate: row.end_date,
       manpowerEksisting: row.manpower_eksisting,
@@ -1097,24 +1097,150 @@ export async function fetchWorkDailyData(workProjectId: string): Promise<WorkDai
   if (!supabase) return [];
 
   try {
-    const { data, error } = await supabase
+    // Try primary table first (work_daily_data)
+    const { data: primaryData, error: primaryError } = await supabase
       .from('work_daily_data')
       .select('*')
       .eq('work_project_id', workProjectId)
-      .order('day_index', { ascending: true });
+      .order('date', { ascending: true });
 
-    if (error) throw error;
+    if (!primaryError && primaryData && primaryData.length > 0) {
+      // Get project start_date to compute proper sequential dayIndex
+      const { data: projData } = await supabase
+        .from('work_projects')
+        .select('start_date')
+        .eq('id', workProjectId)
+        .single();
 
-    return (data || []).map(row => ({
-      id: row.id,
-      workProjectId: row.work_project_id,
-      date: row.date,
-      dayIndex: row.day_index,
-      planCumulative: row.plan_cumulative,
-      actualCumulative: row.actual_cumulative || 0,
-      planDaily: row.plan_daily,
-      actualDaily: row.actual_daily,
-    }));
+      const projectStart = projData ? new Date(projData.start_date) : null;
+
+      // Check if we have actual_daily values (new data format)
+      const hasActualDaily = primaryData.some(row => row.actual_daily != null && row.actual_daily > 0);
+
+      if (hasActualDaily) {
+        // NEW DATA PATH: recompute cumulative from actual_daily values (most reliable)
+        let runningCumulative = 0;
+        return primaryData.map(row => {
+          let dayIndex = row.day_index;
+          if (projectStart && row.date) {
+            const rowDate = new Date(row.date);
+            dayIndex = Math.ceil((rowDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          }
+
+          const dailyValue = row.actual_daily || 0;
+          runningCumulative += dailyValue;
+
+          return {
+            id: row.id,
+            workProjectId: row.work_project_id,
+            date: row.date,
+            dayIndex,
+            planCumulative: row.plan_cumulative,
+            actualCumulative: runningCumulative,
+            planDaily: row.plan_daily,
+            actualDaily: dailyValue,
+          };
+        });
+      }
+
+      // LEGACY DATA PATH: detect cumulative segments (month-boundary resets)
+      // Within each month, stored cumulative is correct (increases monotonically).
+      // At month boundaries, cumulative resets to near-zero.
+      // True cumulative = sum of all completed segments' final values + current segment's value
+      let segmentBaseOffset = 0;
+      let prevStoredCum = 0;
+
+      return primaryData.map((row, index) => {
+        let dayIndex = row.day_index;
+        if (projectStart && row.date) {
+          const rowDate = new Date(row.date);
+          dayIndex = Math.ceil((rowDate.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        }
+
+        const storedCum = row.actual_cumulative || 0;
+
+        // Detect cumulative reset (new segment)
+        if (index > 0 && storedCum < prevStoredCum) {
+          segmentBaseOffset += prevStoredCum;
+        }
+
+        prevStoredCum = storedCum;
+        const trueCumulative = segmentBaseOffset + storedCum;
+
+        // Extract daily value for reference
+        let dailyValue: number;
+        if (index === 0) {
+          dailyValue = storedCum;
+        } else {
+          const prevStored = primaryData[index - 1].actual_cumulative || 0;
+          dailyValue = storedCum > prevStored ? storedCum - prevStored : storedCum;
+        }
+
+        return {
+          id: row.id,
+          workProjectId: row.work_project_id,
+          date: row.date,
+          dayIndex,
+          planCumulative: row.plan_cumulative,
+          actualCumulative: trueCumulative,
+          planDaily: row.plan_daily,
+          actualDaily: dailyValue,
+        };
+      });
+    }
+
+    // Fallback: try daily_work_data table with raw realisasi values
+    const { data: rawData, error: rawError } = await supabase
+      .from('daily_work_data')
+      .select('*')
+      .eq('project_id', workProjectId)
+      .order('date', { ascending: true });
+
+    if (rawError || !rawData || rawData.length === 0) return [];
+
+    // Get the project to compute dayIndex from start_date
+    const { data: projectData, error: projectError } = await supabase
+      .from('work_projects')
+      .select('start_date, generated_plan')
+      .eq('id', workProjectId)
+      .single();
+
+    if (projectError || !projectData) return [];
+
+    const projectStartDate = new Date(projectData.start_date);
+
+    // Parse generated_plan to get plan cumulative values
+    const planByDate = new Map<string, number>();
+    if (projectData.generated_plan) {
+      try {
+        const planArray = JSON.parse(projectData.generated_plan);
+        for (const p of planArray) {
+          planByDate.set(p.date, p.cumulative || 0);
+        }
+      } catch (e) {
+        console.warn('Could not parse generated_plan:', e);
+      }
+    }
+
+    // Compute dayIndex and cumulative values from raw daily realisasi
+    let cumulative = 0;
+    return rawData.map(row => {
+      const rowDate = new Date(row.date);
+      const dayIndex = Math.ceil((rowDate.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const dailyValue = row.realisasi || 0;
+      cumulative += dailyValue;
+
+      return {
+        id: row.id,
+        workProjectId: workProjectId,
+        date: row.date,
+        dayIndex,
+        planCumulative: planByDate.get(row.date) || 0,
+        actualCumulative: cumulative,
+        planDaily: undefined,
+        actualDaily: dailyValue,
+      };
+    });
   } catch (error) {
     console.error('Error fetching work daily data:', error);
     return [];
@@ -1222,23 +1348,55 @@ export async function fetchWorkPlanSchedule(workProjectId: string): Promise<Work
   }
 
   try {
-    const { data, error } = await supabase
+    // Try primary table first (work_plan_schedule)
+    const { data: scheduleData, error: scheduleError } = await supabase
       .from('work_plan_schedule')
       .select('*')
       .eq('work_project_id', workProjectId)
       .order('day_index', { ascending: true });
 
-    if (error) throw error;
+    if (!scheduleError && scheduleData && scheduleData.length > 0) {
+      return scheduleData.map(row => ({
+        id: row.id,
+        workProjectId: row.work_project_id,
+        dayIndex: row.day_index,
+        date: row.date,
+        dailyTarget: row.daily_target,
+        weight: parseFloat(row.weight),
+        planCumulative: row.plan_cumulative,
+      }));
+    }
 
-    return (data || []).map(row => ({
-      id: row.id,
-      workProjectId: row.work_project_id,
-      dayIndex: row.day_index,
-      date: row.date,
-      dailyTarget: row.daily_target,
-      weight: parseFloat(row.weight),
-      planCumulative: row.plan_cumulative,
-    }));
+    // Fallback: parse generated_plan JSON from work_projects
+    const { data: projectData, error } = await supabase
+      .from('work_projects')
+      .select('start_date, generated_plan, target, target_pohon')
+      .eq('id', workProjectId)
+      .single();
+
+    if (error || !projectData?.generated_plan) return [];
+
+    const projectStartDate = new Date(projectData.start_date);
+    const target = projectData.target || projectData.target_pohon || 0;
+
+    try {
+      const planArray = JSON.parse(projectData.generated_plan);
+      return planArray.map((p: any) => {
+        const planDate = new Date(p.date);
+        const dayIndex = Math.ceil((planDate.getTime() - projectStartDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+        return {
+          workProjectId,
+          dayIndex,
+          date: p.date,
+          dailyTarget: p.dailyTarget || 0,
+          weight: p.bobot || (target > 0 ? parseFloat(((p.dailyTarget / target) * 100).toFixed(2)) : 0),
+          planCumulative: p.cumulative || 0,
+        };
+      });
+    } catch (parseError) {
+      console.warn('Could not parse generated_plan JSON:', parseError);
+      return [];
+    }
   } catch (error) {
     console.error('Error fetching work plan schedule:', error);
     return [];

@@ -293,8 +293,8 @@ export const ManageData: React.FC = () => {
         </div>
 
         {/* Task Data Editor */}
-        <div className="xl:col-span-2 rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm animate-in slide-in-from-bottom-4 duration-700">
-          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 p-6 border-b border-slate-100 sm:items-center sm:justify-between">
+        <div className="lg:col-span-2 rounded-xl border border-slate-200 bg-white text-slate-950 shadow-sm animate-in slide-in-from-bottom-4 duration-700">
+          <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 p-4 sm:p-6 border-b border-slate-100 sm:items-center sm:justify-between">
             <div className="space-y-1.5">
               <h3 className="font-semibold leading-none tracking-tight">Activity Data</h3>
               <p className="text-sm text-slate-500">Modify task details, owners, and progress.</p>
@@ -308,7 +308,154 @@ export const ManageData: React.FC = () => {
             </button>
           </div>
 
-          <div className="relative w-full overflow-auto custom-scrollbar">
+          {/* ===== MOBILE: Card-based layout ===== */}
+          <div className="md:hidden">
+            {tasks.length === 0 && (
+              <div className="p-8 text-center text-slate-500 text-sm">
+                No activities found. Tap "New Activity" to add one.
+              </div>
+            )}
+            <div className="divide-y divide-slate-100">
+              {tasks.map((task) => {
+                const isEditing = editingTask === task.id;
+                const mobileInputClass = `w-full rounded-md border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-950 ${isEditing ? 'border-indigo-300 bg-indigo-50/30' : 'border-slate-200 bg-slate-50 text-slate-700'}`;
+                const statusColors: Record<string, string> = {
+                  'Completed': 'bg-green-100 text-green-700',
+                  'In Progress': 'bg-blue-100 text-blue-700',
+                  'Not Started': 'bg-slate-100 text-slate-600',
+                  'Delayed': 'bg-red-100 text-red-700',
+                };
+
+                return (
+                  <div key={task.id} className={`p-4 space-y-3 ${isEditing ? 'bg-indigo-50/20' : ''}`}>
+                    {/* Top Row: Code + Status Badge + Actions */}
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {isEditing ? (
+                          <input value={task.code} onChange={(e) => handleTaskChange(task.id, 'code', e.target.value)} className="w-16 rounded-md border border-indigo-300 bg-indigo-50/30 px-2 py-1 text-sm font-mono font-bold" />
+                        ) : (
+                          <span className="text-sm font-mono font-bold text-slate-900 bg-slate-100 px-2 py-1 rounded">{task.code || '—'}</span>
+                        )}
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${statusColors[task.status] || 'bg-slate-100 text-slate-600'}`}>
+                          {task.status}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isEditing ? (
+                          <button onClick={() => setEditingTask(null)} className="p-2 rounded-lg text-green-600 bg-green-50 border border-green-200" title="Save">
+                            <Save size={16} />
+                          </button>
+                        ) : (
+                          <>
+                            <button onClick={() => setEditingTask(task.id)} className="p-2 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-slate-100" title="Edit">
+                              <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDeleteTask(task.id)} className="p-2 rounded-lg text-slate-500 hover:text-red-600 hover:bg-red-50" title="Delete">
+                              <Trash2 size={16} />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Activity Name */}
+                    {isEditing ? (
+                      <input value={task.activity} onChange={(e) => handleTaskChange(task.id, 'activity', e.target.value)} className={mobileInputClass} placeholder="Nama Activity" />
+                    ) : (
+                      <p className="text-sm font-medium text-slate-900 leading-snug">{task.activity || '—'}</p>
+                    )}
+
+                    {/* Info Grid */}
+                    <div className="grid grid-cols-2 gap-2">
+                      {/* PIC */}
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">PIC</span>
+                        {isEditing ? (
+                          <select value={task.pic} onChange={(e) => handleTaskChange(task.id, 'pic', e.target.value)} className={mobileInputClass}>
+                            <option value="DANTA">DANTA</option>
+                            <option value="ARIEF">ARIEF</option>
+                            <option value="BILA">BILA</option>
+                            <option value="INDRI">INDRI</option>
+                            <option value="TIM LAPANGAN">TIM LAPANGAN</option>
+                          </select>
+                        ) : (
+                          <p className="text-sm text-slate-700">{task.pic}</p>
+                        )}
+                      </div>
+                      {/* Status (editable) */}
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Status</span>
+                        {isEditing ? (
+                          <select value={task.status} onChange={(e) => handleTaskChange(task.id, 'status', e.target.value)} className={mobileInputClass}>
+                            <option value="Not Started">Not Started</option>
+                            <option value="In Progress">In Progress</option>
+                            <option value="Completed">Completed</option>
+                            <option value="Delayed">Delayed</option>
+                          </select>
+                        ) : (
+                          <p className="text-sm text-slate-700">{task.status}</p>
+                        )}
+                      </div>
+                      {/* Year */}
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Year</span>
+                        {isEditing ? (
+                          <input type="number" min="2020" max="2100" value={task.startYear ?? ''} onChange={(e) => handleTaskChange(task.id, 'startYear', Number(e.target.value))} className={mobileInputClass} />
+                        ) : (
+                          <p className="text-sm text-slate-700">{task.startYear || '—'}</p>
+                        )}
+                      </div>
+                      {/* Month + Week */}
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Month / Week</span>
+                        {isEditing ? (
+                          <div className="flex gap-1">
+                            <select value={task.startMonth ?? ''} onChange={(e) => handleTaskChange(task.id, 'startMonth', e.target.value)} className={`${mobileInputClass} flex-1`}>
+                              <option value="">-</option>
+                              {monthOptions.map(m => (<option key={m} value={m}>{m}</option>))}
+                            </select>
+                            <select value={task.startWeek ?? 1} onChange={(e) => handleTaskChange(task.id, 'startWeek', Number(e.target.value))} className={`${mobileInputClass} w-14`}>
+                              {[1, 2, 3, 4].map(w => (<option key={w} value={w}>W{w}</option>))}
+                            </select>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-slate-700">{task.startMonth || '—'} / W{task.startWeek ?? 1}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Weight + Progress Bar */}
+                    <div className="flex items-center gap-3">
+                      <div className="shrink-0">
+                        <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Weight</span>
+                        {isEditing ? (
+                          <input type="number" value={task.weight} onChange={(e) => handleTaskChange(task.id, 'weight', parseFloat(e.target.value))} className={`${mobileInputClass} w-20`} />
+                        ) : (
+                          <p className="text-sm font-medium text-slate-700">{task.weight}%</p>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Progress</span>
+                          <span className="text-xs font-bold text-slate-900 tabular-nums">{task.progress}%</span>
+                        </div>
+                        {isEditing ? (
+                          <input type="range" min="0" max="100" value={task.progress} onChange={(e) => handleTaskChange(task.id, 'progress', parseInt(e.target.value))} className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-slate-900" />
+                        ) : (
+                          <div className="w-full bg-slate-200 rounded-full h-2">
+                            <div className={`h-2 rounded-full transition-all ${task.progress >= 100 ? 'bg-green-500' : task.progress >= 50 ? 'bg-blue-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(task.progress, 100)}%` }} />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* ===== DESKTOP: Table layout ===== */}
+          <div className="hidden md:block relative w-full overflow-auto custom-scrollbar">
             <table className="w-full caption-bottom text-sm min-w-[1000px]">
               <thead className="[&_tr]:border-b border-slate-200 bg-slate-50/50">
                 <tr className="border-b transition-colors hover:bg-slate-100/50 data-[state=selected]:bg-slate-100">
@@ -339,28 +486,13 @@ export const ManageData: React.FC = () => {
                   return (
                     <tr key={task.id} className={`group border-b border-slate-200 transition-colors hover:bg-slate-50/50 data-[state=selected]:bg-slate-100 ${isEditing ? 'bg-indigo-50/10' : ''}`}>
                       <td className="p-3 align-middle">
-                        <input
-                          disabled={!isEditing}
-                          value={task.code}
-                          onChange={(e) => handleTaskChange(task.id, 'code', e.target.value)}
-                          className={inputClass}
-                        />
+                        <input disabled={!isEditing} value={task.code} onChange={(e) => handleTaskChange(task.id, 'code', e.target.value)} className={inputClass} />
                       </td>
                       <td className="p-3 align-middle">
-                        <input
-                          disabled={!isEditing}
-                          value={task.activity}
-                          onChange={(e) => handleTaskChange(task.id, 'activity', e.target.value)}
-                          className={inputClass}
-                        />
+                        <input disabled={!isEditing} value={task.activity} onChange={(e) => handleTaskChange(task.id, 'activity', e.target.value)} className={inputClass} />
                       </td>
                       <td className="p-3 align-middle">
-                        <select
-                          disabled={!isEditing}
-                          value={task.pic}
-                          onChange={(e) => handleTaskChange(task.id, 'pic', e.target.value)}
-                          className={inputClass}
-                        >
+                        <select disabled={!isEditing} value={task.pic} onChange={(e) => handleTaskChange(task.id, 'pic', e.target.value)} className={inputClass}>
                           <option value="DANTA">DANTA</option>
                           <option value="ARIEF">ARIEF</option>
                           <option value="BILA">BILA</option>
@@ -369,12 +501,7 @@ export const ManageData: React.FC = () => {
                         </select>
                       </td>
                       <td className="p-3 align-middle">
-                        <select
-                          disabled={!isEditing}
-                          value={task.status}
-                          onChange={(e) => handleTaskChange(task.id, 'status', e.target.value)}
-                          className={inputClass}
-                        >
+                        <select disabled={!isEditing} value={task.status} onChange={(e) => handleTaskChange(task.id, 'status', e.target.value)} className={inputClass}>
                           <option value="Not Started">Not Started</option>
                           <option value="In Progress">In Progress</option>
                           <option value="Completed">Completed</option>
@@ -382,88 +509,41 @@ export const ManageData: React.FC = () => {
                         </select>
                       </td>
                       <td className="p-3 align-middle">
-                        <input
-                          type="number"
-                          min="2020"
-                          max="2100"
-                          disabled={!isEditing}
-                          value={task.startYear ?? ''}
-                          onChange={(e) => handleTaskChange(task.id, 'startYear', Number(e.target.value))}
-                          className={inputClass}
-                        />
+                        <input type="number" min="2020" max="2100" disabled={!isEditing} value={task.startYear ?? ''} onChange={(e) => handleTaskChange(task.id, 'startYear', Number(e.target.value))} className={inputClass} />
                       </td>
                       <td className="p-3 align-middle">
-                        <select
-                          disabled={!isEditing}
-                          value={task.startMonth ?? ''}
-                          onChange={(e) => handleTaskChange(task.id, 'startMonth', e.target.value)}
-                          className={inputClass}
-                        >
+                        <select disabled={!isEditing} value={task.startMonth ?? ''} onChange={(e) => handleTaskChange(task.id, 'startMonth', e.target.value)} className={inputClass}>
                           <option value="">-</option>
-                          {monthOptions.map(m => (
-                            <option key={m} value={m}>{m}</option>
-                          ))}
+                          {monthOptions.map(m => (<option key={m} value={m}>{m}</option>))}
                         </select>
                       </td>
                       <td className="p-3 align-middle">
-                        <select
-                          disabled={!isEditing}
-                          value={task.startWeek ?? 1}
-                          onChange={(e) => handleTaskChange(task.id, 'startWeek', Number(e.target.value))}
-                          className={inputClass}
-                        >
-                          {[1, 2, 3, 4].map(week => (
-                            <option key={week} value={week}>{week}</option>
-                          ))}
+                        <select disabled={!isEditing} value={task.startWeek ?? 1} onChange={(e) => handleTaskChange(task.id, 'startWeek', Number(e.target.value))} className={inputClass}>
+                          {[1, 2, 3, 4].map(week => (<option key={week} value={week}>{week}</option>))}
                         </select>
                       </td>
                       <td className="p-3 align-middle">
-                        <input
-                          type="number"
-                          disabled={!isEditing}
-                          value={task.weight}
-                          onChange={(e) => handleTaskChange(task.id, 'weight', parseFloat(e.target.value))}
-                          className={inputClass}
-                        />
+                        <input type="number" disabled={!isEditing} value={task.weight} onChange={(e) => handleTaskChange(task.id, 'weight', parseFloat(e.target.value))} className={inputClass} />
                       </td>
                       <td className="p-3 align-middle">
                         <div className="flex items-center gap-3 w-full">
-                          <input
-                            type="range"
-                            disabled={!isEditing}
-                            min="0" max="100"
-                            value={task.progress}
-                            onChange={(e) => handleTaskChange(task.id, 'progress', parseInt(e.target.value))}
-                            className={`flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${isEditing ? 'accent-slate-900' : 'accent-slate-400 opacity-60'}`}
-                          />
+                          <input type="range" disabled={!isEditing} min="0" max="100" value={task.progress} onChange={(e) => handleTaskChange(task.id, 'progress', parseInt(e.target.value))} className={`flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer ${isEditing ? 'accent-slate-900' : 'accent-slate-400 opacity-60'}`} />
                           <span className="text-xs font-medium w-9 text-right tabular-nums">{task.progress}%</span>
                         </div>
                       </td>
                       <td className="p-3 align-middle text-right">
                         {isEditing ? (
                           <div className="flex justify-end pr-2">
-                            <button
-                              onClick={() => setEditingTask(null)}
-                              className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 h-9 w-9 text-green-600 border border-green-200 bg-green-50 shadow-sm hover:bg-green-100"
-                              title="Save Task"
-                            >
+                            <button onClick={() => setEditingTask(null)} className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 h-9 w-9 text-green-600 border border-green-200 bg-green-50 shadow-sm hover:bg-green-100" title="Save Task">
                               <Save size={16} className="group-hover:scale-110 transition-transform" />
                             </button>
                           </div>
                         ) : (
                           <div className="flex justify-end gap-1 flex-nowrap">
-                            <button
-                              onClick={() => setEditingTask(task.id)}
-                              className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 h-9 w-9 text-slate-500 hover:text-indigo-600"
-                              title="Edit Task"
-                            >
+                            <button onClick={() => setEditingTask(task.id)} className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-slate-100 hover:text-slate-900 h-9 w-9 text-slate-500 hover:text-indigo-600" title="Edit Task">
                               <Edit2 size={16} className="group-hover:rotate-12 transition-transform" />
                             </button>
-                            <button
-                              onClick={() => handleDeleteTask(task.id)}
-                              className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-red-50 hover:text-red-900 h-9 w-9 text-slate-500 hover:text-red-600"
-                              title="Delete Task"
-                            >
+                            <button onClick={() => handleDeleteTask(task.id)} className="group inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors hover:bg-red-50 hover:text-red-900 h-9 w-9 text-slate-500 hover:text-red-600" title="Delete Task">
                               <Trash2 size={16} className="group-hover:scale-110 group-hover:text-red-600 transition-all" />
                             </button>
                           </div>
