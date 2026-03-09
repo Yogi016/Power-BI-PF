@@ -201,6 +201,7 @@ export async function fetchActivities(projectId: string): Promise<ActivityData[]
       weeklyProgress: {},
       startWeek: row.start_week,
       endWeek: row.end_week,
+      evidence: row.evidence || '[]',
     }));
   } catch (error) {
     console.error('Error fetching activities:', error);

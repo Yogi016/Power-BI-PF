@@ -39,7 +39,7 @@ export async function generateWeeklyReport(
 ): Promise<void> {
   try {
     console.log('Starting report generation for project:', projectId);
-    
+
     // Set default week range (current week)
     const start = weekStart || getWeekStart(new Date());
     const end = weekEnd || getWeekEnd(new Date());
@@ -50,7 +50,7 @@ export async function generateWeeklyReport(
     const { fetchProjects: getProjects } = await import('./supabase');
     const allProjects = await getProjects();
     const project = allProjects.find(p => p.id === projectId);
-    
+
     if (!project) {
       throw new Error('Project not found');
     }
@@ -79,28 +79,31 @@ export async function generateWeeklyReport(
     // Generate slides
     await createCoverSlide(doc, project, start, end);
     doc.addPage();
-    
+
     await createExecutiveSummary(doc, project, metrics);
     doc.addPage();
-    
+
     await createSCurveSlide(doc, scurveData);
     doc.addPage();
-    
+
     await createStatusBreakdown(doc, activities);
     doc.addPage();
-    
+
     await createCompletedActivities(doc, activities, start, end);
+
+    // Evidence photos slide(s) — auto-paginated
+    await createEvidenceSlides(doc, activities);
+
     doc.addPage();
-    
     await createOngoingActivities(doc, activities);
     doc.addPage();
-    
+
     await createIssuesSlide(doc, activities);
     doc.addPage();
-    
+
     await createNextWeekPlan(doc, activities, end);
     doc.addPage();
-    
+
     await createClosingSlide(doc, project, metrics);
 
     console.log('All slides generated');
@@ -108,9 +111,9 @@ export async function generateWeeklyReport(
     // Save PDF
     const fileName = `Weekly_Report_${project.name.replace(/[^a-zA-Z0-9]/g, '_')}_${formatDate(start)}.pdf`;
     console.log('Saving PDF as:', fileName);
-    
+
     doc.save(fileName);
-    
+
     console.log('PDF saved successfully');
   } catch (error) {
     console.error('Error generating weekly report:', error);
@@ -134,7 +137,7 @@ async function createCoverSlide(
   // Background gradient (simulated with rectangles)
   doc.setFillColor(59, 130, 246); // Blue
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
-  
+
   // Decorative circle (without opacity)
   doc.setFillColor(16, 185, 129); // Emerald
   doc.circle(pageWidth - 50, 50, 80, 'F');
@@ -149,13 +152,13 @@ async function createCoverSlide(
       logoImg.onerror = reject;
       setTimeout(reject, 1000); // Timeout after 1s
     });
-    
+
     // Calculate aspect ratio and maintain proportions
     const maxLogoHeight = 20; // Reduced from 30 to 20mm
     const aspectRatio = logoImg.width / logoImg.height;
     const logoHeight = maxLogoHeight;
     const logoWidth = logoHeight * aspectRatio;
-    
+
     // Add logo to PDF (top left) with proper aspect ratio
     doc.addImage(logoImg, 'PNG', MARGIN, MARGIN, logoWidth, logoHeight);
   } catch (error) {
@@ -171,12 +174,12 @@ async function createCoverSlide(
   // Project name box
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(pageWidth / 2 - 80, 85, 160, 30, 3, 3, 'F');
-  
+
   doc.setTextColor(59, 130, 246);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(project.name, pageWidth / 2, 100, { align: 'center' });
-  
+
   // Project details
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
@@ -217,7 +220,7 @@ async function createExecutiveSummary(
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.text('Overall Progress', MARGIN, yPos);
-  
+
   yPos += 10;
   doc.setFontSize(36); // Reduced from 42 to 36
   doc.setTextColor(59, 130, 246);
@@ -227,11 +230,11 @@ async function createExecutiveSummary(
   yPos += 8;
   const barWidth = 80;
   const barHeight = 8;
-  
+
   // Background bar
   doc.setFillColor(226, 232, 240); // Gray
   doc.roundedRect(MARGIN, yPos, barWidth, barHeight, 2, 2, 'F');
-  
+
   // Progress bar
   const progressWidth = (metrics.overallProgress / 100) * barWidth;
   doc.setFillColor(59, 130, 246); // Blue
@@ -240,14 +243,14 @@ async function createExecutiveSummary(
   // Status indicator with badge
   yPos += 15;
   doc.setFontSize(14);
-  
+
   const statusColor = metrics.status === 'on-track' ? [16, 185, 129] : metrics.status === 'at-risk' ? [245, 158, 11] : [239, 68, 68];
   const statusText = metrics.status === 'on-track' ? 'On Track' : metrics.status === 'at-risk' ? 'At Risk' : 'Delayed';
-  
+
   // Status badge background
   doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
   doc.roundedRect(MARGIN, yPos - 5, 35, 8, 2, 2, 'F');
-  
+
   // Status text
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
@@ -256,16 +259,16 @@ async function createExecutiveSummary(
   // Metrics grid with better layout
   yPos = 50;
   const col2X = 130;
-  
+
   doc.setFontSize(16);
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'bold');
   doc.text('Key Metrics', col2X, yPos);
-  
+
   yPos += 12;
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(11);
-  
+
   const metricsData = [
     { label: 'Total Activities', value: metrics.totalActivities, color: [100, 116, 139] },
     { label: 'Completed This Week', value: metrics.completedThisWeek, color: [16, 185, 129] },
@@ -277,26 +280,26 @@ async function createExecutiveSummary(
 
   metricsData.forEach((item, index) => {
     const y = yPos + (index * 10);
-    
+
     // Color indicator
     doc.setFillColor(item.color[0], item.color[1], item.color[2]);
     doc.circle(col2X, y - 2, 2, 'F');
-    
+
     // Label
     doc.setTextColor(0, 0, 0);
     doc.text(item.label + ':', col2X + 5, y);
-    
+
     // Value with background
     doc.setFont('helvetica', 'bold');
     const valueText = item.value.toString();
     const valueWidth = doc.getTextWidth(valueText);
-    
+
     doc.setFillColor(241, 245, 249);
     doc.roundedRect(col2X + 70, y - 4, valueWidth + 4, 6, 1, 1, 'F');
-    
+
     doc.setTextColor(item.color[0], item.color[1], item.color[2]);
     doc.text(valueText, col2X + 72, y);
-    
+
     doc.setFont('helvetica', 'normal');
   });
 
@@ -304,12 +307,12 @@ async function createExecutiveSummary(
   yPos += 75;
   doc.setFillColor(241, 245, 249);
   doc.roundedRect(MARGIN, yPos, PAGE_WIDTH - 2 * MARGIN, 25, 3, 3, 'F');
-  
+
   doc.setTextColor(0, 0, 0);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text('Summary:', MARGIN + 5, yPos + 8);
-  
+
   doc.setFont('helvetica', 'normal');
   const summaryText = `Project "${project.name}" is ${metrics.overallProgress.toFixed(1)}% complete with ${metrics.completedThisWeek} activities completed this week. Status: ${statusText}.`;
   const splitText = doc.splitTextToSize(summaryText, PAGE_WIDTH - 2 * MARGIN - 10);
@@ -333,7 +336,7 @@ async function createSCurveSlide(doc: jsPDF, scurveData: any): Promise<void> {
   if (ctx && scurveData && scurveData.length > 0) {
     // Draw S-Curve chart
     drawSCurveChart(ctx, scurveData);
-    
+
     // Convert to image and add to PDF
     const imgData = canvas.toDataURL('image/png');
     doc.addImage(imgData, 'PNG', MARGIN, 50, PAGE_WIDTH - 2 * MARGIN, 120);
@@ -388,10 +391,10 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
     if (count > 0) {
       const percentage = (count / total) * 100;
       const angle = (percentage / 100) * 360;
-      
+
       doc.setFillColor(statusColors[status]);
       drawPieSlice(doc, centerX, centerY, radius, startAngle, startAngle + angle);
-      
+
       startAngle += angle;
     }
   });
@@ -409,11 +412,11 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
   Object.entries(statusCounts).forEach(([status, count]) => {
     doc.setFillColor(statusColors[status]);
     doc.rect(legendX, legendY - 3, 5, 5, 'F');
-    
+
     doc.setTextColor(0, 0, 0);
     const label = status.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     doc.text(`${label}: ${count} (${((count / total) * 100).toFixed(1)}%)`, legendX + 8, legendY);
-    
+
     legendY += 8;
   });
 
@@ -446,7 +449,7 @@ async function createCompletedActivities(
       a.endDate || '',
     ]);
 
-    createTable(doc, 
+    createTable(doc,
       ['Code', 'Activity Name', 'PIC', 'Completion Date'],
       tableData,
       MARGIN,
@@ -545,7 +548,7 @@ async function createNextWeekPlan(doc: jsPDF, activities: any[], weekEnd: Date):
 
   const nextWeekStart = new Date(weekEnd);
   nextWeekStart.setDate(nextWeekStart.getDate() + 1);
-  
+
   const nextWeekEnd = new Date(nextWeekStart);
   nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
 
@@ -619,22 +622,263 @@ async function createClosingSlide(doc: jsPDF, project: any, metrics: WeeklyMetri
 }
 
 // =====================================================
+// EVIDENCE PHOTOS SLIDE(S)
+// =====================================================
+
+/**
+ * Helper to load an image from a URL and return as HTMLImageElement
+ */
+async function loadImageFromUrl(url: string): Promise<HTMLImageElement | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => {
+      console.warn('Failed to load evidence image:', url);
+      resolve(null);
+    };
+    // Timeout after 10s
+    setTimeout(() => resolve(null), 10000);
+    img.src = url;
+  });
+}
+
+/**
+ * Parse evidence field — can be JSON array string or plain array
+ */
+function parseEvidenceField(raw: any): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Check if a URL points to an image file (not PDF or other docs)
+ */
+function isImageUrl(url: string): boolean {
+  const imageExts = ['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp'];
+  const lower = url.toLowerCase().split('?')[0]; // Remove query params
+  return imageExts.some(ext => lower.endsWith(ext));
+}
+
+/**
+ * Create evidence photo slides — grouped by activity, auto-paginated
+ * Each activity with evidence gets its own section with a header and photo grid.
+ */
+async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void> {
+  // Group evidence by activity
+  interface ActivityEvidence {
+    code: string;
+    name: string;
+    status: string;
+    urls: string[];
+  }
+
+  const activityEvidenceList: ActivityEvidence[] = [];
+  for (const activity of activities) {
+    const allUrls = parseEvidenceField(activity.evidence);
+    const imageUrls = allUrls.filter(isImageUrl);
+    if (imageUrls.length > 0) {
+      activityEvidenceList.push({
+        code: activity.code || '',
+        name: activity.activityName || activity.activity || 'Unknown',
+        status: activity.status || 'not-started',
+        urls: imageUrls,
+      });
+    }
+  }
+
+  if (activityEvidenceList.length === 0) {
+    doc.addPage();
+    addSlideHeader(doc, 'Dokumentasi Kegiatan', 6);
+    doc.setFontSize(14);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Belum ada foto dokumentasi kegiatan', PAGE_WIDTH / 2, 100, { align: 'center' });
+    addSlideFooter(doc, 6);
+    return;
+  }
+
+  // Layout constants
+  const CONTENT_LEFT = MARGIN;
+  const CONTENT_RIGHT = PAGE_WIDTH - MARGIN;
+  const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
+  const CONTENT_TOP = 45;
+  const CONTENT_BOTTOM = PAGE_HEIGHT - 18;
+  const ACTIVITY_HEADER_HEIGHT = 12;
+  const PHOTO_ROW_HEIGHT = 60; // Height per photo row
+  const PHOTO_GAP = 4;
+  const MAX_PHOTOS_PER_ROW = 3;
+
+  // Status colors for the accent bar
+  const statusColors: Record<string, [number, number, number]> = {
+    'completed': [34, 197, 94],
+    'in-progress': [59, 130, 246],
+    'delayed': [239, 68, 68],
+    'not-started': [148, 163, 184],
+    'on-hold': [245, 158, 11],
+  };
+
+  const statusLabels: Record<string, string> = {
+    'completed': 'Selesai',
+    'in-progress': 'Berjalan',
+    'delayed': 'Terlambat',
+    'not-started': 'Belum Mulai',
+    'on-hold': 'Ditunda',
+  };
+
+  let currentPageNum = 0;
+  let cursorY = CONTENT_BOTTOM + 1; // Force first page creation
+
+  // Helper: start a new evidence page
+  const startNewPage = () => {
+    doc.addPage();
+    currentPageNum++;
+    const title = `Dokumentasi Kegiatan`;
+    addSlideHeader(doc, title, 6);
+    addSlideFooter(doc, 6);
+    cursorY = CONTENT_TOP;
+  };
+
+  // Helper: ensure enough vertical space, otherwise start new page
+  const ensureSpace = (needed: number) => {
+    if (cursorY + needed > CONTENT_BOTTOM) {
+      startNewPage();
+    }
+  };
+
+  // Process each activity
+  for (const actEvidence of activityEvidenceList) {
+    // Calculate space needed for this activity block
+    const photoRows = Math.ceil(actEvidence.urls.length / MAX_PHOTOS_PER_ROW);
+    const totalBlockHeight = ACTIVITY_HEADER_HEIGHT + 4 + photoRows * (PHOTO_ROW_HEIGHT + PHOTO_GAP) + 6;
+
+    // If the entire block fits, render together. Otherwise start new page.
+    ensureSpace(Math.min(totalBlockHeight, ACTIVITY_HEADER_HEIGHT + PHOTO_ROW_HEIGHT + 16));
+
+    // ─── Activity Header Bar ───
+    const statusColor = statusColors[actEvidence.status] || statusColors['not-started'];
+    const statusLabel = statusLabels[actEvidence.status] || actEvidence.status;
+
+    // Accent bar on the left
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+    doc.rect(CONTENT_LEFT, cursorY, 3, ACTIVITY_HEADER_HEIGHT, 'F');
+
+    // Header background
+    doc.setFillColor(241, 245, 249);
+    doc.rect(CONTENT_LEFT + 3, cursorY, CONTENT_WIDTH - 3, ACTIVITY_HEADER_HEIGHT, 'F');
+
+    // Activity code + name
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(30, 41, 59);
+    const headerText = actEvidence.code
+      ? `${actEvidence.code}. ${actEvidence.name}`
+      : actEvidence.name;
+    const maxHeaderWidth = CONTENT_WIDTH - 60;
+    const displayHeader = headerText.length > 70
+      ? headerText.substring(0, 67) + '...'
+      : headerText;
+    doc.text(displayHeader, CONTENT_LEFT + 7, cursorY + 8);
+
+    // Status badge
+    const badgeWidth = doc.getTextWidth(statusLabel) + 8;
+    const badgeX = CONTENT_RIGHT - badgeWidth - 4;
+    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+    doc.roundedRect(badgeX, cursorY + 2, badgeWidth, 8, 2, 2, 'F');
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text(statusLabel, badgeX + badgeWidth / 2, cursorY + 7.5, { align: 'center' });
+
+    // Photo count
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${actEvidence.urls.length} foto`, badgeX - 25, cursorY + 7.5);
+
+    cursorY += ACTIVITY_HEADER_HEIGHT + 3;
+
+    // ─── Photos Grid ───
+    // Load all images for this activity
+    const loadPromises = actEvidence.urls.map(url => loadImageFromUrl(url));
+    const images = await Promise.all(loadPromises);
+
+    for (let i = 0; i < actEvidence.urls.length; i++) {
+      const colIdx = i % MAX_PHOTOS_PER_ROW;
+
+      // If starting a new row (not the first), move cursor down
+      if (colIdx === 0 && i > 0) {
+        cursorY += PHOTO_ROW_HEIGHT + PHOTO_GAP;
+        ensureSpace(PHOTO_ROW_HEIGHT + PHOTO_GAP + 6);
+      }
+
+      const photoWidth = (CONTENT_WIDTH - (MAX_PHOTOS_PER_ROW - 1) * PHOTO_GAP) / MAX_PHOTOS_PER_ROW;
+      const photoX = CONTENT_LEFT + colIdx * (photoWidth + PHOTO_GAP);
+
+      // Photo cell background
+      doc.setFillColor(249, 250, 251);
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.roundedRect(photoX, cursorY, photoWidth, PHOTO_ROW_HEIGHT, 2, 2, 'FD');
+
+      const img = images[i];
+      const imgPadding = 3;
+      const imgMaxW = photoWidth - 2 * imgPadding;
+      const imgMaxH = PHOTO_ROW_HEIGHT - 2 * imgPadding;
+
+      if (img) {
+        // Maintain aspect ratio
+        const imgAspect = img.width / img.height;
+        let drawW = imgMaxW;
+        let drawH = drawW / imgAspect;
+        if (drawH > imgMaxH) {
+          drawH = imgMaxH;
+          drawW = drawH * imgAspect;
+        }
+        const imgX = photoX + (photoWidth - drawW) / 2;
+        const imgY = cursorY + (PHOTO_ROW_HEIGHT - drawH) / 2;
+
+        try {
+          doc.addImage(img, 'JPEG', imgX, imgY, drawW, drawH);
+        } catch {
+          doc.setFontSize(8);
+          doc.setTextColor(150, 150, 150);
+          doc.text('Gagal memuat', photoX + photoWidth / 2, cursorY + PHOTO_ROW_HEIGHT / 2, { align: 'center' });
+        }
+      } else {
+        doc.setFontSize(8);
+        doc.setTextColor(180, 180, 180);
+        doc.text('Gagal memuat', photoX + photoWidth / 2, cursorY + PHOTO_ROW_HEIGHT / 2, { align: 'center' });
+      }
+    }
+
+    // Move cursor past last photo row
+    cursorY += PHOTO_ROW_HEIGHT + 8;
+  }
+}
+
+// =====================================================
 // HELPER FUNCTIONS
 // =====================================================
 
 function addSlideHeader(doc: jsPDF, title: string, slideNumber: number): void {
   const pageWidth = doc.internal.pageSize.getWidth();
-  
+
   // Header background
   doc.setFillColor(59, 130, 246);
   doc.rect(0, 0, pageWidth, 35, 'F');
-  
+
   // Title
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
   doc.text(title, MARGIN, 22);
-  
+
   // Slide number
   doc.setFontSize(14);
   doc.setFont('helvetica', 'normal');
@@ -644,7 +888,7 @@ function addSlideHeader(doc: jsPDF, title: string, slideNumber: number): void {
 function addSlideFooter(doc: jsPDF, slideNumber: number): void {
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  
+
   doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(`Slide ${slideNumber}`, MARGIN, pageHeight - 10);
@@ -664,11 +908,11 @@ function createTable(
   // Header
   doc.setFillColor(59, 130, 246);
   doc.rect(x, y, PAGE_WIDTH - 2 * MARGIN, rowHeight, 'F');
-  
+
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  
+
   headers.forEach((header, i) => {
     doc.text(header, x + i * colWidth + 2, y + 6);
   });
@@ -680,13 +924,13 @@ function createTable(
 
   data.forEach((row, rowIndex) => {
     const rowY = y + (rowIndex + 1) * rowHeight;
-    
+
     // Alternate row colors
     if (rowIndex % 2 === 0) {
       doc.setFillColor(241, 245, 249);
       doc.rect(x, rowY, PAGE_WIDTH - 2 * MARGIN, rowHeight, 'F');
     }
-    
+
     row.forEach((cell, colIndex) => {
       const text = cell.length > 30 ? cell.substring(0, 27) + '...' : cell;
       doc.text(text, x + colIndex * colWidth + 2, rowY + 6);
@@ -704,13 +948,13 @@ function drawPieSlice(
 ): void {
   const startRad = (startAngle * Math.PI) / 180;
   const endRad = (endAngle * Math.PI) / 180;
-  
+
   doc.moveTo(centerX, centerY);
   doc.lineTo(
     centerX + radius * Math.cos(startRad),
     centerY + radius * Math.sin(startRad)
   );
-  
+
   // Arc approximation
   const steps = Math.max(10, Math.abs(endAngle - startAngle) / 5);
   for (let i = 0; i <= steps; i++) {
@@ -720,7 +964,7 @@ function drawPieSlice(
       centerY + radius * Math.sin(angle)
     );
   }
-  
+
   doc.lineTo(centerX, centerY);
   doc.fill();
 }
@@ -748,12 +992,12 @@ function drawSCurveChart(ctx: CanvasRenderingContext2D, data: any[]): void {
   ctx.font = '14px Arial';
   ctx.textAlign = 'right';
   ctx.textBaseline = 'middle';
-  
+
   for (let i = 0; i <= 10; i++) {
     const y = height - padding - (i / 10) * (height - 2 * padding);
     const value = i * 10;
     ctx.fillText(`${value}%`, padding - 10, y);
-    
+
     // Gridlines
     ctx.strokeStyle = '#e0e0e0';
     ctx.lineWidth = 1;
@@ -776,7 +1020,7 @@ function drawSCurveChart(ctx: CanvasRenderingContext2D, data: any[]): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'top';
   ctx.font = '12px Arial';
-  
+
   const labelInterval = Math.max(1, Math.floor(data.length / 8)); // Show max 8 labels
   data.forEach((point, index) => {
     if (index % labelInterval === 0 || index === data.length - 1) {
@@ -834,7 +1078,7 @@ function calculateWeeklyMetrics(
   weekEnd: Date
 ): WeeklyMetrics {
   const total = activities.length;
-  
+
   const completedThisWeek = activities.filter(a => {
     if (a.status !== 'completed' || !a.endDate) return false;
     const endDate = new Date(a.endDate);
