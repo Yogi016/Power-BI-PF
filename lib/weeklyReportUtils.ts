@@ -667,8 +667,8 @@ function isImageUrl(url: string): boolean {
 }
 
 /**
- * Create evidence photo slides — grouped by activity, auto-paginated
- * Each activity with evidence gets its own section with a header and photo grid.
+ * Create evidence photo slides — grouped by activity, compact layout
+ * Multiple activities pack onto one page to save space.
  */
 async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void> {
   // Group evidence by activity
@@ -703,18 +703,18 @@ async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void
     return;
   }
 
-  // Layout constants
+  // Compact layout constants
   const CONTENT_LEFT = MARGIN;
   const CONTENT_RIGHT = PAGE_WIDTH - MARGIN;
   const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
-  const CONTENT_TOP = 45;
-  const CONTENT_BOTTOM = PAGE_HEIGHT - 18;
-  const ACTIVITY_HEADER_HEIGHT = 12;
-  const PHOTO_ROW_HEIGHT = 60; // Height per photo row
-  const PHOTO_GAP = 4;
-  const MAX_PHOTOS_PER_ROW = 3;
+  const CONTENT_TOP = 42;
+  const CONTENT_BOTTOM = PAGE_HEIGHT - 16;
+  const HEADER_H = 9;       // Compact activity header
+  const PHOTO_H = 35;       // Compact photo height
+  const PHOTO_GAP = 3;
+  const SECTION_GAP = 5;    // Gap between activity sections
+  const MAX_PER_ROW = 4;    // 4 photos per row for compactness
 
-  // Status colors for the accent bar
   const statusColors: Record<string, [number, number, number]> = {
     'completed': [34, 197, 94],
     'in-progress': [59, 130, 246],
@@ -731,134 +731,113 @@ async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void
     'on-hold': 'Ditunda',
   };
 
-  let currentPageNum = 0;
-  let cursorY = CONTENT_BOTTOM + 1; // Force first page creation
+  let cursorY = CONTENT_BOTTOM + 1; // Force first page
 
-  // Helper: start a new evidence page
   const startNewPage = () => {
     doc.addPage();
-    currentPageNum++;
-    const title = `Dokumentasi Kegiatan`;
-    addSlideHeader(doc, title, 6);
+    addSlideHeader(doc, 'Dokumentasi Kegiatan', 6);
     addSlideFooter(doc, 6);
     cursorY = CONTENT_TOP;
   };
 
-  // Helper: ensure enough vertical space, otherwise start new page
   const ensureSpace = (needed: number) => {
     if (cursorY + needed > CONTENT_BOTTOM) {
       startNewPage();
     }
   };
 
-  // Process each activity
   for (const actEvidence of activityEvidenceList) {
-    // Calculate space needed for this activity block
-    const photoRows = Math.ceil(actEvidence.urls.length / MAX_PHOTOS_PER_ROW);
-    const totalBlockHeight = ACTIVITY_HEADER_HEIGHT + 4 + photoRows * (PHOTO_ROW_HEIGHT + PHOTO_GAP) + 6;
+    // Need at least header + 1 photo row
+    ensureSpace(HEADER_H + 2 + PHOTO_H + SECTION_GAP);
 
-    // If the entire block fits, render together. Otherwise start new page.
-    ensureSpace(Math.min(totalBlockHeight, ACTIVITY_HEADER_HEIGHT + PHOTO_ROW_HEIGHT + 16));
-
-    // ─── Activity Header Bar ───
+    // ─── Compact Header ───
     const statusColor = statusColors[actEvidence.status] || statusColors['not-started'];
     const statusLabel = statusLabels[actEvidence.status] || actEvidence.status;
 
-    // Accent bar on the left
+    // Left accent
     doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.rect(CONTENT_LEFT, cursorY, 3, ACTIVITY_HEADER_HEIGHT, 'F');
+    doc.rect(CONTENT_LEFT, cursorY, 2.5, HEADER_H, 'F');
 
-    // Header background
-    doc.setFillColor(241, 245, 249);
-    doc.rect(CONTENT_LEFT + 3, cursorY, CONTENT_WIDTH - 3, ACTIVITY_HEADER_HEIGHT, 'F');
+    // Header bg
+    doc.setFillColor(245, 247, 250);
+    doc.rect(CONTENT_LEFT + 2.5, cursorY, CONTENT_WIDTH - 2.5, HEADER_H, 'F');
 
-    // Activity code + name
-    doc.setFontSize(10);
+    // Activity name
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(30, 41, 59);
     const headerText = actEvidence.code
       ? `${actEvidence.code}. ${actEvidence.name}`
       : actEvidence.name;
-    const maxHeaderWidth = CONTENT_WIDTH - 60;
-    const displayHeader = headerText.length > 70
-      ? headerText.substring(0, 67) + '...'
-      : headerText;
-    doc.text(displayHeader, CONTENT_LEFT + 7, cursorY + 8);
+    const displayHeader = headerText.length > 80 ? headerText.substring(0, 77) + '...' : headerText;
+    doc.text(displayHeader, CONTENT_LEFT + 5, cursorY + 6);
 
-    // Status badge
-    const badgeWidth = doc.getTextWidth(statusLabel) + 8;
-    const badgeX = CONTENT_RIGHT - badgeWidth - 4;
+    // Status badge (compact)
+    doc.setFontSize(6);
+    const badgeW = doc.getTextWidth(statusLabel) + 6;
+    const badgeX = CONTENT_RIGHT - badgeW - 3;
     doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.roundedRect(badgeX, cursorY + 2, badgeWidth, 8, 2, 2, 'F');
-    doc.setFontSize(7);
+    doc.roundedRect(badgeX, cursorY + 1.5, badgeW, 6, 1.5, 1.5, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(255, 255, 255);
-    doc.text(statusLabel, badgeX + badgeWidth / 2, cursorY + 7.5, { align: 'center' });
+    doc.text(statusLabel, badgeX + badgeW / 2, cursorY + 5.5, { align: 'center' });
 
     // Photo count
-    doc.setFontSize(7);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(100, 116, 139);
-    doc.text(`${actEvidence.urls.length} foto`, badgeX - 25, cursorY + 7.5);
+    doc.text(`${actEvidence.urls.length} foto`, badgeX - 20, cursorY + 5.5);
 
-    cursorY += ACTIVITY_HEADER_HEIGHT + 3;
+    cursorY += HEADER_H + 2;
 
-    // ─── Photos Grid ───
-    // Load all images for this activity
+    // ─── Photos ───
     const loadPromises = actEvidence.urls.map(url => loadImageFromUrl(url));
     const images = await Promise.all(loadPromises);
 
-    for (let i = 0; i < actEvidence.urls.length; i++) {
-      const colIdx = i % MAX_PHOTOS_PER_ROW;
+    const photoW = (CONTENT_WIDTH - (MAX_PER_ROW - 1) * PHOTO_GAP) / MAX_PER_ROW;
 
-      // If starting a new row (not the first), move cursor down
+    for (let i = 0; i < actEvidence.urls.length; i++) {
+      const colIdx = i % MAX_PER_ROW;
+
       if (colIdx === 0 && i > 0) {
-        cursorY += PHOTO_ROW_HEIGHT + PHOTO_GAP;
-        ensureSpace(PHOTO_ROW_HEIGHT + PHOTO_GAP + 6);
+        cursorY += PHOTO_H + PHOTO_GAP;
+        ensureSpace(PHOTO_H + PHOTO_GAP);
       }
 
-      const photoWidth = (CONTENT_WIDTH - (MAX_PHOTOS_PER_ROW - 1) * PHOTO_GAP) / MAX_PHOTOS_PER_ROW;
-      const photoX = CONTENT_LEFT + colIdx * (photoWidth + PHOTO_GAP);
+      const photoX = CONTENT_LEFT + colIdx * (photoW + PHOTO_GAP);
 
-      // Photo cell background
+      // Cell
       doc.setFillColor(249, 250, 251);
       doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(photoX, cursorY, photoWidth, PHOTO_ROW_HEIGHT, 2, 2, 'FD');
+      doc.setLineWidth(0.2);
+      doc.roundedRect(photoX, cursorY, photoW, PHOTO_H, 1.5, 1.5, 'FD');
 
       const img = images[i];
-      const imgPadding = 3;
-      const imgMaxW = photoWidth - 2 * imgPadding;
-      const imgMaxH = PHOTO_ROW_HEIGHT - 2 * imgPadding;
+      const pad = 2;
+      const maxW = photoW - 2 * pad;
+      const maxH = PHOTO_H - 2 * pad;
 
       if (img) {
-        // Maintain aspect ratio
-        const imgAspect = img.width / img.height;
-        let drawW = imgMaxW;
-        let drawH = drawW / imgAspect;
-        if (drawH > imgMaxH) {
-          drawH = imgMaxH;
-          drawW = drawH * imgAspect;
-        }
-        const imgX = photoX + (photoWidth - drawW) / 2;
-        const imgY = cursorY + (PHOTO_ROW_HEIGHT - drawH) / 2;
-
+        const aspect = img.width / img.height;
+        let dW = maxW;
+        let dH = dW / aspect;
+        if (dH > maxH) { dH = maxH; dW = dH * aspect; }
+        const imgX = photoX + (photoW - dW) / 2;
+        const imgY = cursorY + (PHOTO_H - dH) / 2;
         try {
-          doc.addImage(img, 'JPEG', imgX, imgY, drawW, drawH);
+          doc.addImage(img, 'JPEG', imgX, imgY, dW, dH);
         } catch {
-          doc.setFontSize(8);
-          doc.setTextColor(150, 150, 150);
-          doc.text('Gagal memuat', photoX + photoWidth / 2, cursorY + PHOTO_ROW_HEIGHT / 2, { align: 'center' });
+          doc.setFontSize(6);
+          doc.setTextColor(160, 160, 160);
+          doc.text('Gagal', photoX + photoW / 2, cursorY + PHOTO_H / 2, { align: 'center' });
         }
       } else {
-        doc.setFontSize(8);
+        doc.setFontSize(6);
         doc.setTextColor(180, 180, 180);
-        doc.text('Gagal memuat', photoX + photoWidth / 2, cursorY + PHOTO_ROW_HEIGHT / 2, { align: 'center' });
+        doc.text('Gagal', photoX + photoW / 2, cursorY + PHOTO_H / 2, { align: 'center' });
       }
     }
 
-    // Move cursor past last photo row
-    cursorY += PHOTO_ROW_HEIGHT + 8;
+    cursorY += PHOTO_H + SECTION_GAP;
   }
 }
 
