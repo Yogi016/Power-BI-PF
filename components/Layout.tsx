@@ -15,6 +15,7 @@ import {
   FileText
 } from 'lucide-react';
 import { PageView } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface LayoutProps {
   activePage: PageView;
@@ -25,8 +26,14 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
+
+  // Derive user display info
+  const userEmail = user?.email || '';
+  const userName = user?.user_metadata?.name || user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
+  const userInitials = userName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -177,6 +184,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             {!collapsed && <span className="font-medium">Settings</span>}
           </button>
           <button
+            onClick={signOut}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-700 transition-colors group ${collapsed ? 'justify-center' : ''
               }`}
           >
@@ -204,11 +212,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
           </div>
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-semibold text-slate-900 leading-none mb-1">Admin User</p>
-              <p className="text-xs text-slate-500 leading-none">Project Manager</p>
+              <p className="text-sm font-semibold text-slate-900 leading-none mb-1">{userName}</p>
+              <p className="text-xs text-slate-500 leading-none">{userEmail}</p>
             </div>
             <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm ring-2 ring-white shadow-sm">
-              AU
+              {userInitials}
             </div>
           </div>
         </header>
@@ -222,7 +230,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             loading="lazy"
           />
           <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs ring-2 ring-white shadow-sm">
-            AU
+            {userInitials}
           </div>
         </header>
 
