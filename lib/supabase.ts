@@ -1898,8 +1898,8 @@ export async function fetchDocuments(categoryId: string): Promise<DocumentItem[]
       .from('documents')
       .select('*')
       .eq('category_id', categoryId)
-      .order('display_order', { ascending: true })
-      .order('created_at', { ascending: true });
+      .order('tanggal', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
     if (error) throw error;
     return (data || []).map(row => ({
       id: row.id,

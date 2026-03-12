@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
     Plus, Search, FileText, Trash2, Edit3, X, ExternalLink,
     Check, ChevronDown, FolderPlus, Settings2, AlertCircle, Loader2,
-    Upload, Link as LinkIcon, File
+    Upload, Link as LinkIcon, File, ArrowUpDown, ArrowUp, ArrowDown
 } from 'lucide-react';
 import { DocumentCategory, DocumentItem } from '../types';
 import {
@@ -29,6 +29,7 @@ export const DokumenPage: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [loadingDocs, setLoadingDocs] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
+    const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
     const [showAddDocModal, setShowAddDocModal] = useState(false);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [showManageCategories, setShowManageCategories] = useState(false);
@@ -81,18 +82,25 @@ export const DokumenPage: React.FC = () => {
     useEffect(() => { loadCategories(); }, [loadCategories]);
     useEffect(() => { loadDocuments(); }, [loadDocuments]);
 
-    // Filtered documents
-    const filteredDocs = documents.filter(doc => {
-        if (!searchQuery) return true;
-        const q = searchQuery.toLowerCase();
-        return (
-            doc.deskripsi?.toLowerCase().includes(q) ||
-            doc.jenisDokumen?.toLowerCase().includes(q) ||
-            doc.pengisi?.toLowerCase().includes(q) ||
-            doc.penerbi?.toLowerCase().includes(q) ||
-            doc.keterangan?.toLowerCase().includes(q)
-        );
-    });
+    // Filtered & sorted documents
+    const filteredDocs = documents
+        .filter(doc => {
+            if (!searchQuery) return true;
+            const q = searchQuery.toLowerCase();
+            return (
+                doc.noSurat?.toLowerCase().includes(q) ||
+                doc.deskripsi?.toLowerCase().includes(q) ||
+                doc.jenisDokumen?.toLowerCase().includes(q) ||
+                doc.pengisi?.toLowerCase().includes(q) ||
+                doc.penerbi?.toLowerCase().includes(q) ||
+                doc.keterangan?.toLowerCase().includes(q)
+            );
+        })
+        .sort((a, b) => {
+            const dateA = a.tanggal ? new Date(a.tanggal).getTime() : 0;
+            const dateB = b.tanggal ? new Date(b.tanggal).getTime() : 0;
+            return sortOrder === 'desc' ? dateB - dateA : dateA - dateB;
+        });
 
     // Handlers
     const resetForm = () => {
@@ -270,15 +278,25 @@ export const DokumenPage: React.FC = () => {
 
                     {/* Search & Actions Bar */}
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 p-4 border-b border-slate-100 bg-slate-50/50">
-                        <div className="relative flex-1 max-w-md">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={e => setSearchQuery(e.target.value)}
-                                placeholder="Cari dokumen..."
-                                className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
-                            />
+                        <div className="flex items-center gap-2 flex-1">
+                            <div className="relative flex-1 max-w-md">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={e => setSearchQuery(e.target.value)}
+                                    placeholder="Cari dokumen..."
+                                    className="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
+                                />
+                            </div>
+                            <button
+                                onClick={() => setSortOrder(prev => prev === 'desc' ? 'asc' : 'desc')}
+                                className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors whitespace-nowrap"
+                                title={sortOrder === 'desc' ? 'Tanggal: Terbaru di atas' : 'Tanggal: Terlama di atas'}
+                            >
+                                {sortOrder === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
+                                <span className="hidden sm:inline">{sortOrder === 'desc' ? 'Terbaru' : 'Terlama'}</span>
+                            </button>
                         </div>
                         <button
                             onClick={() => { resetForm(); setShowAddDocModal(true); }}
