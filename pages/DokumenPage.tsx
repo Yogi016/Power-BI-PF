@@ -382,95 +382,186 @@ export const DokumenPage: React.FC = () => {
                             </p>
                         </div>
                     ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="bg-slate-50 text-slate-600">
-                                        <th className="text-left px-4 py-3 font-semibold w-10">No</th>
-                                        <th className="text-left px-4 py-3 font-semibold w-28">Tanggal</th>
-                                        <th className="text-left px-4 py-3 font-semibold w-36">No Surat</th>
-                                        <th className="text-left px-4 py-3 font-semibold min-w-[200px]">Deskripsi</th>
-                                        <th className="text-left px-4 py-3 font-semibold w-36">Jenis Dokumen</th>
-                                        <th className="text-center px-4 py-3 font-semibold w-16">Link</th>
-                                        <th className="text-left px-4 py-3 font-semibold w-28">Pengirim</th>
-                                        <th className="text-left px-4 py-3 font-semibold w-28">Penerima</th>
-                                        <th className="text-center px-4 py-3 font-semibold w-20">Softfile</th>
-                                        <th className="text-center px-4 py-3 font-semibold w-20">Hardfile</th>
-                                        <th className="text-left px-4 py-3 font-semibold min-w-[120px]">Keterangan</th>
-                                        <th className="text-center px-4 py-3 font-semibold w-20">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredDocs.map((doc, idx) => (
-                                        <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors group">
-                                            <td className="px-4 py-3 text-slate-500 font-medium">{idx + 1}</td>
-                                            <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{formatDate(doc.tanggal)}</td>
-                                            <td className="px-4 py-3 text-slate-700 text-xs">{doc.noSurat || '-'}</td>
-                                            <td className="px-4 py-3 text-slate-800">{doc.deskripsi || '-'}</td>
-                                            <td className="px-4 py-3">
-                                                {doc.jenisDokumen ? (
-                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium">
+                        <>
+                            {/* ─── MOBILE: Card Layout ─── */}
+                            <div className="block md:hidden divide-y divide-slate-100">
+                                {filteredDocs.map((doc, idx) => (
+                                    <div key={doc.id} className="p-4 hover:bg-slate-50/80 transition-colors">
+                                        {/* Top row: number, date, actions */}
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <span className="flex-shrink-0 w-6 h-6 rounded-full bg-emerald-100 text-emerald-700 text-xs font-bold flex items-center justify-center">
+                                                    {idx + 1}
+                                                </span>
+                                                <span className="text-xs text-slate-500">{formatDate(doc.tanggal)}</span>
+                                                {doc.jenisDokumen && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium">
                                                         {doc.jenisDokumen}
                                                     </span>
-                                                ) : '-'}
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                {doc.link ? (
+                                                )}
+                                            </div>
+                                            <div className="flex items-center gap-1 flex-shrink-0">
+                                                {doc.link && (
                                                     <a
                                                         href={doc.link}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
-                                                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-colors"
+                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 active:bg-emerald-100"
                                                         title="Buka Link"
                                                     >
                                                         <ExternalLink size={14} />
                                                     </a>
-                                                ) : (
-                                                    <span className="text-slate-300">-</span>
                                                 )}
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-600">{doc.pengisi || '-'}</td>
-                                            <td className="px-4 py-3 text-slate-600">{doc.penerbi || '-'}</td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${doc.hasSoftfile
-                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                    : 'bg-slate-100 text-slate-400'
-                                                    }`}>
+                                                <button
+                                                    onClick={() => handleEditDoc(doc)}
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-600 hover:bg-emerald-50"
+                                                    title="Edit"
+                                                >
+                                                    <Edit3 size={14} />
+                                                </button>
+                                                <button
+                                                    onClick={() => setDeleteConfirm({ type: 'doc', id: doc.id })}
+                                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50"
+                                                    title="Hapus"
+                                                >
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Description */}
+                                        <p className="text-sm text-slate-800 font-medium leading-snug mb-1.5">
+                                            {doc.deskripsi || '-'}
+                                        </p>
+
+                                        {/* No Surat */}
+                                        {doc.noSurat && (
+                                            <p className="text-[11px] text-slate-500 mb-2 font-mono break-all">
+                                                {doc.noSurat}
+                                            </p>
+                                        )}
+
+                                        {/* Meta row */}
+                                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                                            {doc.pengisi && (
+                                                <span>Pengirim: <span className="text-slate-700">{doc.pengisi}</span></span>
+                                            )}
+                                            {doc.penerbi && (
+                                                <span>Penerima: <span className="text-slate-700">{doc.penerbi}</span></span>
+                                            )}
+                                            <span className="flex items-center gap-1">
+                                                Soft: <span className={doc.hasSoftfile ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
                                                     {doc.hasSoftfile ? '✓' : '✗'}
                                                 </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-center">
-                                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${doc.hasHardfile
-                                                    ? 'bg-emerald-100 text-emerald-700'
-                                                    : 'bg-slate-100 text-slate-400'
-                                                    }`}>
+                                            </span>
+                                            <span className="flex items-center gap-1">
+                                                Hard: <span className={doc.hasHardfile ? 'text-emerald-600 font-semibold' : 'text-slate-400'}>
                                                     {doc.hasHardfile ? '✓' : '✗'}
                                                 </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-500 text-xs">{doc.keterangan || '-'}</td>
-                                            <td className="px-4 py-3">
-                                                <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                    <button
-                                                        onClick={() => handleEditDoc(doc)}
-                                                        className="p-1.5 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
-                                                        title="Edit"
-                                                    >
-                                                        <Edit3 size={14} />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => setDeleteConfirm({ type: 'doc', id: doc.id })}
-                                                        className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
-                                                        title="Hapus"
-                                                    >
-                                                        <Trash2 size={14} />
-                                                    </button>
-                                                </div>
-                                            </td>
+                                            </span>
+                                        </div>
+
+                                        {/* Keterangan */}
+                                        {doc.keterangan && (
+                                            <p className="text-[11px] text-slate-400 mt-1 italic">
+                                                {doc.keterangan}
+                                            </p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+
+                            {/* ─── DESKTOP: Table Layout ─── */}
+                            <div className="hidden md:block overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-slate-50 text-slate-600">
+                                            <th className="text-left px-4 py-3 font-semibold w-10">No</th>
+                                            <th className="text-left px-4 py-3 font-semibold w-28">Tanggal</th>
+                                            <th className="text-left px-4 py-3 font-semibold w-36">No Surat</th>
+                                            <th className="text-left px-4 py-3 font-semibold min-w-[200px]">Deskripsi</th>
+                                            <th className="text-left px-4 py-3 font-semibold w-36">Jenis Dokumen</th>
+                                            <th className="text-center px-4 py-3 font-semibold w-16">Link</th>
+                                            <th className="text-left px-4 py-3 font-semibold w-28">Pengirim</th>
+                                            <th className="text-left px-4 py-3 font-semibold w-28">Penerima</th>
+                                            <th className="text-center px-4 py-3 font-semibold w-20">Softfile</th>
+                                            <th className="text-center px-4 py-3 font-semibold w-20">Hardfile</th>
+                                            <th className="text-left px-4 py-3 font-semibold min-w-[120px]">Keterangan</th>
+                                            <th className="text-center px-4 py-3 font-semibold w-20">Aksi</th>
                                         </tr>
-                                    ))}
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {filteredDocs.map((doc, idx) => (
+                                            <tr key={doc.id} className="hover:bg-slate-50/80 transition-colors group">
+                                                <td className="px-4 py-3 text-slate-500 font-medium">{idx + 1}</td>
+                                                <td className="px-4 py-3 text-slate-700 whitespace-nowrap">{formatDate(doc.tanggal)}</td>
+                                                <td className="px-4 py-3 text-slate-700 text-xs">{doc.noSurat || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-800">{doc.deskripsi || '-'}</td>
+                                                <td className="px-4 py-3">
+                                                    {doc.jenisDokumen ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium">
+                                                            {doc.jenisDokumen}
+                                                        </span>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {doc.link ? (
+                                                        <a
+                                                            href={doc.link}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 transition-colors"
+                                                            title="Buka Link"
+                                                        >
+                                                            <ExternalLink size={14} />
+                                                        </a>
+                                                    ) : (
+                                                        <span className="text-slate-300">-</span>
+                                                    )}
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-600">{doc.pengisi || '-'}</td>
+                                                <td className="px-4 py-3 text-slate-600">{doc.penerbi || '-'}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${doc.hasSoftfile
+                                                        ? 'bg-emerald-100 text-emerald-700'
+                                                        : 'bg-slate-100 text-slate-400'
+                                                        }`}>
+                                                        {doc.hasSoftfile ? '✓' : '✗'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md text-xs font-bold ${doc.hasHardfile
+                                                        ? 'bg-emerald-100 text-emerald-700'
+                                                        : 'bg-slate-100 text-slate-400'
+                                                        }`}>
+                                                        {doc.hasHardfile ? '✓' : '✗'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-3 text-slate-500 text-xs">{doc.keterangan || '-'}</td>
+                                                <td className="px-4 py-3">
+                                                    <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <button
+                                                            onClick={() => handleEditDoc(doc)}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors"
+                                                            title="Edit"
+                                                        >
+                                                            <Edit3 size={14} />
+                                                        </button>
+                                                        <button
+                                                            onClick={() => setDeleteConfirm({ type: 'doc', id: doc.id })}
+                                                            className="p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                                                            title="Hapus"
+                                                        >
+                                                            <Trash2 size={14} />
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
                                 </tbody>
                             </table>
                         </div>
+                        </>
                     )}
 
                     {/* Footer Stats */}
