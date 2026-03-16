@@ -128,6 +128,8 @@ export const WorkPage: React.FC = () => {
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showDailyDataForm, setShowDailyDataForm] = useState(false);
   const [editingProject, setEditingProject] = useState<WorkProject | null>(null);
+  const [savingProject, setSavingProject] = useState(false);
+  const [savingDaily, setSavingDaily] = useState(false);
   const [projectFormData, setProjectFormData] = useState<Partial<WorkProject>>({
     projectName: '',
     faseName: '',
@@ -317,7 +319,7 @@ export const WorkPage: React.FC = () => {
       prognosManpower,
       tambahanManpower,
     };
-  }, [selectedProject, selectedDailyData]);
+  }, [selectedProject, selectedDailyData, selectedPlanSchedule]);
 
   const showNotification = (type: 'success' | 'error', message: string) => {
     setNotification({ type, message });
@@ -392,10 +394,15 @@ export const WorkPage: React.FC = () => {
       obstacle: project.obstacle || '',
       actionPlan: project.actionPlan || '',
     });
+    // Load existing plan schedule into form
+    const existingSchedule = planScheduleMap[project.id] || [];
+    setFormPlanSchedule(existingSchedule);
     setShowProjectForm(true);
   };
 
   const handleSaveProject = async () => {
+    if (savingProject) return; // Prevent double-submit
+
     if (!projectFormData.projectName || !projectFormData.faseName || !projectFormData.target) {
       showNotification('error', 'Nama project, fase, dan target wajib diisi');
       return;
@@ -406,6 +413,7 @@ export const WorkPage: React.FC = () => {
       return;
     }
 
+    setSavingProject(true);
     try {
       if (editingProject) {
         const success = await updateWorkProject(editingProject.id, projectFormData as WorkProject);
@@ -445,6 +453,8 @@ export const WorkPage: React.FC = () => {
       }
     } catch (error) {
       showNotification('error', 'Terjadi kesalahan');
+    } finally {
+      setSavingProject(false);
     }
   };
 
@@ -478,6 +488,8 @@ export const WorkPage: React.FC = () => {
   };
 
   const handleSaveDailyData = async () => {
+    if (savingDaily) return; // Prevent double-submit
+
     if (!selectedProject || !dailyFormData.date) {
       showNotification('error', 'Tanggal wajib diisi');
       return;
@@ -520,6 +532,7 @@ export const WorkPage: React.FC = () => {
 
     const actualCumulative = previousCumulative + dailyFormData.dailyPlanting;
 
+    setSavingDaily(true);
     const success = await upsertWorkDailyData({
       workProjectId: selectedProject.id,
       date: dailyFormData.date,
@@ -536,6 +549,7 @@ export const WorkPage: React.FC = () => {
     } else {
       showNotification('error', 'Gagal menyimpan data harian');
     }
+    setSavingDaily(false);
   };
 
   if (loading) {
@@ -854,10 +868,11 @@ export const WorkPage: React.FC = () => {
               <div className="flex gap-3 mt-6">
                 <button
                   onClick={handleSaveProject}
-                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                  disabled={savingProject}
+                  className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
                 >
-                  <Save size={18} />
-                  Simpan
+                  {savingProject ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                  {savingProject ? 'Menyimpan...' : 'Simpan'}
                 </button>
                 <button
                   onClick={() => setShowProjectForm(false)}
@@ -1018,10 +1033,11 @@ export const WorkPage: React.FC = () => {
                 <div className="flex gap-3 mt-6">
                   <button
                     onClick={handleSaveDailyData}
-                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                    disabled={savingDaily}
+                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
                   >
-                    <Save size={18} />
-                    Simpan
+                    {savingDaily ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                    {savingDaily ? 'Menyimpan...' : 'Simpan'}
                   </button>
                   <button
                     onClick={() => setShowDailyDataForm(false)}
