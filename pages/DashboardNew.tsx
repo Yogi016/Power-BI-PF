@@ -6,9 +6,9 @@ import { TimelineSelector } from '../components/TimelineSelector';
 import { ProjectSelector } from '../components/ProjectSelector';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
-import { generateWeeklyReport } from '../lib/weeklyReportUtils';
+import { generateWeeklyReport, generateAllProjectsReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
-import { Loader2, TrendingUp, FileText, Database, Download, Calendar } from 'lucide-react';
+import { Loader2, TrendingUp, FileText, Database, Download, Calendar, BookOpen } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -25,6 +25,8 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   const [metrics, setMetrics] = useState<ProjectMetrics | null>(null);
   const [loading, setLoading] = useState(true);
   const [generatingReport, setGeneratingReport] = useState(false);
+  const [generatingAllReport, setGeneratingAllReport] = useState(false);
+  const [allReportProgress, setAllReportProgress] = useState('');
   const [downloadingChart, setDownloadingChart] = useState(false);
   const sCurveChartRef = useRef<HTMLDivElement | null>(null);
 
@@ -156,6 +158,22 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
       alert('Failed to generate report. Please try again.');
     } finally {
       setGeneratingReport(false);
+    }
+  };
+
+  // Handle all projects report generation
+  const handleGenerateAllReport = async () => {
+    setGeneratingAllReport(true);
+    setAllReportProgress('Memulai...');
+    try {
+      await generateAllProjectsReport((msg) => setAllReportProgress(msg));
+      alert('All Report Project berhasil di-generate!');
+    } catch (error) {
+      console.error('Error generating all report:', error);
+      alert('Gagal generate report. Silakan coba lagi.');
+    } finally {
+      setGeneratingAllReport(false);
+      setAllReportProgress('');
     }
   };
 
@@ -315,6 +333,25 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
                 )}
               </button>
             )}
+
+            {/* Generate All Report Project Button */}
+            <button
+              onClick={handleGenerateAllReport}
+              disabled={generatingAllReport}
+              className="mt-2 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-lg disabled:cursor-not-allowed"
+            >
+              {generatingAllReport ? (
+                <>
+                  <Loader2 size={20} className="animate-spin" />
+                  <span className="truncate">{allReportProgress || 'Generating...'}</span>
+                </>
+              ) : (
+                <>
+                  <BookOpen size={20} />
+                  All Report Project
+                </>
+              )}
+            </button>
           </div>
         </div>
 

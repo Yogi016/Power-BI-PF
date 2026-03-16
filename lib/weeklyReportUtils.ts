@@ -1112,3 +1112,327 @@ function formatDate(date: Date): string {
     day: 'numeric',
   });
 }
+
+// =====================================================
+// ALL PROJECTS REPORT
+// =====================================================
+
+interface AllReportProjectData {
+  id: string;
+  name: string;
+  pic: string;
+  location?: string;
+  category?: string;
+  description?: string;
+  startDate: string;
+  endDate: string;
+  status?: string;
+  budget?: number;
+}
+
+/**
+ * Progress callback for UI updates
+ */
+export type AllReportProgressCallback = (message: string) => void;
+
+/**
+ * Generate a single PDF report containing all projects
+ */
+export async function generateAllProjectsReport(
+  onProgress?: AllReportProgressCallback
+): Promise<void> {
+  try {
+    onProgress?.('Memuat data project...');
+
+    const { fetchProjects: getProjects } = await import('./supabase');
+    const allProjects = await getProjects();
+
+    if (allProjects.length === 0) {
+      throw new Error('Tidak ada project untuk di-report');
+    }
+
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'mm',
+      format: 'a4',
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    let globalSlide = 1;
+
+    // ── SLIDE 1: Cover ──
+    onProgress?.('Membuat cover...');
+    doc.setFillColor(15, 23, 42); // Slate-900
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+
+    // Accent
+    doc.setFillColor(16, 185, 129); // Emerald
+    doc.rect(0, pageHeight - 6, pageWidth, 6, 'F');
+    doc.setFillColor(59, 130, 246); // Blue accent circle
+    doc.circle(pageWidth - 40, 40, 70, 'F');
+
+    // Logo
+    try {
+      const logoImg = new Image();
+      logoImg.src = '/logo_putih.png';
+      await new Promise((resolve, reject) => {
+        logoImg.onload = resolve;
+        logoImg.onerror = reject;
+        setTimeout(reject, 2000);
+      });
+      const ratio = logoImg.width / logoImg.height;
+      doc.addImage(logoImg, 'PNG', MARGIN, MARGIN, 20 * ratio, 20);
+    } catch { /* skip */ }
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(38);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Laporan Seluruh Project', pageWidth / 2, 80, { align: 'center' });
+
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Pertamina Foundation', pageWidth / 2, 100, { align: 'center' });
+
+    doc.setFontSize(14);
+    doc.text(`${allProjects.length} Project · ${formatDate(new Date())}`, pageWidth / 2, 115, { align: 'center' });
+
+    doc.setFontSize(11);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Dibuat otomatis oleh sistem Project Fungsi Lingkungan', pageWidth / 2, pageHeight - 15, { align: 'center' });
+
+    // ── SLIDE 2: Portfolio Overview Table ──
+    doc.addPage();
+    globalSlide++;
+    onProgress?.('Membuat overview portfolio...');
+
+    addSlideHeader(doc, 'Portfolio Overview', globalSlide);
+
+    // Collect metrics for all projects first
+    const allProjectMetrics: {
+      project: AllReportProjectData;
+      activities: any[];
+      metrics: WeeklyMetrics;
+      scurveData: any[];
+    }[] = [];
+
+    for (let i = 0; i < allProjects.length; i++) {
+      const p = allProjects[i];
+      onProgress?.(`Memuat data project ${i + 1}/${allProjects.length}: ${p.name}...`);
+      const acts = await fetchActivities(p.id);
+      const scurve = await fetchSCurveData(p.id);
+      const met = calculateWeeklyMetrics(acts, getWeekStart(new Date()), getWeekEnd(new Date()));
+      allProjectMetrics.push({ project: p, activities: acts, metrics: met, scurveData: scurve });
+    }
+
+    // Draw overview table
+    let ty = 48;
+    const colWidths = [85, 30, 35, 35, 35, 38]; // name, status, progress, completed, delayed, timeline
+    const headers = ['Project', 'Status', 'Progress', 'Selesai', 'Delay', 'Timeline'];
+
+    // Header row
+    doc.setFillColor(59, 130, 246);
+    doc.rect(MARGIN, ty, pageWidth - 2 * MARGIN, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    let cx = MARGIN;
+    headers.forEach((h, i) => {
+      doc.text(h, cx + 2, ty + 6);
+      cx += colWidths[i];
+    });
+
+    // Data rows
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+
+    const maxRows = Math.min(allProjectMetrics.length, 18); // max rows per page
+    for (let r = 0; r < maxRows; r++) {
+      const { project: p, metrics: m } = allProjectMetrics[r];
+      const rowY = ty + (r + 1) * 8;
+
+      if (r % 2 === 0) {
+        doc.setFillColor(241, 245, 249);
+        doc.rect(MARGIN, rowY, pageWidth - 2 * MARGIN, 8, 'F');
+      }
+
+      doc.setTextColor(15, 23, 42);
+      cx = MARGIN;
+      const rowData = [
+        (p.name || '').substring(0, 40),
+        m.status === 'on-track' ? 'On Track' : m.status === 'at-risk' ? 'At Risk' : 'Delayed',
+        `${m.overallProgress.toFixed(1)}%`,
+        `${m.completedThisWeek}/${m.totalActivities}`,
+        `${m.delayed}`,
+        `${p.startDate?.substring(0, 10) || ''} → ${p.endDate?.substring(0, 10) || ''}`,
+      ];
+      rowData.forEach((cell, i) => {
+        // Color status cell
+        if (i === 1) {
+          if (m.status === 'on-track') doc.setTextColor(16, 185, 129);
+          else if (m.status === 'at-risk') doc.setTextColor(245, 158, 11);
+          else doc.setTextColor(239, 68, 68);
+        } else if (i === 4 && m.delayed > 0) {
+          doc.setTextColor(239, 68, 68);
+        } else {
+          doc.setTextColor(15, 23, 42);
+        }
+        const txt = cell.length > 42 ? cell.substring(0, 39) + '...' : cell;
+        doc.text(txt, cx + 2, rowY + 6);
+        cx += colWidths[i];
+      });
+    }
+
+    addSlideFooter(doc, globalSlide);
+
+    // ── PER-PROJECT SLIDES ──
+    for (let i = 0; i < allProjectMetrics.length; i++) {
+      const { project: proj, activities, metrics: met, scurveData } = allProjectMetrics[i];
+      onProgress?.(`Membuat slide project ${i + 1}/${allProjectMetrics.length}: ${proj.name}...`);
+
+      // ── Project Cover Slide ──
+      doc.addPage();
+      globalSlide++;
+
+      doc.setFillColor(30, 64, 175); // Blue-800
+      doc.rect(0, 0, pageWidth, pageHeight, 'F');
+      doc.setFillColor(16, 185, 129);
+      doc.rect(0, pageHeight - 4, pageWidth, 4, 'F');
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`PROJECT ${i + 1} / ${allProjectMetrics.length}`, pageWidth / 2, 50, { align: 'center' });
+
+      doc.setFontSize(32);
+      doc.setFont('helvetica', 'bold');
+      const projName = proj.name.length > 45 ? proj.name.substring(0, 42) + '...' : proj.name;
+      doc.text(projName, pageWidth / 2, 80, { align: 'center' });
+
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`PIC: ${proj.pic || '-'}`, pageWidth / 2, 100, { align: 'center' });
+      doc.text(`${proj.location || '-'}`, pageWidth / 2, 112, { align: 'center' });
+
+      doc.setFontSize(13);
+      doc.text(`${proj.startDate?.substring(0, 10) || ''} — ${proj.endDate?.substring(0, 10) || ''}`, pageWidth / 2, 130, { align: 'center' });
+
+      if (proj.budget) {
+        doc.text(`Budget: Rp ${(proj.budget / 1_000_000).toFixed(0)}M`, pageWidth / 2, 142, { align: 'center' });
+      }
+
+      // ── Executive Summary + S-Curve Slide ──
+      doc.addPage();
+      globalSlide++;
+      addSlideHeader(doc, `${proj.name} — Summary & S-Curve`, globalSlide);
+
+      // Left: Metrics
+      let sy = 48;
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(15, 23, 42);
+      doc.text('Metrics', MARGIN, sy);
+
+      sy += 8;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+
+      const metricItems = [
+        ['Overall Progress', `${met.overallProgress.toFixed(1)}%`],
+        ['Total Activities', `${met.totalActivities}`],
+        ['Completed', `${met.completedThisWeek}`],
+        ['In Progress', `${met.inProgress}`],
+        ['Delayed', `${met.delayed}`],
+        ['Not Started', `${met.notStarted}`],
+        ['Status', met.status === 'on-track' ? 'On Track' : met.status === 'at-risk' ? 'At Risk' : 'Delayed'],
+      ];
+
+      metricItems.forEach(([label, value], idx) => {
+        const my = sy + idx * 8;
+        doc.setTextColor(100, 116, 139);
+        doc.text(label, MARGIN + 2, my);
+        doc.setTextColor(15, 23, 42);
+        doc.setFont('helvetica', 'bold');
+        doc.text(value, MARGIN + 60, my);
+        doc.setFont('helvetica', 'normal');
+      });
+
+      // Progress bar
+      const barY = sy + metricItems.length * 8 + 5;
+      doc.setFillColor(226, 232, 240);
+      doc.roundedRect(MARGIN, barY, 80, 6, 2, 2, 'F');
+      doc.setFillColor(16, 185, 129);
+      doc.roundedRect(MARGIN, barY, Math.min(80, (met.overallProgress / 100) * 80), 6, 2, 2, 'F');
+
+      // Right: S-Curve Chart
+      if (scurveData && scurveData.length > 0) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 300;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          drawSCurveChart(ctx, scurveData);
+          const imgData = canvas.toDataURL('image/png');
+          doc.addImage(imgData, 'PNG', 120, 45, 155, 78);
+        }
+      } else {
+        doc.setFontSize(10);
+        doc.setTextColor(148, 163, 184);
+        doc.text('Data S-Curve tidak tersedia', 195, 85, { align: 'center' });
+      }
+
+      addSlideFooter(doc, globalSlide);
+
+      // ── Activities Status Slide ──
+      if (activities.length > 0) {
+        doc.addPage();
+        globalSlide++;
+        addSlideHeader(doc, `${proj.name} — Activities`, globalSlide);
+
+        const actHeaders = ['Kode', 'Activity', 'Status', 'Bobot'];
+        const actData = activities.slice(0, 16).map((a: any) => [
+          (a.code || '-').substring(0, 8),
+          (a.activityName || a.activity_name || '-').substring(0, 45),
+          (a.status || 'not-started'),
+          `${(a.weight || 0)}%`,
+        ]);
+
+        createTable(doc, actHeaders, actData, MARGIN, 48);
+        addSlideFooter(doc, globalSlide);
+      }
+    }
+
+    // ── CLOSING SLIDE ──
+    doc.addPage();
+    globalSlide++;
+
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, pageHeight, 'F');
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, pageHeight - 6, pageWidth, 6, 'F');
+
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(32);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Terima Kasih', pageWidth / 2, 80, { align: 'center' });
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Pertamina Foundation', pageWidth / 2, 100, { align: 'center' });
+    doc.text(`${allProjects.length} Project · ${globalSlide} Slides`, pageWidth / 2, 115, { align: 'center' });
+
+    doc.setFontSize(11);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Dibuat: ${formatDate(new Date())}`, pageWidth / 2, 135, { align: 'center' });
+
+    // Save
+    onProgress?.('Menyimpan PDF...');
+    const fileName = `All_Report_Project_${new Date().toISOString().split('T')[0]}.pdf`;
+    doc.save(fileName);
+
+    onProgress?.('Selesai!');
+  } catch (error) {
+    console.error('Error generating all projects report:', error);
+    throw error;
+  }
+}
