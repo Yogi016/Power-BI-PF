@@ -395,6 +395,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   const [activities, setActivities] = useState<ActivityFormRow[]>([]);
   const [activitiesDirty, setActivitiesDirty] = useState(false);
   const [savingActivities, setSavingActivities] = useState(false);
+  const [savingProject, setSavingProject] = useState(false);
 
   // S-Curve editor state
   const [sCurveDraftMap, setSCurveDraftMap] = useState<Record<string, SCurveDraftValue>>({});
@@ -749,6 +750,8 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       return;
     }
 
+    if (savingActivities || savingProject) return; // Prevent double-submit
+
     const activitiesWeightError = getActivitiesWeightError();
     if (activitiesWeightError) {
       showNotification('error', activitiesWeightError);
@@ -783,6 +786,8 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
   };
 
   const handleSave = async () => {
+    if (savingProject || savingActivities) return; // Prevent double-submit
+
     if (!formData.name || !formData.pic || !formData.startDate || !formData.endDate) {
       showNotification('error', 'Nama, PIC, dan tanggal wajib diisi');
       return;
@@ -795,9 +800,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     }
 
     if (isCreating) {
+      setSavingProject(true);
       const newProject = await createProject(formData as Omit<Project, 'id' | 'createdAt' | 'updatedAt'>);
       if (!newProject) {
         showNotification('error', 'Gagal membuat project');
+        setSavingProject(false);
         return;
       }
 
@@ -816,6 +823,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
       setActivitiesDirty(false);
       showNotification('success', 'Project dan S-Curve berhasil dibuat');
+      setSavingProject(false);
       loadProjects();
       handleCancel();
       return;
@@ -823,9 +831,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
     if (!editingProject) return;
 
+    setSavingProject(true);
     const success = await updateProject(editingProject.id, formData);
     if (!success) {
       showNotification('error', 'Gagal mengupdate project');
+      setSavingProject(false);
       return;
     }
 
@@ -844,6 +854,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
     setActivitiesDirty(false);
     showNotification('success', 'Project dan S-Curve berhasil diupdate');
+    setSavingProject(false);
     loadProjects();
     handleCancel();
   };
@@ -1637,10 +1648,11 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleSave}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors"
+                disabled={savingProject || savingActivities}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                <Save size={18} />
-                Simpan
+                {savingProject ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {savingProject ? 'Menyimpan...' : 'Simpan'}
               </button>
               <button
                 onClick={handleCancel}
