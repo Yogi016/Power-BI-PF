@@ -9,7 +9,9 @@ import {
   deleteWorkProject,
   upsertWorkDailyData,
   fetchWorkPlanSchedule,
-  batchUpsertWorkPlanSchedule
+  batchUpsertWorkPlanSchedule,
+  deleteWorkPlanSchedule,
+  deleteWorkDailyDataOutsideRange
 } from '../lib/supabase';
 import {
   Plus,
@@ -416,9 +418,28 @@ export const WorkPage: React.FC = () => {
     setSavingProject(true);
     try {
       if (editingProject) {
+        // Check if dates changed and there's existing daily data
+        const datesChanged =
+          projectFormData.startDate !== editingProject.startDate ||
+          projectFormData.endDate !== editingProject.endDate;
+
+        if (datesChanged) {
+          const existingDailyData = dailyDataMap[editingProject.id] || [];
+          if (existingDailyData.length > 0) {
+            const confirmed = window.confirm(
+              `Tanggal project berubah. Data harian yang berada di luar rentang tanggal baru (${projectFormData.startDate} s/d ${projectFormData.endDate}) akan dihapus otomatis.\n\nLanjutkan?`
+            );
+            if (!confirmed) {
+              setSavingProject(false);
+              return;
+            }
+          }
+        }
+
         const success = await updateWorkProject(editingProject.id, projectFormData as WorkProject);
         if (success) {
-          // Save plan schedule
+          // Clean up: delete old plan schedule and re-insert
+          await deleteWorkPlanSchedule(editingProject.id);
           if (formPlanSchedule.length > 0) {
             const scheduleWithProjectId = formPlanSchedule.map(s => ({
               ...s,
@@ -426,7 +447,22 @@ export const WorkPage: React.FC = () => {
             }));
             await batchUpsertWorkPlanSchedule(scheduleWithProjectId);
           }
-          showNotification('success', 'Project berhasil diupdate');
+
+          // Clean up daily data outside new date range
+          if (datesChanged && projectFormData.startDate && projectFormData.endDate) {
+            const { deleted } = await deleteWorkDailyDataOutsideRange(
+              editingProject.id,
+              projectFormData.startDate,
+              projectFormData.endDate
+            );
+            if (deleted > 0) {
+              showNotification('success', `Project diupdate. ${deleted} data harian di luar rentang baru dihapus.`);
+            } else {
+              showNotification('success', 'Project berhasil diupdate');
+            }
+          } else {
+            showNotification('success', 'Project berhasil diupdate');
+          }
           await loadData();
           setShowProjectForm(false);
         } else {

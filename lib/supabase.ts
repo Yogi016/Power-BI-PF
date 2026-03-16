@@ -1456,6 +1456,43 @@ export async function deleteWorkPlanSchedule(workProjectId: string): Promise<boo
   }
 }
 
+/**
+ * Delete daily data outside a date range for a work project
+ */
+export async function deleteWorkDailyDataOutsideRange(
+  workProjectId: string,
+  startDate: string,
+  endDate: string
+): Promise<{ deleted: number }> {
+  if (!supabase) return { deleted: 0 };
+
+  try {
+    // Delete rows where date < startDate OR date > endDate
+    const { data: beforeData, error: beforeError } = await supabase
+      .from('work_daily_data')
+      .delete()
+      .eq('work_project_id', workProjectId)
+      .lt('date', startDate)
+      .select('id');
+
+    const { data: afterData, error: afterError } = await supabase
+      .from('work_daily_data')
+      .delete()
+      .eq('work_project_id', workProjectId)
+      .gt('date', endDate)
+      .select('id');
+
+    if (beforeError) console.error('Error deleting before-range data:', beforeError);
+    if (afterError) console.error('Error deleting after-range data:', afterError);
+
+    const deleted = (beforeData?.length || 0) + (afterData?.length || 0);
+    return { deleted };
+  } catch (error) {
+    console.error('Error cleaning up daily data outside range:', error);
+    return { deleted: 0 };
+  }
+}
+
 // =====================================================
 // EVIDENCE STORAGE OPERATIONS
 // =====================================================
