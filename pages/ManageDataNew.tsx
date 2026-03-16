@@ -503,6 +503,9 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setEditingProject(project);
     setFormData(project);
     setLoadingSCurve(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    // Also scroll the main content container (Layout uses overflow-auto div)
+    document.querySelector('main .overflow-auto, main.overflow-auto')?.scrollTo({ top: 0, behavior: 'smooth' });
 
     try {
       const projectActivities = await loadActivitiesForProject(project.id);
