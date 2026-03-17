@@ -1414,6 +1414,191 @@ export async function generateAllProjectsReport(
         createTable(doc, actHeaders, actData, MARGIN, 48);
         addSlideFooter(doc, globalSlide);
       }
+
+      // ── Evidence Slides (Images) ──
+      if (activities.length > 0) {
+        // Collect image evidence
+        interface ActEvidence { code: string; name: string; status: string; imageUrls: string[]; pdfUrls: string[]; }
+        const evidenceList: ActEvidence[] = [];
+        for (const act of activities) {
+          const allUrls = parseEvidenceField(act.evidence);
+          const imageUrls = allUrls.filter(isImageUrl);
+          const pdfUrls = allUrls.filter((u: string) => u.toLowerCase().split('?')[0].endsWith('.pdf'));
+          if (imageUrls.length > 0 || pdfUrls.length > 0) {
+            evidenceList.push({
+              code: act.code || '',
+              name: act.activityName || act.activity_name || 'Unknown',
+              status: act.status || 'not-started',
+              imageUrls,
+              pdfUrls,
+            });
+          }
+        }
+
+        if (evidenceList.length > 0) {
+          // Image evidence slides
+          const imageEvidence = evidenceList.filter(e => e.imageUrls.length > 0);
+          if (imageEvidence.length > 0) {
+            const CONTENT_LEFT = MARGIN;
+            const CONTENT_RIGHT = pageWidth - MARGIN;
+            const CONTENT_W = CONTENT_RIGHT - CONTENT_LEFT;
+            const CONTENT_TOP_E = 42;
+            const CONTENT_BOTTOM_E = pageHeight - 16;
+            const HDR_H = 9;
+            const PHOTO_H = 35;
+            const PHOTO_GAP = 3;
+            const SEC_GAP = 5;
+            const MAX_ROW = 4;
+
+            const stColors: Record<string, [number, number, number]> = {
+              'completed': [34, 197, 94], 'in-progress': [59, 130, 246],
+              'delayed': [239, 68, 68], 'not-started': [148, 163, 184], 'on-hold': [245, 158, 11],
+            };
+            const stLabels: Record<string, string> = {
+              'completed': 'Selesai', 'in-progress': 'Berjalan',
+              'delayed': 'Terlambat', 'not-started': 'Belum Mulai', 'on-hold': 'Ditunda',
+            };
+
+            let ey = CONTENT_BOTTOM_E + 1;
+
+            const newEvPage = () => {
+              doc.addPage();
+              globalSlide++;
+              addSlideHeader(doc, `${proj.name} — Evidence`, globalSlide);
+              addSlideFooter(doc, globalSlide);
+              ey = CONTENT_TOP_E;
+            };
+
+            const ensureEv = (needed: number) => {
+              if (ey + needed > CONTENT_BOTTOM_E) newEvPage();
+            };
+
+            for (const ev of imageEvidence) {
+              ensureEv(HDR_H + 2 + PHOTO_H + SEC_GAP);
+
+              const sc = stColors[ev.status] || stColors['not-started'];
+              const sl = stLabels[ev.status] || ev.status;
+
+              // Header accent
+              doc.setFillColor(sc[0], sc[1], sc[2]);
+              doc.rect(CONTENT_LEFT, ey, 2.5, HDR_H, 'F');
+              doc.setFillColor(245, 247, 250);
+              doc.rect(CONTENT_LEFT + 2.5, ey, CONTENT_W - 2.5, HDR_H, 'F');
+
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(30, 41, 59);
+              const htxt = ev.code ? `${ev.code}. ${ev.name}` : ev.name;
+              doc.text(htxt.substring(0, 80), CONTENT_LEFT + 5, ey + 6);
+
+              // Status badge
+              doc.setFontSize(6);
+              const bW = doc.getTextWidth(sl) + 6;
+              const bX = CONTENT_RIGHT - bW - 3;
+              doc.setFillColor(sc[0], sc[1], sc[2]);
+              doc.roundedRect(bX, ey + 1.5, bW, 6, 1.5, 1.5, 'F');
+              doc.setTextColor(255, 255, 255);
+              doc.text(sl, bX + bW / 2, ey + 5.5, { align: 'center' });
+
+              doc.setFont('helvetica', 'normal');
+              doc.setTextColor(100, 116, 139);
+              doc.text(`${ev.imageUrls.length} foto`, bX - 20, ey + 5.5);
+
+              ey += HDR_H + 2;
+
+              // Load & render photos
+              const imgs = await Promise.all(ev.imageUrls.map(u => loadImageFromUrl(u)));
+              const photoW = (CONTENT_W - (MAX_ROW - 1) * PHOTO_GAP) / MAX_ROW;
+
+              for (let pi = 0; pi < ev.imageUrls.length; pi++) {
+                const col = pi % MAX_ROW;
+                if (col === 0 && pi > 0) {
+                  ey += PHOTO_H + PHOTO_GAP;
+                  ensureEv(PHOTO_H + PHOTO_GAP);
+                }
+
+                const px = CONTENT_LEFT + col * (photoW + PHOTO_GAP);
+                doc.setFillColor(249, 250, 251);
+                doc.setDrawColor(226, 232, 240);
+                doc.setLineWidth(0.2);
+                doc.roundedRect(px, ey, photoW, PHOTO_H, 1.5, 1.5, 'FD');
+
+                const img = imgs[pi];
+                const pad = 2;
+                if (img) {
+                  const aspect = img.width / img.height;
+                  let dW = photoW - 2 * pad;
+                  let dH = dW / aspect;
+                  if (dH > PHOTO_H - 2 * pad) { dH = PHOTO_H - 2 * pad; dW = dH * aspect; }
+                  try {
+                    doc.addImage(img, 'JPEG', px + (photoW - dW) / 2, ey + (PHOTO_H - dH) / 2, dW, dH);
+                  } catch {
+                    doc.setFontSize(6); doc.setTextColor(160, 160, 160);
+                    doc.text('Gagal', px + photoW / 2, ey + PHOTO_H / 2, { align: 'center' });
+                  }
+                } else {
+                  doc.setFontSize(6); doc.setTextColor(180, 180, 180);
+                  doc.text('Gagal', px + photoW / 2, ey + PHOTO_H / 2, { align: 'center' });
+                }
+              }
+              ey += PHOTO_H + SEC_GAP;
+            }
+          }
+
+          // PDF evidence listing slide
+          const pdfEvidence = evidenceList.filter(e => e.pdfUrls.length > 0);
+          if (pdfEvidence.length > 0) {
+            doc.addPage();
+            globalSlide++;
+            addSlideHeader(doc, `${proj.name} — Dokumen Evidence (PDF)`, globalSlide);
+
+            let py = 48;
+            doc.setFontSize(10);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor(100, 116, 139);
+            doc.text('Dokumen PDF terlampir sebagai referensi:', MARGIN, py);
+            py += 10;
+
+            for (const ev of pdfEvidence) {
+              if (py > pageHeight - 25) {
+                doc.addPage();
+                globalSlide++;
+                addSlideHeader(doc, `${proj.name} — Dokumen Evidence (PDF)`, globalSlide);
+                py = 48;
+              }
+
+              // Activity header
+              doc.setFontSize(9);
+              doc.setFont('helvetica', 'bold');
+              doc.setTextColor(30, 41, 59);
+              const aLabel = ev.code ? `${ev.code}. ${ev.name}` : ev.name;
+              doc.text(aLabel.substring(0, 70), MARGIN + 2, py);
+              py += 6;
+
+              // PDF files
+              doc.setFontSize(8);
+              doc.setFont('helvetica', 'normal');
+              let linkNum = 0;
+              for (const pdfUrl of ev.pdfUrls) {
+                linkNum++;
+                if (py > pageHeight - 20) {
+                  doc.addPage();
+                  globalSlide++;
+                  addSlideHeader(doc, `${proj.name} — Dokumen Evidence (PDF)`, globalSlide);
+                  py = 48;
+                }
+                doc.setTextColor(59, 130, 246);
+                doc.text(`📄 Link ${linkNum}`, MARGIN + 6, py);
+                // Add clickable link
+                doc.link(MARGIN + 6, py - 3, 200, 5, { url: pdfUrl });
+                py += 6;
+              }
+              py += 4;
+            }
+            addSlideFooter(doc, globalSlide);
+          }
+        }
+      }
     }
 
     // ── CLOSING SLIDE ──
