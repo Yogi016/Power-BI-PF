@@ -1200,14 +1200,15 @@ export async function generateAllProjectsReport(
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(38);
     doc.setFont('helvetica', 'bold');
-    doc.text('Laporan Seluruh Project', pageWidth / 2, 80, { align: 'center' });
+    const yearLabel = filterYear ? ` Tahun ${filterYear}` : '';
+    doc.text(`Laporan Seluruh Project${yearLabel}`, pageWidth / 2, 80, { align: 'center' });
 
     doc.setFontSize(20);
     doc.setFont('helvetica', 'normal');
     doc.text('Pertamina Foundation', pageWidth / 2, 100, { align: 'center' });
 
     doc.setFontSize(14);
-    doc.text(`${allProjects.length} Project · ${formatDate(new Date())}`, pageWidth / 2, 115, { align: 'center' });
+    doc.text(`${allProjects.length} Project${yearLabel} · ${formatDate(new Date())}`, pageWidth / 2, 115, { align: 'center' });
 
     doc.setFontSize(11);
     doc.setTextColor(148, 163, 184);
