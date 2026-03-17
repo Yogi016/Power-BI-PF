@@ -8,7 +8,7 @@ import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
 import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport, generateAllProjectsReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
-import { Loader2, TrendingUp, FileText, Database, Download, Calendar, BookOpen } from 'lucide-react';
+import { Loader2, TrendingUp, FileText, Database, Download, Calendar, BookOpen, ChevronDown, Filter } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -27,6 +27,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   const [generatingReport, setGeneratingReport] = useState(false);
   const [generatingAllReport, setGeneratingAllReport] = useState(false);
   const [allReportProgress, setAllReportProgress] = useState('');
+  const [showYearFilter, setShowYearFilter] = useState(false);
   const [downloadingChart, setDownloadingChart] = useState(false);
   const sCurveChartRef = useRef<HTMLDivElement | null>(null);
 
@@ -161,16 +162,25 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     }
   };
 
+  // Available years for report filtering
+  const reportYears = useMemo(() => {
+    const years = projects
+      .map(p => p.startDate ? new Date(p.startDate).getFullYear() : null)
+      .filter((y): y is number => y !== null);
+    return [...new Set(years)].sort((a, b) => b - a);
+  }, [projects]);
+
   // Handle all projects report generation
-  const handleGenerateAllReport = async () => {
+  const handleGenerateAllReport = async (year?: number | null) => {
+    setShowYearFilter(false);
     setGeneratingAllReport(true);
     setAllReportProgress('Memulai...');
     try {
-      await generateAllProjectsReport((msg) => setAllReportProgress(msg));
+      await generateAllProjectsReport((msg) => setAllReportProgress(msg), year);
       alert('All Report Project berhasil di-generate!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error generating all report:', error);
-      alert('Gagal generate report. Silakan coba lagi.');
+      alert(error?.message || 'Gagal generate report. Silakan coba lagi.');
     } finally {
       setGeneratingAllReport(false);
       setAllReportProgress('');
@@ -335,23 +345,60 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
             )}
 
             {/* Generate All Report Project Button */}
-            <button
-              onClick={handleGenerateAllReport}
-              disabled={generatingAllReport}
-              className="mt-2 w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-lg disabled:cursor-not-allowed"
-            >
-              {generatingAllReport ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  <span className="truncate">{allReportProgress || 'Generating...'}</span>
-                </>
-              ) : (
-                <>
-                  <BookOpen size={20} />
-                  All Report Project
-                </>
+            <div className="relative mt-2">
+              <button
+                onClick={() => setShowYearFilter(!showYearFilter)}
+                disabled={generatingAllReport}
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-teal-500 hover:from-blue-700 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white px-4 py-3 rounded-lg font-medium transition-all shadow-lg disabled:cursor-not-allowed"
+              >
+                {generatingAllReport ? (
+                  <>
+                    <Loader2 size={20} className="animate-spin" />
+                    <span className="truncate">{allReportProgress || 'Generating...'}</span>
+                  </>
+                ) : (
+                  <>
+                    <BookOpen size={20} />
+                    All Report Project
+                    <ChevronDown size={16} className={`transition-transform ${showYearFilter ? 'rotate-180' : ''}`} />
+                  </>
+                )}
+              </button>
+
+              {/* Year Filter Dropdown */}
+              {showYearFilter && !generatingAllReport && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 overflow-hidden">
+                  <div className="px-3 py-2 bg-slate-50 border-b border-slate-100">
+                    <p className="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                      <Filter size={12} />
+                      Pilih Tahun Project
+                    </p>
+                  </div>
+                  <div className="py-1 max-h-48 overflow-y-auto">
+                    <button
+                      onClick={() => handleGenerateAllReport(null)}
+                      className="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 transition-colors flex items-center justify-between"
+                    >
+                      Semua Tahun
+                      <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{projects.length}</span>
+                    </button>
+                    {reportYears.map(year => {
+                      const count = projects.filter(p => p.startDate && new Date(p.startDate).getFullYear() === year).length;
+                      return (
+                        <button
+                          key={year}
+                          onClick={() => handleGenerateAllReport(year)}
+                          className="w-full text-left px-4 py-2.5 text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-700 transition-colors flex items-center justify-between"
+                        >
+                          Tahun {year}
+                          <span className="text-xs text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">{count}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               )}
-            </button>
+            </div>
           </div>
         </div>
 

@@ -1139,16 +1139,28 @@ export type AllReportProgressCallback = (message: string) => void;
  * Generate a single PDF report containing all projects
  */
 export async function generateAllProjectsReport(
-  onProgress?: AllReportProgressCallback
+  onProgress?: AllReportProgressCallback,
+  filterYear?: number | null
 ): Promise<void> {
   try {
     onProgress?.('Memuat data project...');
 
     const { fetchProjects: getProjects } = await import('./supabase');
-    const allProjects = await getProjects();
+    let allProjects = await getProjects();
+
+    // Filter by year if specified
+    if (filterYear) {
+      allProjects = allProjects.filter(p => {
+        const year = p.startDate ? new Date(p.startDate).getFullYear() : null;
+        return year === filterYear;
+      });
+    }
 
     if (allProjects.length === 0) {
-      throw new Error('Tidak ada project untuk di-report');
+      throw new Error(filterYear
+        ? `Tidak ada project untuk tahun ${filterYear}`
+        : 'Tidak ada project untuk di-report'
+      );
     }
 
     const doc = new jsPDF({
@@ -1311,7 +1323,8 @@ export async function generateAllProjectsReport(
 
       doc.setFontSize(16);
       doc.setFont('helvetica', 'normal');
-      doc.text(`PIC: ${proj.pic || '-'}`, pageWidth / 2, 100, { align: 'center' });
+      // PIC hidden per user request
+      // doc.text(`PIC: ${proj.pic || '-'}`, pageWidth / 2, 100, { align: 'center' });
       doc.text(`${proj.location || '-'}`, pageWidth / 2, 112, { align: 'center' });
 
       doc.setFontSize(13);
