@@ -1007,19 +1007,27 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     showNotification('success', `Bobot otomatis diperbarui ke total 100% (${totalActivities} activity)`);
   };
 
-  // Evidence upload handler — appends to the array
-  const handleEvidenceUpload = async (index: number, file: File) => {
+  // Evidence upload handler — supports multiple files, appends to the array
+  const handleEvidenceUpload = async (index: number, files: FileList | File[]) => {
     const projectId = editingProject?.id || 'new';
     const code = activities[index]?.code || `act${index}`;
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
 
     setUploadingEvidence(index);
+    let successCount = 0;
     try {
-      const url = await uploadEvidence(file, projectId, code);
-      if (url) {
-        const currentFiles = [...(activities[index]?.evidence || [])];
-        currentFiles.push(url);
-        updateActivity(index, 'evidence', currentFiles);
-        showNotification('success', `File "${file.name}" berhasil diupload`);
+      for (const file of fileArray) {
+        const url = await uploadEvidence(file, projectId, code);
+        if (url) {
+          const currentFiles = [...(activities[index]?.evidence || [])];
+          currentFiles.push(url);
+          updateActivity(index, 'evidence', currentFiles);
+          successCount++;
+        }
+      }
+      if (successCount > 0) {
+        showNotification('success', `${successCount} file berhasil diupload`);
       } else {
         showNotification('error', 'Gagal mengupload file');
       }
@@ -1477,7 +1485,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                             </div>
                           </div>
 
-                          {/* Evidence — multi-file */}
+                          {/* Evidence — multi-file with drag & drop */}
                           <div>
                             <label className="text-[11px] font-medium text-slate-400 uppercase tracking-wider">Evidence {activity.evidence.length > 0 && <span className="text-blue-600">({activity.evidence.length})</span>}</label>
                             <div className="mt-1 space-y-1.5">
@@ -1497,22 +1505,23 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                                   </button>
                                 </div>
                               ))}
-                              {/* Upload buttons — always visible */}
+                              {/* Upload buttons + drag & drop */}
                               {uploadingEvidence === index ? (
                                 <div className="flex items-center gap-2 text-blue-600">
                                   <Loader2 size={14} className="animate-spin" />
                                   <span className="text-xs">Uploading...</span>
                                 </div>
                               ) : (
-                                <div className="flex items-center gap-2">
-                                  <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
-                                  <button type="button" onClick={() => evidenceFileRefs.current[index]?.click()} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors" title="Upload file">
-                                    <Paperclip size={12} /> File
-                                  </button>
-                                  <input type="file" accept="image/*" capture="environment" className="hidden" ref={(el) => { evidenceCameraRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
-                                  <button type="button" onClick={() => evidenceCameraRefs.current[index]?.click()} className="flex items-center gap-1 px-3 py-1.5 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition-colors" title="Kamera">
-                                    <Camera size={12} /> Foto
-                                  </button>
+                                <div
+                                  className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-lg p-3 text-center transition-colors cursor-pointer"
+                                  onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-blue-400', 'bg-blue-50/50'); }}
+                                  onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50'); }}
+                                  onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50'); if (e.dataTransfer.files.length > 0) handleEvidenceUpload(index, e.dataTransfer.files); }}
+                                  onClick={() => evidenceFileRefs.current[index]?.click()}
+                                >
+                                  <input type="file" multiple accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleEvidenceUpload(index, e.target.files); e.target.value = ''; }} />
+                                  <p className="text-xs text-slate-500">Seret file ke sini atau <span className="text-blue-600 font-medium">pilih file</span></p>
+                                  <p className="text-[10px] text-slate-400 mt-0.5">PDF, JPG, PNG, WebP (bisa banyak file)</p>
                                 </div>
                               )}
                             </div>
@@ -1587,22 +1596,22 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                                     </button>
                                   </div>
                                 ))}
-                                {/* Upload buttons — always visible */}
+                                {/* Upload — drag & drop + multi-file */}
                                 {uploadingEvidence === index ? (
                                   <div className="flex items-center gap-2 text-blue-600">
                                     <Loader2 size={14} className="animate-spin" />
                                     <span className="text-xs">Uploading...</span>
                                   </div>
                                 ) : (
-                                  <div className="flex items-center gap-1">
-                                    <input type="file" accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
-                                    <button type="button" onClick={() => evidenceFileRefs.current[index]?.click()} className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors" title="Upload PDF atau gambar">
-                                      <Paperclip size={12} /> File
-                                    </button>
-                                    <input type="file" accept="image/*" capture="environment" className="hidden" ref={(el) => { evidenceCameraRefs.current[index] = el; }} onChange={(e) => { const f = e.target.files?.[0]; if (f) handleEvidenceUpload(index, f); e.target.value = ''; }} />
-                                    <button type="button" onClick={() => evidenceCameraRefs.current[index]?.click()} className="flex items-center gap-1 px-2 py-1 text-xs bg-slate-100 hover:bg-slate-200 text-slate-600 rounded transition-colors" title="Ambil foto dari kamera">
-                                      <Camera size={12} />
-                                    </button>
+                                  <div
+                                    className="border-2 border-dashed border-slate-200 hover:border-blue-400 rounded-lg p-2 text-center transition-colors cursor-pointer"
+                                    onDragOver={(e) => { e.preventDefault(); e.currentTarget.classList.add('border-blue-400', 'bg-blue-50/50'); }}
+                                    onDragLeave={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50'); }}
+                                    onDrop={(e) => { e.preventDefault(); e.currentTarget.classList.remove('border-blue-400', 'bg-blue-50/50'); if (e.dataTransfer.files.length > 0) handleEvidenceUpload(index, e.dataTransfer.files); }}
+                                    onClick={() => evidenceFileRefs.current[index]?.click()}
+                                  >
+                                    <input type="file" multiple accept=".pdf,image/jpeg,image/png,image/webp" className="hidden" ref={(el) => { evidenceFileRefs.current[index] = el; }} onChange={(e) => { if (e.target.files && e.target.files.length > 0) handleEvidenceUpload(index, e.target.files); e.target.value = ''; }} />
+                                    <p className="text-[11px] text-slate-500">Seret file atau <span className="text-blue-600 font-medium">pilih</span></p>
                                   </div>
                                 )}
                               </div>
