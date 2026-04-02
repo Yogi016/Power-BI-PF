@@ -11,6 +11,7 @@ import {
     updateDocumentCategory,
     deleteDocumentCategory,
     fetchDocuments,
+    fetchAllDocuments,
     createDocument,
     updateDocument,
     deleteDocument,
@@ -30,6 +31,10 @@ export const DokumenPage: React.FC = () => {
     const [loadingDocs, setLoadingDocs] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+    const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+    const [globalSearchResults, setGlobalSearchResults] = useState<DocumentItem[]>([]);
+    const [globalSearching, setGlobalSearching] = useState(false);
+    const [showGlobalResults, setShowGlobalResults] = useState(false);
     const [showAddDocModal, setShowAddDocModal] = useState(false);
     const [showAddCategoryModal, setShowAddCategoryModal] = useState(false);
     const [showManageCategories, setShowManageCategories] = useState(false);
@@ -81,6 +86,36 @@ export const DokumenPage: React.FC = () => {
 
     useEffect(() => { loadCategories(); }, [loadCategories]);
     useEffect(() => { loadDocuments(); }, [loadDocuments]);
+
+    // Global search handler
+    useEffect(() => {
+        if (!globalSearchQuery.trim()) {
+            setGlobalSearchResults([]);
+            setShowGlobalResults(false);
+            return;
+        }
+        const timeout = setTimeout(async () => {
+            setGlobalSearching(true);
+            const allDocs = await fetchAllDocuments();
+            const q = globalSearchQuery.toLowerCase();
+            const filtered = allDocs.filter(doc =>
+                doc.noSurat?.toLowerCase().includes(q) ||
+                doc.deskripsi?.toLowerCase().includes(q) ||
+                doc.jenisDokumen?.toLowerCase().includes(q) ||
+                doc.pengisi?.toLowerCase().includes(q) ||
+                doc.penerbi?.toLowerCase().includes(q) ||
+                doc.keterangan?.toLowerCase().includes(q)
+            );
+            setGlobalSearchResults(filtered);
+            setShowGlobalResults(true);
+            setGlobalSearching(false);
+        }, 400);
+        return () => clearTimeout(timeout);
+    }, [globalSearchQuery]);
+
+    const getCategoryName = (categoryId: string) => {
+        return categories.find(c => c.id === categoryId)?.name || '-';
+    };
 
     // Filtered & sorted documents
     const filteredDocs = documents
@@ -249,6 +284,117 @@ export const DokumenPage: React.FC = () => {
                         <span className="hidden sm:inline">Kategori Baru</span>
                     </button>
                 </div>
+            </div>
+
+            {/* Global Search Bar */}
+            <div className="relative">
+                <div className="relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                        type="text"
+                        value={globalSearchQuery}
+                        onChange={e => setGlobalSearchQuery(e.target.value)}
+                        placeholder="Cari di semua kategori... (No Surat, Deskripsi, Jenis Dokumen, dll.)"
+                        className="w-full pl-11 pr-10 py-3 text-sm rounded-xl border border-slate-200 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-400 transition-all"
+                    />
+                    {globalSearchQuery && (
+                        <button
+                            onClick={() => { setGlobalSearchQuery(''); setShowGlobalResults(false); }}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                        >
+                            <X size={16} />
+                        </button>
+                    )}
+                </div>
+
+                {/* Global Search Results */}
+                {showGlobalResults && (
+                    <div className="mt-2 bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden">
+                        <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                            <span className="text-sm font-medium text-slate-700">
+                                {globalSearching ? (
+                                    <span className="flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Mencari...</span>
+                                ) : (
+                                    <>Hasil pencarian: <strong className="text-emerald-600">{globalSearchResults.length}</strong> dokumen ditemukan</>
+                                )}
+                            </span>
+                            <button
+                                onClick={() => { setGlobalSearchQuery(''); setShowGlobalResults(false); }}
+                                className="text-xs text-slate-500 hover:text-slate-700 px-2 py-1 rounded-md hover:bg-slate-100 transition-colors"
+                            >
+                                Tutup
+                            </button>
+                        </div>
+                        {!globalSearching && globalSearchResults.length > 0 && (
+                            <div className="overflow-x-auto max-h-[400px] overflow-y-auto">
+                                <table className="w-full text-sm">
+                                    <thead className="sticky top-0 z-10">
+                                        <tr className="bg-slate-50 text-slate-600">
+                                            <th className="text-left px-4 py-2.5 font-semibold w-32">Kategori</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold w-28">Tanggal</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold w-36">No Surat</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold min-w-[200px]">Deskripsi</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold w-32">Jenis</th>
+                                            <th className="text-center px-4 py-2.5 font-semibold w-14">Link</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold w-28">Pengirim</th>
+                                            <th className="text-left px-4 py-2.5 font-semibold w-28">Penerima</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {globalSearchResults.map(doc => (
+                                            <tr
+                                                key={doc.id}
+                                                className="hover:bg-emerald-50/50 cursor-pointer transition-colors"
+                                                onClick={() => {
+                                                    setActiveCategory(doc.categoryId);
+                                                    setGlobalSearchQuery('');
+                                                    setShowGlobalResults(false);
+                                                }}
+                                            >
+                                                <td className="px-4 py-2.5">
+                                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-xs font-medium">
+                                                        {getCategoryName(doc.categoryId)}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-2.5 text-slate-700 whitespace-nowrap text-xs">{formatDate(doc.tanggal)}</td>
+                                                <td className="px-4 py-2.5 text-slate-700 text-xs">{doc.noSurat || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-800 text-xs">{doc.deskripsi || '-'}</td>
+                                                <td className="px-4 py-2.5">
+                                                    {doc.jenisDokumen ? (
+                                                        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 text-xs font-medium">
+                                                            {doc.jenisDokumen}
+                                                        </span>
+                                                    ) : '-'}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-center">
+                                                    {doc.link ? (
+                                                        <a
+                                                            href={doc.link}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors"
+                                                            onClick={e => e.stopPropagation()}
+                                                        >
+                                                            <ExternalLink size={12} />
+                                                        </a>
+                                                    ) : <span className="text-slate-300">-</span>}
+                                                </td>
+                                                <td className="px-4 py-2.5 text-slate-600 text-xs">{doc.pengisi || '-'}</td>
+                                                <td className="px-4 py-2.5 text-slate-600 text-xs">{doc.penerbi || '-'}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        {!globalSearching && globalSearchResults.length === 0 && (
+                            <div className="py-8 text-center text-slate-400">
+                                <Search size={28} className="mx-auto mb-2 opacity-50" />
+                                <p className="text-sm">Tidak ada dokumen yang cocok</p>
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
 
             {/* Category Tabs */}

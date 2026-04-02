@@ -1961,6 +1961,38 @@ export async function fetchDocuments(categoryId: string): Promise<DocumentItem[]
   }
 }
 
+export async function fetchAllDocuments(): Promise<DocumentItem[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('documents')
+      .select('*')
+      .order('tanggal', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map(row => ({
+      id: row.id,
+      categoryId: row.category_id,
+      noSurat: row.no_surat,
+      tanggal: row.tanggal,
+      deskripsi: row.deskripsi,
+      jenisDokumen: row.jenis_dokumen,
+      link: row.link,
+      pengisi: row.pengisi,
+      penerbi: row.penerbi,
+      hasSoftfile: row.has_softfile,
+      hasHardfile: row.has_hardfile,
+      keterangan: row.keterangan,
+      displayOrder: row.display_order,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching all documents:', error);
+    return [];
+  }
+}
+
 export async function createDocument(doc: Omit<DocumentItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<DocumentItem | null> {
   if (!supabase) return null;
   try {
