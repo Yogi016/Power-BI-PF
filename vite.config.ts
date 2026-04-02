@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.png', 'pf-logo.png', 'logo_putih.png'],
+        includeAssets: ['Fav-Icon.jpeg', 'pf-logo.png', 'logo_putih.png'],
         manifest: {
           name: 'ProTrack - Sistem Pemantauan Progress',
           short_name: 'ProTrack',
@@ -27,19 +27,19 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           icons: [
             {
-              src: 'pwa-192x192.png',
+              src: 'Fav-Icon.jpeg',
               sizes: '192x192',
-              type: 'image/png',
+              type: 'image/jpeg',
             },
             {
-              src: 'pwa-512x512.png',
+              src: 'Fav-Icon.jpeg',
               sizes: '512x512',
-              type: 'image/png',
+              type: 'image/jpeg',
             },
             {
-              src: 'pwa-512x512.png',
+              src: 'Fav-Icon.jpeg',
               sizes: '512x512',
-              type: 'image/png',
+              type: 'image/jpeg',
               purpose: 'any maskable',
             },
           ],
