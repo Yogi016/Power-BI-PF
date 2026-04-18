@@ -12,6 +12,9 @@ dist
 dist-ssr
 *.local
 
+# Gemini MCP config (contains access tokens)
+.gemini/settings.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

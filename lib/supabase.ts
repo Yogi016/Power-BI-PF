@@ -1,5 +1,41 @@
 import { supabase } from './supabaseClient';
 import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem } from '../types';
+import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { r2Client } from './r2Client';
+
+// =====================================================
+// STORAGE VALIDATION HELPERS
+// =====================================================
+
+const MAX_EVIDENCE_SIZE_MB = 20;
+const MAX_DOCUMENT_SIZE_MB = 50;
+
+const ALLOWED_EVIDENCE_TYPES = [
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif',
+  'application/pdf',
+];
+
+const ALLOWED_DOCUMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'image/jpeg', 'image/png',
+];
+
+function validateFile(
+  file: File,
+  allowedTypes: string[],
+  maxSizeMB: number
+): void {
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    throw new Error(`Ukuran file melebihi batas ${maxSizeMB}MB. Ukuran saat ini: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
+  }
+  if (!allowedTypes.includes(file.type)) {
+    throw new Error(`Format file tidak didukung: ${file.type || 'unknown'}. Format yang diizinkan: ${allowedTypes.join(', ')}`);
+  }
+}
 
 // =====================================================
 // PROJECT OPERATIONS
@@ -1508,59 +1544,78 @@ export async function uploadEvidence(
   projectId: string,
   activityCode: string
 ): Promise<string | null> {
-  if (!supabase) return null;
-
   try {
+    // Validasi file sebelum upload
+    validateFile(file, ALLOWED_EVIDENCE_TYPES, MAX_EVIDENCE_SIZE_MB);
+
     const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
     const timestamp = Date.now();
     const safeName = (activityCode || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
     const filePath = `${projectId}/${safeName}_${timestamp}.${ext}`;
 
+    const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
+    if (r2Bucket) {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const command = new PutObjectCommand({
+        Bucket: r2Bucket,
+        Key: filePath,
+        Body: uint8Array,
+        ContentType: file.type,
+      });
+      await r2Client.send(command);
+      const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
+      return `${publicUrlBase}/${filePath}`;
+    }
+
+    if (!supabase) return null;
     const { error } = await supabase.storage
       .from(EVIDENCE_BUCKET)
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
-
+      .upload(filePath, file, { cacheControl: '3600', upsert: false });
     if (error) throw error;
-
-    const { data: urlData } = supabase.storage
-      .from(EVIDENCE_BUCKET)
-      .getPublicUrl(filePath);
-
+    const { data: urlData } = supabase.storage.from(EVIDENCE_BUCKET).getPublicUrl(filePath);
     return urlData?.publicUrl || null;
   } catch (error) {
     console.error('Error uploading evidence:', error);
-    return null;
+    throw error; // Re-throw agar UI bisa menampilkan pesan error ke pengguna
   }
 }
+
 
 /**
  * Delete an evidence file from storage using its public URL.
  */
-export async function deleteEvidence(publicUrl: string): Promise<boolean> {
-  if (!supabase) return false;
-
+export async function deleteStorageFileByUrl(publicUrl: string, bucketType: 'evidence' | 'dokumen' = 'evidence'): Promise<boolean> {
   try {
-    // Extract the file path from the public URL
-    // URL format: https://<project>.supabase.co/storage/v1/object/public/evidence/<path>
-    const marker = `/storage/v1/object/public/${EVIDENCE_BUCKET}/`;
+    if (!publicUrl) return false;
+
+    const r2PublicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
+    if (r2PublicUrl && publicUrl.startsWith(r2PublicUrl)) {
+      const key = decodeURIComponent(publicUrl.replace(`${r2PublicUrl}/`, ''));
+      const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
+      const command = new DeleteObjectCommand({ Bucket: r2Bucket, Key: key });
+      await r2Client.send(command);
+      return true;
+    }
+
+    if (!supabase) return false;
+    const marker = `/storage/v1/object/public/${bucketType}/`;
     const idx = publicUrl.indexOf(marker);
-    if (idx === -1) return false;
-
-    const filePath = decodeURIComponent(publicUrl.substring(idx + marker.length));
-
-    const { error } = await supabase.storage
-      .from(EVIDENCE_BUCKET)
-      .remove([filePath]);
-
-    if (error) throw error;
+    if (idx !== -1) {
+      const filePath = decodeURIComponent(publicUrl.substring(idx + marker.length));
+      const { error } = await supabase.storage.from(bucketType).remove([filePath]);
+      if (error) throw error;
+      return true;
+    }
     return true;
-  } catch (error) {
-    console.error('Error deleting evidence:', error);
+  } catch (e) {
+    console.error('Error deleting file from storage via url:', e);
     return false;
   }
+}
+
+export async function deleteEvidence(publicUrl: string): Promise<boolean> {
+  return deleteStorageFileByUrl(publicUrl, 'evidence');
 }
 
 // =====================================================
@@ -1912,6 +1967,13 @@ export async function updateDocumentCategory(id: string, name: string): Promise<
 export async function deleteDocumentCategory(id: string): Promise<boolean> {
   if (!supabase) return false;
   try {
+    const { data: docs } = await supabase.from('documents').select('link').eq('category_id', id);
+    if (docs) {
+      for (const doc of docs) {
+         if (doc.link) await deleteStorageFileByUrl(doc.link, 'dokumen');
+      }
+    }
+
     const { error } = await supabase
       .from('document_categories')
       .delete()
@@ -2072,6 +2134,11 @@ export async function updateDocument(
 export async function deleteDocument(id: string): Promise<boolean> {
   if (!supabase) return false;
   try {
+    const { data: doc } = await supabase.from('documents').select('link').eq('id', id).single();
+    if (doc?.link) {
+      await deleteStorageFileByUrl(doc.link, 'dokumen');
+    }
+
     const { error } = await supabase
       .from('documents')
       .delete()
@@ -2089,12 +2156,30 @@ export async function deleteDocument(id: string): Promise<boolean> {
 // =====================================================
 
 export async function uploadDocumentFile(file: File, categoryName: string): Promise<string | null> {
-  if (!supabase) return null;
   try {
+    // Validasi file sebelum upload
+    validateFile(file, ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_SIZE_MB);
+
     const timestamp = Date.now();
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `${categoryName}/${timestamp}_${safeName}`;
 
+    const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
+    if (r2Bucket) {
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8Array = new Uint8Array(arrayBuffer);
+      const command = new PutObjectCommand({
+        Bucket: r2Bucket,
+        Key: filePath,
+        Body: uint8Array,
+        ContentType: file.type,
+      });
+      await r2Client.send(command);
+      const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
+      return `${publicUrlBase}/${filePath}`;
+    }
+
+    if (!supabase) return null;
     const { error } = await supabase.storage
       .from('dokumen')
       .upload(filePath, file, { upsert: true });
@@ -2111,3 +2196,4 @@ export async function uploadDocumentFile(file: File, categoryName: string): Prom
     return null;
   }
 }
+
