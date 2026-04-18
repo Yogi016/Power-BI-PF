@@ -7,8 +7,9 @@
     "dev": "vite",
     "prebuild": "tsx scripts/update_r2_cors.ts",
     "build": "vite build",
-    "preview": "vite preview",
-    "cors:update": "tsx scripts/update_r2_cors.ts"
+    "preview": "npm run build && wrangler dev",
+    "cors:update": "tsx scripts/update_r2_cors.ts",
+    "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1032.0",
@@ -36,6 +37,7 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.32.3",
     "@types/node": "^22.14.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
@@ -44,6 +46,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.0",
-    "vite-plugin-pwa": "^1.2.0"
+    "vite-plugin-pwa": "^1.2.0",
+    "wrangler": "^4.83.0"
   }
 }

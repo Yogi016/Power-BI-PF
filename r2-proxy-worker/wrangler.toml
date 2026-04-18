@@ -1,0 +1,8 @@
+name = "r2-proxy-worker"
+main = "src/index.ts"
+compatibility_date = "2024-04-18"
+
+# Bind ke bucket R2 Anda dengan aman (tanpa expose kunci API)
+[[r2_buckets]]
+binding = "MY_BUCKET"
+bucket_name = "dashboard-lingkungan"

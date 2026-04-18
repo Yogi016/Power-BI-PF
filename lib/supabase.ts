@@ -1,7 +1,6 @@
 import { supabase } from './supabaseClient';
 import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem } from '../types';
-import { PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
-import { r2Client } from './r2Client';
+// Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
 
 // =====================================================
 // STORAGE VALIDATION HELPERS
@@ -1553,17 +1552,17 @@ export async function uploadEvidence(
     const safeName = (activityCode || 'file').replace(/[^a-zA-Z0-9_-]/g, '_');
     const filePath = `${projectId}/${safeName}_${timestamp}.${ext}`;
 
-    const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
-    if (r2Bucket) {
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const command = new PutObjectCommand({
-        Bucket: r2Bucket,
-        Key: filePath,
-        Body: uint8Array,
-        ContentType: file.type,
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    if (workerUrl) {
+      const response = await fetch(`${workerUrl}/${filePath}`, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type }
       });
-      await r2Client.send(command);
+      if (!response.ok) {
+         console.error('Worker returned error:', await response.text());
+         throw new Error(`Upload via worker failed: ${response.status}`);
+      }
       const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
       return `${publicUrlBase}/${filePath}`;
     }
@@ -1590,11 +1589,19 @@ export async function deleteStorageFileByUrl(publicUrl: string, bucketType: 'evi
     if (!publicUrl) return false;
 
     const r2PublicUrl = import.meta.env.VITE_R2_PUBLIC_URL;
-    if (r2PublicUrl && publicUrl.startsWith(r2PublicUrl)) {
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    
+    if (r2PublicUrl && workerUrl && publicUrl.startsWith(r2PublicUrl)) {
       const key = decodeURIComponent(publicUrl.replace(`${r2PublicUrl}/`, ''));
-      const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
-      const command = new DeleteObjectCommand({ Bucket: r2Bucket, Key: key });
-      await r2Client.send(command);
+      
+      const response = await fetch(`${workerUrl}/${key}`, {
+        method: 'DELETE'
+      });
+      
+      if (!response.ok) {
+         console.error('Worker delete returned error:', await response.text());
+         throw new Error(`Delete via worker failed: ${response.status}`);
+      }
       return true;
     }
 
@@ -2164,17 +2171,17 @@ export async function uploadDocumentFile(file: File, categoryName: string): Prom
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     const filePath = `${categoryName}/${timestamp}_${safeName}`;
 
-    const r2Bucket = import.meta.env.VITE_R2_BUCKET_NAME;
-    if (r2Bucket) {
-      const arrayBuffer = await file.arrayBuffer();
-      const uint8Array = new Uint8Array(arrayBuffer);
-      const command = new PutObjectCommand({
-        Bucket: r2Bucket,
-        Key: filePath,
-        Body: uint8Array,
-        ContentType: file.type,
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    if (workerUrl) {
+      const response = await fetch(`${workerUrl}/${filePath}`, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type }
       });
-      await r2Client.send(command);
+      if (!response.ok) {
+         console.error('Worker returned error:', await response.text());
+         throw new Error(`Upload via worker failed: ${response.status}`);
+      }
       const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
       return `${publicUrlBase}/${filePath}`;
     }
