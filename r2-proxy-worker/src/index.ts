@@ -33,7 +33,15 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const origin = request.headers.get('Origin');
     const url = new URL(request.url);
-    const key = url.pathname.slice(1); // Menghapus "/" di awal URL
+    let key: string;
+    try {
+      key = decodeURIComponent(url.pathname.slice(1)); // Normalisasi "%20" kembali menjadi spasi pada key R2
+    } catch {
+      return new Response('Bad Request: path tidak valid', {
+        status: 400,
+        headers: corsHeaders(origin)
+      });
+    }
 
     // 1. Tangani CORS Preflight (Browser mengecek izin sebelum upload)
     if (request.method === 'OPTIONS') {

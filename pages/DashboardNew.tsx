@@ -5,10 +5,10 @@ import { SCurveChart } from '../components/SCurveChart';
 import { TimelineSelector } from '../components/TimelineSelector';
 import { ProjectSelector } from '../components/ProjectSelector';
 import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
-import { fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
+import { fetchAllProjectsSCurveData, fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport, generateAllProjectsReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
-import { Loader2, TrendingUp, FileText, Database, Download, Calendar, BookOpen, ChevronDown, Filter } from 'lucide-react';
+import { Loader2, TrendingUp, FileText, Database, Download, BookOpen, ChevronDown, Filter } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -53,9 +53,12 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   useEffect(() => {
     const loadSCurveData = async () => {
       if (!selectedProjectId) {
-        // Load aggregated data from all projects
-        const { fetchAllProjectsSCurveData } = await import('../lib/supabase');
-        const data = await fetchAllProjectsSCurveData(selectedPeriod);
+        const projectIds = projectYearFilter
+          ? projects
+            .filter((project) => new Date(project.startDate).getFullYear() === projectYearFilter)
+            .map((project) => project.id)
+          : undefined;
+        const data = await fetchAllProjectsSCurveData(selectedPeriod, projectIds);
         setSCurveData(data);
         return;
       }
@@ -65,7 +68,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     };
 
     loadSCurveData();
-  }, [selectedProjectId, selectedPeriod]);
+  }, [selectedProjectId, selectedPeriod, projectYearFilter, projects]);
 
   // Load metrics when project changes
   useEffect(() => {
@@ -87,13 +90,6 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
-  // Available years from projects for year filter
-  const availableProjectYears = useMemo(() => {
-    return Array.from(
-      new Set(projects.map((p) => new Date(p.startDate).getFullYear()))
-    ).sort((a, b) => b - a);
-  }, [projects]);
-
   // Filter projects by year
   const filteredProjects = useMemo(() => {
     if (!projectYearFilter) return projects;
@@ -105,11 +101,12 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   // Auto-select first project when filter changes
   useEffect(() => {
     if (projectYearFilter === null) return;
+    if (!selectedProjectId) return;
     const currentStillVisible = filteredProjects.some((p) => p.id === selectedProjectId);
     if (!currentStillVisible) {
       setSelectedProjectId(filteredProjects.length > 0 ? filteredProjects[0].id : null);
     }
-  }, [filteredProjects, projectYearFilter]);
+  }, [filteredProjects, projectYearFilter, selectedProjectId]);
 
   // Get available years from S-Curve data
   const availableYears = useMemo(() => {
@@ -117,6 +114,12 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
     sCurveData.forEach(d => years.add(d.year));
     return Array.from(years).sort();
   }, [sCurveData]);
+
+  useEffect(() => {
+    if (selectedYear && availableYears.length > 0 && !availableYears.includes(selectedYear)) {
+      setSelectedYear(null);
+    }
+  }, [availableYears, selectedYear]);
 
   // Filter S-Curve data by selected year
   const displayData = useMemo(() => {
@@ -283,31 +286,12 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
         {/* Project Selector & Timeline */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
-            {availableProjectYears.length > 1 && (
-              <div className="flex items-center justify-end mb-2">
-                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
-                  <Calendar size={16} className="text-slate-500" />
-                  <select
-                    value={projectYearFilter ?? ''}
-                    onChange={(e) =>
-                      setProjectYearFilter(e.target.value ? Number(e.target.value) : null)
-                    }
-                    className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
-                  >
-                    <option value="">Semua Tahun</option>
-                    {availableProjectYears.map((year) => (
-                      <option key={year} value={year}>
-                        {year}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-            )}
             <ProjectSelector
-              projects={filteredProjects}
+              projects={projects}
               selectedProjectId={selectedProjectId}
               onProjectChange={setSelectedProjectId}
+              yearFilter={projectYearFilter}
+              onYearFilterChange={setProjectYearFilter}
             />
           </div>
 
@@ -410,12 +394,14 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">
-                Diagram S-Curve {!selectedProjectId && '- Semua Project'}
+                Diagram S-Curve {!selectedProjectId && `- Semua Project${projectYearFilter ? ` ${projectYearFilter}` : ''}`}
               </h2>
               <p className="text-slate-600">
                 {selectedProjectId
                   ? 'Grafik perbandingan progress baseline (rencana) vs actual (realisasi)'
-                  : 'Grafik rata-rata progress dari semua project'}
+                  : projectYearFilter
+                    ? `Grafik rata-rata progress project tahun ${projectYearFilter}`
+                    : 'Grafik rata-rata progress dari semua project'}
               </p>
             </div>
             <button

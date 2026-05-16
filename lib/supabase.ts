@@ -849,28 +849,42 @@ export async function batchUpdateWeeklyProgress(
  * Fetch and aggregate S-Curve data from all projects
  */
 export async function fetchAllProjectsSCurveData(
-  periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly'
+  periodType: 'weekly' | 'monthly' | 'yearly' = 'monthly',
+  projectIds?: string[]
 ): Promise<SCurveDataPoint[]> {
   if (!supabase) return [];
+  if (projectIds && projectIds.length === 0) return [];
 
   try {
     const actualPeriodType = periodType === 'yearly' ? 'monthly' : periodType;
 
     // Fetch all baseline data
-    const { data: baselineData, error: baselineError } = await supabase
+    let baselineQuery = supabase
       .from('s_curve_baseline')
       .select('*')
-      .eq('period_type', actualPeriodType)
+      .eq('period_type', actualPeriodType);
+
+    if (projectIds) {
+      baselineQuery = baselineQuery.in('project_id', projectIds);
+    }
+
+    const { data: baselineData, error: baselineError } = await baselineQuery
       .order('year', { ascending: true })
       .order('period_index', { ascending: true });
 
     if (baselineError) throw baselineError;
 
     // Fetch all actual data
-    const { data: actualData, error: actualError } = await supabase
+    let actualQuery = supabase
       .from('s_curve_actual')
       .select('*')
-      .eq('period_type', actualPeriodType)
+      .eq('period_type', actualPeriodType);
+
+    if (projectIds) {
+      actualQuery = actualQuery.in('project_id', projectIds);
+    }
+
+    const { data: actualData, error: actualError } = await actualQuery
       .order('year', { ascending: true })
       .order('period_index', { ascending: true });
 
@@ -2203,4 +2217,3 @@ export async function uploadDocumentFile(file: File, categoryName: string): Prom
     return null;
   }
 }
-
