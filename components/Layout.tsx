@@ -241,34 +241,56 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
         </header>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-auto bg-slate-50/50 pb-16 lg:pb-0">
+        <div className="flex-1 overflow-auto bg-slate-50/50 pb-24 lg:pb-0">
           {children}
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-slate-200 shadow-[0_-2px_10px_rgba(0,0,0,0.06)]" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-          <div className="flex items-center justify-around h-14">
+        <nav
+          className="lg:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-2"
+          style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}
+          aria-label="Navigasi utama mobile"
+        >
+          <div className="mx-auto max-w-md rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_-10px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+            <div className="grid grid-cols-7 gap-1">
             {[
-              { page: PageView.DASHBOARD, icon: <LayoutDashboard size={20} />, label: 'Dashboard' },
-              { page: PageView.MANAGE_DATA, icon: <Database size={20} />, label: 'Data' },
-              { page: PageView.WORK, icon: <Briefcase size={20} />, label: 'Work' },
-              { page: PageView.GANTT, icon: <BarChart3 size={20} />, label: 'Gantt' },
-              { page: PageView.LING_SIGN, icon: <PenTool size={20} />, label: 'Ling-Sign' },
-              { page: PageView.DOKUMEN, icon: <FileText size={20} />, label: 'Dokumen' },
-              { page: PageView.CLOSE_PROJECT, icon: <Archive size={20} />, label: 'Close' },
-            ].map(({ page, icon, label }) => (
+              { page: PageView.DASHBOARD, icon: <LayoutDashboard className="h-[18px] w-[18px]" />, label: 'Dash', ariaLabel: 'Dashboard' },
+              { page: PageView.MANAGE_DATA, icon: <Database className="h-[18px] w-[18px]" />, label: 'Data', ariaLabel: 'Manage Data' },
+              { page: PageView.WORK, icon: <Briefcase className="h-[18px] w-[18px]" />, label: 'Work', ariaLabel: 'Work' },
+              { page: PageView.GANTT, icon: <BarChart3 className="h-[18px] w-[18px]" />, label: 'Gantt', ariaLabel: 'Gantt Chart' },
+              { page: PageView.LING_SIGN, icon: <PenTool className="h-[18px] w-[18px]" />, label: 'Sign', ariaLabel: 'Ling-Sign' },
+              { page: PageView.DOKUMEN, icon: <FileText className="h-[18px] w-[18px]" />, label: 'Dok', ariaLabel: 'Dokumen' },
+              { page: PageView.CLOSE_PROJECT, icon: <Archive className="h-[18px] w-[18px]" />, label: 'Close', ariaLabel: 'Close Project' },
+            ].map(({ page, icon, label, ariaLabel }) => {
+              const isActive = activePage === page;
+
+              return (
               <button
                 key={page}
                 onClick={() => onPageChange(page)}
-                className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${activePage === page
-                  ? 'text-emerald-600'
-                  : 'text-slate-400 active:text-slate-600'
+                  aria-label={ariaLabel}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`group relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 ${isActive
+                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                    : 'text-slate-500 active:bg-slate-100'
                   }`}
               >
-                {icon}
-                <span className="text-[10px] font-medium leading-none">{label}</span>
+                  {isActive && (
+                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.45)]" />
+                  )}
+                  <span className={`grid h-7 w-7 place-items-center rounded-xl transition-all duration-200 ${isActive
+                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm'
+                    : 'text-slate-500 group-active:scale-95'
+                    }`}>
+                    {icon}
+                  </span>
+                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isActive ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    {label}
+                  </span>
               </button>
-            ))}
+              );
+            })}
+            </div>
           </div>
         </nav>
       </main>
