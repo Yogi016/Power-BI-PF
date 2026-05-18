@@ -32,6 +32,7 @@ import {
   Camera,
   FileText,
   Image as ImageIcon,
+  Link as LinkIcon,
   ExternalLink,
   Download,
   Search,
@@ -66,6 +67,38 @@ const parseEvidence = (raw: any): string[] => {
     }
   }
   return [];
+};
+
+const normalizeEvidenceLink = (rawValue: string): string | null => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) return null;
+
+  const withProtocol = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(withProtocol);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : null;
+  } catch {
+    return null;
+  }
+};
+
+const getEvidenceDisplayName = (fileUrl: string, index: number): string => {
+  try {
+    const pathname = new URL(fileUrl).pathname;
+    const filename = pathname.split('/').filter(Boolean).pop();
+    return filename ? decodeURIComponent(filename) : `Link ${index + 1}`;
+  } catch {
+    const filename = fileUrl.split('/').filter(Boolean).pop();
+    return filename || `Link ${index + 1}`;
+  }
+};
+
+const getEvidenceIconType = (fileUrl: string): 'pdf' | 'image' | 'link' => {
+  const normalized = fileUrl.split('?')[0].split('#')[0].toLowerCase();
+  if (normalized.endsWith('.pdf')) return 'pdf';
+  if (/\.(jpe?g|png|webp|gif)$/i.test(normalized)) return 'image';
+  return 'link';
 };
 
 interface MonthlySCurveEditorRow {
@@ -407,6 +440,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
   // Evidence upload state
   const [uploadingEvidence, setUploadingEvidence] = useState<number | null>(null);
+  const [evidenceLinkDrafts, setEvidenceLinkDrafts] = useState<Record<number, string>>({});
   const evidenceFileRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const evidenceCameraRefs = useRef<Record<number, HTMLInputElement | null>>({});
 
@@ -1089,6 +1123,27 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     }
   };
 
+  // Evidence link handler — appends an external/R2/Drive URL without uploading a file
+  const handleEvidenceLinkAdd = (index: number) => {
+    const normalizedUrl = normalizeEvidenceLink(evidenceLinkDrafts[index] || '');
+
+    if (!normalizedUrl) {
+      showNotification('error', 'Masukkan link evidence yang valid');
+      return;
+    }
+
+    const currentFiles = [...(activities[index]?.evidence || [])];
+    if (currentFiles.includes(normalizedUrl)) {
+      showNotification('error', 'Link evidence sudah ada');
+      return;
+    }
+
+    currentFiles.push(normalizedUrl);
+    updateActivity(index, 'evidence', currentFiles);
+    setEvidenceLinkDrafts((current) => ({ ...current, [index]: '' }));
+    showNotification('success', 'Link evidence berhasil ditambahkan');
+  };
+
   // Evidence delete handler — removes one URL from the array
   const handleEvidenceDelete = async (index: number, fileUrl: string) => {
     if (!fileUrl) return;
@@ -1595,13 +1650,15 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                               {/* Existing files */}
                               {activity.evidence.map((fileUrl, fileIdx) => (
                                 <div key={fileIdx} className="flex items-center gap-2 bg-slate-50 px-2 py-1 rounded-lg">
-                                  {fileUrl.match(/\.(pdf)$/i) ? (
+                                  {getEvidenceIconType(fileUrl) === 'pdf' ? (
                                     <FileText size={13} className="text-red-500 flex-shrink-0" />
-                                  ) : (
+                                  ) : getEvidenceIconType(fileUrl) === 'image' ? (
                                     <ImageIcon size={13} className="text-green-500 flex-shrink-0" />
+                                  ) : (
+                                    <LinkIcon size={13} className="text-blue-500 flex-shrink-0" />
                                   )}
                                   <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate flex-1" title={fileUrl}>
-                                    File {fileIdx + 1}
+                                    {getEvidenceDisplayName(fileUrl, fileIdx)}
                                   </a>
                                   <button type="button" onClick={() => handleEvidenceDelete(index, fileUrl)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
                                     <X size={12} />
@@ -1627,6 +1684,31 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                                   <p className="text-[10px] text-slate-400 mt-0.5">PDF, JPG, PNG, WebP (bisa banyak file)</p>
                                 </div>
                               )}
+                              <div className="flex items-center gap-1.5">
+                                <div className="relative min-w-0 flex-1">
+                                  <LinkIcon size={13} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-slate-400" />
+                                  <input
+                                    type="url"
+                                    value={evidenceLinkDrafts[index] || ''}
+                                    onChange={(e) => setEvidenceLinkDrafts((current) => ({ ...current, [index]: e.target.value }))}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        e.preventDefault();
+                                        handleEvidenceLinkAdd(index);
+                                      }
+                                    }}
+                                    placeholder="Paste link evidence..."
+                                    className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-7 pr-2 text-xs text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleEvidenceLinkAdd(index)}
+                                  className="shrink-0 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+                                >
+                                  Tambah
+                                </button>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -1686,13 +1768,15 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                                 {/* Existing files list */}
                                 {activity.evidence.map((fileUrl, fileIdx) => (
                                   <div key={fileIdx} className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded">
-                                    {fileUrl.match(/\.(pdf)$/i) ? (
+                                    {getEvidenceIconType(fileUrl) === 'pdf' ? (
                                       <FileText size={12} className="text-red-500 flex-shrink-0" />
-                                    ) : (
+                                    ) : getEvidenceIconType(fileUrl) === 'image' ? (
                                       <ImageIcon size={12} className="text-green-500 flex-shrink-0" />
+                                    ) : (
+                                      <LinkIcon size={12} className="text-blue-500 flex-shrink-0" />
                                     )}
                                     <a href={fileUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline truncate flex-1" title={fileUrl}>
-                                      File {fileIdx + 1}
+                                      {getEvidenceDisplayName(fileUrl, fileIdx)}
                                     </a>
                                     <button type="button" onClick={() => handleEvidenceDelete(index, fileUrl)} className="p-0.5 text-slate-400 hover:text-red-500 rounded transition-colors flex-shrink-0" title="Hapus file">
                                       <X size={10} />
@@ -1717,6 +1801,31 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                                     <p className="text-[11px] text-slate-500">Seret file atau <span className="text-blue-600 font-medium">pilih</span></p>
                                   </div>
                                 )}
+                                <div className="flex items-center gap-1">
+                                  <div className="relative min-w-0 flex-1">
+                                    <LinkIcon size={12} className="pointer-events-none absolute left-1.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                                    <input
+                                      type="url"
+                                      value={evidenceLinkDrafts[index] || ''}
+                                      onChange={(e) => setEvidenceLinkDrafts((current) => ({ ...current, [index]: e.target.value }))}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.preventDefault();
+                                          handleEvidenceLinkAdd(index);
+                                        }
+                                      }}
+                                      placeholder="Paste link..."
+                                      className="w-full rounded border border-slate-200 bg-white py-1 pl-6 pr-1.5 text-[11px] text-slate-700 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEvidenceLinkAdd(index)}
+                                    className="shrink-0 rounded bg-blue-600 px-2 py-1 text-[11px] font-semibold text-white transition hover:bg-blue-700"
+                                  >
+                                    Add
+                                  </button>
+                                </div>
                               </div>
                             </td>
                             <td className="px-3 py-2 text-center">
