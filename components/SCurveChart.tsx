@@ -19,6 +19,7 @@ interface Props {
   weeklyData?: WeeklyData[];
   showWeekly?: boolean;
   yearLabel?: string | null;
+  compact?: boolean;
 }
 
 const CHART_MAX_PERCENT = 100;
@@ -30,10 +31,12 @@ const clampPercent = (value: number): number => {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
+    const visiblePayload = payload.filter((entry: any) => entry.name !== 'actual');
+
     return (
       <div className="bg-white p-4 border border-slate-200 shadow-lg rounded-lg">
         <p className="font-bold text-slate-700 mb-2">{label}</p>
-        {payload.map((entry: any, index: number) => (
+        {visiblePayload.map((entry: any, index: number) => (
           <div key={index} className="flex items-center gap-2 mb-1">
             <div 
               className="w-3 h-3 rounded-full" 
@@ -50,7 +53,32 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   return null;
 };
 
-export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false, yearLabel }) => {
+const getCompactLegendLabel = (value: unknown) => {
+  const label = String(value || '');
+  if (label.includes('Baseline')) return 'Baseline';
+  if (label.includes('Realisasi')) return 'Realisasi';
+  if (label.includes('Target')) return 'Target';
+  return label;
+};
+
+const CustomLegend = ({ payload, compact }: any) => {
+  const visiblePayload = payload?.filter((entry: any) => entry.value !== 'actual') || [];
+
+  if (!visiblePayload.length) return null;
+
+  return (
+    <div className={`flex flex-nowrap items-center justify-center gap-x-3 overflow-hidden ${compact ? 'pb-1 text-[10px]' : 'pb-2 text-sm'}`}>
+      {visiblePayload.map((entry: any) => (
+        <div key={`${entry.dataKey}-${entry.value}`} className="flex min-w-0 items-center gap-1.5 whitespace-nowrap font-semibold" style={{ color: entry.color }}>
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+          <span className="truncate">{compact ? getCompactLegendLabel(entry.value) : entry.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = false, yearLabel, compact = false }) => {
   // Convert weekly data to chart format
   const chartData = showWeekly && weeklyData 
     ? weeklyData.map((w, idx) => {
@@ -82,15 +110,17 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
       }
     : {
         dataKey: "period",
-        tick: { fill: '#64748b', fontSize: 12 },
+        tick: { fill: '#64748b', fontSize: compact ? 10 : 12 },
       };
 
   return (
-    <div className="w-full h-[300px] sm:h-[400px]">
+    <div className={compact ? 'w-full h-[280px]' : 'w-full h-[300px] sm:h-[400px]'}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart
           data={chartData}
-          margin={{ top: 20, right: 30, left: 0, bottom: showWeekly ? 80 : 0 }}
+          margin={compact
+            ? { top: 8, right: 8, left: -10, bottom: showWeekly ? 70 : 2 }
+            : { top: 20, right: 30, left: 0, bottom: showWeekly ? 80 : 0 }}
         >
           <defs>
             <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
@@ -108,7 +138,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
           <YAxis 
             axisLine={false}
             tickLine={false}
-            tick={{ fill: '#64748b', fontSize: 12 }}
+            tick={{ fill: '#64748b', fontSize: compact ? 10 : 12 }}
             domain={[0, CHART_MAX_PERCENT]}
             ticks={[0, 20, 40, 60, 80, 100]}
             tickFormatter={(value) => `${value}%`}
@@ -116,8 +146,9 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
           <Tooltip content={<CustomTooltip />} />
           <Legend 
             verticalAlign="top" 
-            height={36}
+            height={compact ? 24 : 36}
             iconType="circle"
+            content={(props) => <CustomLegend {...props} compact={compact} />}
           />
           
           {/* Baseline Curve */}
@@ -149,6 +180,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             dataKey="actual"
             fill="url(#colorActual)"
             stroke="none"
+            legendType="none"
           />
           <Line
             name="Realisasi (Actual)"

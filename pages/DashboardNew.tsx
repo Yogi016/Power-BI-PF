@@ -458,6 +458,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
                 data={chartData}
                 showWeekly={false}
                 yearLabel={selectedYear?.toString()}
+                compact
               />
             ) : (
               <div className="flex min-h-[260px] items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
