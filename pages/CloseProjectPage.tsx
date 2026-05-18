@@ -56,6 +56,39 @@ const getEvidenceFileName = (fileUrl: string, index: number): string => {
   }
 };
 
+const EvidenceLinks = ({ urls, compact = false }: { urls: string[]; compact?: boolean }) => {
+  if (urls.length === 0) {
+    return <span className="text-xs font-medium text-slate-400">-</span>;
+  }
+
+  return (
+    <div className={compact ? 'grid grid-cols-1 gap-1.5' : 'space-y-1'}>
+      {urls.map((fileUrl, fileIndex) => {
+        const isPdf = /\.pdf($|\?)/i.test(fileUrl);
+
+        return (
+          <a
+            key={`${fileUrl}-${fileIndex}`}
+            href={fileUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={`flex items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700 ${compact ? 'max-w-full' : 'max-w-[220px]'}`}
+            title={fileUrl}
+          >
+            {isPdf ? (
+              <FileText size={13} className="flex-shrink-0 text-red-500" />
+            ) : (
+              <ImageIcon size={13} className="flex-shrink-0 text-emerald-500" />
+            )}
+            <span className="truncate">{getEvidenceFileName(fileUrl, fileIndex)}</span>
+            <ExternalLink size={11} className="flex-shrink-0 text-slate-400" />
+          </a>
+        );
+      })}
+    </div>
+  );
+};
+
 export const CloseProjectPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -214,9 +247,9 @@ export const CloseProjectPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 pb-24 sm:p-6">
       <div className="max-w-[1400px] mx-auto">
-        <div className="mb-6">
+        <div className="mb-4 sm:mb-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Close Project</h1>
@@ -246,12 +279,13 @@ export const CloseProjectPage: React.FC = () => {
               </div>
 
               {availableYears.length > 1 && (
-                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                <div className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm shadow-sm sm:w-auto">
                   <Calendar size={16} className="text-slate-500" />
                   <select
                     value={selectedYear ?? ''}
                     onChange={(event) => setSelectedYear(event.target.value ? Number(event.target.value) : null)}
-                    className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
+                    className="min-w-0 flex-1 cursor-pointer bg-transparent font-medium text-slate-700 outline-none sm:flex-none"
+                    aria-label="Filter tahun close project"
                   >
                     <option value="">Semua Tahun</option>
                     {availableYears.map((year) => (
@@ -268,7 +302,7 @@ export const CloseProjectPage: React.FC = () => {
 
         {notification && (
           <div
-            className={`fixed top-4 right-4 z-50 flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg border ${notification.type === 'success'
+            className={`fixed left-3 right-3 top-3 z-50 flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg sm:left-auto sm:right-4 ${notification.type === 'success'
               ? 'bg-green-50 border-green-200 text-green-800'
               : 'bg-red-50 border-red-200 text-red-800'
               }`}
@@ -284,35 +318,35 @@ export const CloseProjectPage: React.FC = () => {
 
         {selectedProject && (
           <div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4"
+            className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
             onClick={handleCloseProjectDetail}
           >
             <div
-              className="w-full max-w-4xl max-h-[90vh] overflow-hidden rounded-xl bg-white shadow-2xl"
+              className="h-[92vh] w-full max-w-5xl overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:h-auto sm:max-h-[90vh] sm:rounded-xl"
               onClick={(event) => event.stopPropagation()}
             >
-              <div className="flex items-start justify-between gap-4 border-b border-slate-200 p-5">
-                <div className="flex items-start gap-3">
-                  <div className="w-11 h-11 rounded-lg bg-emerald-100 flex items-center justify-center">
-                    <ListChecks size={22} className="text-emerald-600" />
+              <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white p-4 sm:p-5">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 sm:h-11 sm:w-11">
+                    <ListChecks size={21} className="text-emerald-600" />
                   </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-slate-900">{selectedProject.name}</h2>
+                  <div className="min-w-0">
+                    <h2 className="line-clamp-2 text-lg font-bold leading-snug text-slate-900 sm:text-xl">{selectedProject.name}</h2>
                     <p className="text-sm text-slate-500">Detail kegiatan project close</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={handleCloseProjectDetail}
-                  className="rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  className="flex-shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                   aria-label="Tutup detail project"
                 >
                   <X size={20} />
                 </button>
               </div>
 
-              <div className="max-h-[calc(90vh-88px)] overflow-y-auto p-5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+              <div className="h-[calc(92vh-78px)] overflow-y-auto p-4 sm:h-auto sm:max-h-[calc(90vh-88px)] sm:p-5">
+                <div className="grid grid-cols-1 gap-3 mb-4 sm:grid-cols-2 sm:mb-5 lg:grid-cols-4">
                   <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">PIC</p>
                     <p className="mt-1 text-sm font-semibold text-slate-700">{selectedProject.pic || '-'}</p>
@@ -356,7 +390,44 @@ export const CloseProjectPage: React.FC = () => {
                       <span className="text-sm font-medium">Memuat kegiatan...</span>
                     </div>
                   ) : detailActivities.length > 0 ? (
-                    <div className="overflow-x-auto">
+                    <>
+                      <div className="divide-y divide-slate-100 md:hidden">
+                        {detailActivities.map((activity, index) => (
+                          <div key={`${activity.code}-${index}-mobile`} className="p-4">
+                            <div className="mb-3 flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <div className="mb-1 flex items-center gap-2">
+                                  <span className="rounded-md bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">
+                                    {activity.code}
+                                  </span>
+                                  <span className="inline-flex rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+                                    {statusLabels[activity.status] || activity.status}
+                                  </span>
+                                </div>
+                                <h4 className="text-sm font-semibold leading-5 text-slate-900">{activity.activityName}</h4>
+                              </div>
+                              <span className="flex-shrink-0 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+                                {activity.weight}%
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 gap-3 text-sm text-slate-600">
+                              <div>
+                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Tanggal</p>
+                                <p className="font-medium text-slate-700">
+                                  {formatDate(activity.startDate)} - {formatDate(activity.endDate)}
+                                </p>
+                              </div>
+                              <div>
+                                <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Evidence</p>
+                                <EvidenceLinks urls={activity.evidence} compact />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="hidden overflow-x-auto md:block">
                       <table className="w-full min-w-[920px] text-sm">
                         <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                           <tr>
@@ -383,40 +454,14 @@ export const CloseProjectPage: React.FC = () => {
                                 </span>
                               </td>
                               <td className="px-4 py-3">
-                                {activity.evidence.length > 0 ? (
-                                  <div className="space-y-1">
-                                    {activity.evidence.map((fileUrl, fileIndex) => {
-                                      const isPdf = /\.pdf($|\?)/i.test(fileUrl);
-
-                                      return (
-                                        <a
-                                          key={`${fileUrl}-${fileIndex}`}
-                                          href={fileUrl}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          className="flex max-w-[220px] items-center gap-1.5 rounded-md bg-slate-50 px-2 py-1 text-xs font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                                          title={fileUrl}
-                                        >
-                                          {isPdf ? (
-                                            <FileText size={13} className="flex-shrink-0 text-red-500" />
-                                          ) : (
-                                            <ImageIcon size={13} className="flex-shrink-0 text-emerald-500" />
-                                          )}
-                                          <span className="truncate">{getEvidenceFileName(fileUrl, fileIndex)}</span>
-                                          <ExternalLink size={11} className="flex-shrink-0 text-slate-400" />
-                                        </a>
-                                      );
-                                    })}
-                                  </div>
-                                ) : (
-                                  <span className="text-xs font-medium text-slate-400">-</span>
-                                )}
+                                <EvidenceLinks urls={activity.evidence} />
                               </td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                    </div>
+                      </div>
+                    </>
                   ) : (
                     <div className="p-10 text-center">
                       <p className="font-semibold text-slate-700">Belum ada kegiatan</p>
@@ -430,7 +475,7 @@ export const CloseProjectPage: React.FC = () => {
         )}
 
         {filteredProjects.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6 lg:grid-cols-3">
             {filteredProjects.map((project) => (
               <div
                 key={project.id}
@@ -443,15 +488,15 @@ export const CloseProjectPage: React.FC = () => {
                     void handleOpenProjectDetail(project);
                   }
                 }}
-                className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md hover:border-emerald-200 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+                className="cursor-pointer rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:border-emerald-200 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-emerald-500/30 sm:p-6"
               >
-                <div className="flex items-start justify-between mb-4">
+                <div className="mb-4 flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-emerald-100 rounded-lg flex items-center justify-center">
-                      <Building2 size={24} className="text-emerald-600" />
+                    <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-100 sm:h-12 sm:w-12">
+                      <Building2 size={22} className="text-emerald-600 sm:h-6 sm:w-6" />
                     </div>
-                    <div>
-                      <h3 className="font-bold text-slate-900 line-clamp-1">{project.name}</h3>
+                    <div className="min-w-0">
+                      <h3 className="line-clamp-2 font-bold leading-snug text-slate-900 sm:line-clamp-1">{project.name}</h3>
                       <p className="text-sm text-slate-500">PIC: {project.pic}</p>
                     </div>
                   </div>
@@ -461,13 +506,13 @@ export const CloseProjectPage: React.FC = () => {
                   <p className="text-sm text-slate-600 mb-4 line-clamp-2">{project.description}</p>
                 )}
 
-                <div className="space-y-2 mb-4 text-sm text-slate-600">
+                <div className="mb-4 space-y-2 text-sm text-slate-600">
                   {project.location && <p>{project.location}</p>}
                   <p>{formatDate(project.startDate)} - {formatDate(project.endDate)}</p>
                   {project.budget && <p>{formatBudgetJuta(project.budget)}</p>}
                 </div>
 
-                <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between border-t border-slate-100 pt-4">
                   <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">
                     closed
                   </span>
@@ -478,8 +523,9 @@ export const CloseProjectPage: React.FC = () => {
                         void handleDownloadPDF(project);
                       }}
                       disabled={generatingPdfId === project.id}
-                      className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 disabled:text-slate-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:text-slate-300"
                       title="Download PDF"
+                      aria-label={`Download PDF ${project.name}`}
                     >
                       {generatingPdfId === project.id ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
                     </button>
@@ -489,8 +535,9 @@ export const CloseProjectPage: React.FC = () => {
                         void handleReopenProject(project);
                       }}
                       disabled={reopeningId === project.id}
-                      className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 disabled:text-slate-300 disabled:cursor-not-allowed rounded-lg transition-colors"
+                      className="flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:text-slate-300"
                       title="Reopen Project"
+                      aria-label={`Reopen project ${project.name}`}
                     >
                       {reopeningId === project.id ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />}
                     </button>
@@ -500,7 +547,7 @@ export const CloseProjectPage: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 text-center">
+          <div className="rounded-xl border-2 border-dashed border-slate-300 bg-white p-8 text-center sm:p-12">
             <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Archive size={32} className="text-slate-400" />
             </div>

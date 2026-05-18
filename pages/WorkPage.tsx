@@ -122,6 +122,8 @@ export const WorkPage: React.FC = () => {
   const [projects, setProjects] = useState<WorkProject[]>([]);
   const [dailyDataMap, setDailyDataMap] = useState<Record<string, WorkDailyData[]>>({});
   const [planScheduleMap, setPlanScheduleMap] = useState<Record<string, WorkPlanSchedule[]>>({}); // Plan schedule per project
+  const [loadedProjectIds, setLoadedProjectIds] = useState<Record<string, boolean>>({});
+  const [loadingProjectId, setLoadingProjectId] = useState<string | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [useDemo, setUseDemo] = useState(false);
@@ -157,8 +159,8 @@ export const WorkPage: React.FC = () => {
   // Delete confirmation
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
-  // Load data from Supabase
-  const loadData = async () => {
+  // Load project list first; detail data is loaded lazily per selected project.
+  const loadProjects = async (preferredProjectId?: string): Promise<WorkProject[]> => {
     setLoading(true);
     try {
       const projectsData = await fetchWorkProjects();
@@ -166,33 +168,17 @@ export const WorkPage: React.FC = () => {
       if (projectsData.length > 0) {
         setProjects(projectsData);
         setUseDemo(false);
+        setSelectedProjectId(currentId => {
+          const preferredProject = preferredProjectId
+            ? projectsData.find(p => p.id === preferredProjectId)
+            : null;
+          const currentProject = currentId
+            ? projectsData.find(p => p.id === currentId)
+            : null;
 
-        // Load daily data and plan schedule for all projects
-        const dailyMap: Record<string, WorkDailyData[]> = {};
-        const scheduleMap: Record<string, WorkPlanSchedule[]> = {};
-
-        for (const project of projectsData) {
-          const dailyData = await fetchWorkDailyData(project.id);
-          dailyMap[project.id] = dailyData;
-
-          // Load plan schedule and validate against project date range
-          let schedule = await fetchWorkPlanSchedule(project.id);
-          const totalDays = Math.ceil(
-            (new Date(project.endDate).getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)
-          ) + 1;
-
-          // If schedule is stale (doesn't match current project dates), regenerate
-          if (schedule.length === 0 || schedule.length !== totalDays) {
-            schedule = generatePlanSchedule(project.startDate, project.endDate, project.target, project.id);
-          }
-          scheduleMap[project.id] = schedule;
-        }
-        setDailyDataMap(dailyMap);
-        setPlanScheduleMap(scheduleMap);
-
-        if (!selectedProjectId || !projectsData.find(p => p.id === selectedProjectId)) {
-          setSelectedProjectId(projectsData[0].id);
-        }
+          return (preferredProject || currentProject || projectsData[0]).id;
+        });
+        return projectsData;
       } else {
         // Use demo data if no data in Supabase
         const demo1 = generateDemoData();
@@ -205,6 +191,11 @@ export const WorkPage: React.FC = () => {
         });
         setSelectedProjectId(demo1.project.id);
         setUseDemo(true);
+        setLoadedProjectIds({
+          [demo1.project.id]: true,
+          [demo2.project.id]: true,
+        });
+        return [demo1.project, demo2.project];
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -218,18 +209,72 @@ export const WorkPage: React.FC = () => {
       });
       setSelectedProjectId(demo1.project.id);
       setUseDemo(true);
+      setLoadedProjectIds({
+        [demo1.project.id]: true,
+        [demo2.project.id]: true,
+      });
+      return [demo1.project, demo2.project];
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
+  };
+
+  const loadProjectDetails = async (project: WorkProject, force = false) => {
+    if (useDemo || (!force && loadedProjectIds[project.id])) return;
+
+    setLoadingProjectId(project.id);
+    try {
+      const [dailyData, rawSchedule] = await Promise.all([
+        fetchWorkDailyData(project.id),
+        fetchWorkPlanSchedule(project.id),
+      ]);
+
+      let schedule = rawSchedule;
+      const totalDays = Math.ceil(
+        (new Date(project.endDate).getTime() - new Date(project.startDate).getTime()) / (1000 * 60 * 60 * 24)
+      ) + 1;
+
+      if (schedule.length === 0 || schedule.length !== totalDays) {
+        schedule = generatePlanSchedule(project.startDate, project.endDate, project.target, project.id);
+      }
+
+      setDailyDataMap(prev => ({ ...prev, [project.id]: dailyData }));
+      setPlanScheduleMap(prev => ({ ...prev, [project.id]: schedule }));
+      setLoadedProjectIds(prev => ({ ...prev, [project.id]: true }));
+    } catch (error) {
+      console.error('Error loading work project details:', error);
+      setDailyDataMap(prev => ({ ...prev, [project.id]: [] }));
+      setPlanScheduleMap(prev => ({
+        ...prev,
+        [project.id]: generatePlanSchedule(project.startDate, project.endDate, project.target, project.id),
+      }));
+      setLoadedProjectIds(prev => ({ ...prev, [project.id]: true }));
+      showNotification('error', 'Gagal memuat detail project Work');
+    } finally {
+      setLoadingProjectId(currentId => (currentId === project.id ? null : currentId));
+    }
   };
 
   useEffect(() => {
-    loadData();
+    void loadProjects();
   }, []);
 
   const selectedProject = useMemo(() =>
     projects.find(p => p.id === selectedProjectId),
     [projects, selectedProjectId]
   );
+
+  useEffect(() => {
+    if (!selectedProject || useDemo) return;
+    void loadProjectDetails(selectedProject);
+  }, [
+    selectedProject?.id,
+    selectedProject?.startDate,
+    selectedProject?.endDate,
+    selectedProject?.target,
+    selectedProject?.updatedAt,
+    useDemo,
+  ]);
 
   // Extract unique years from all projects' startDate for the filter
   const availableYears = useMemo(() => {
@@ -268,6 +313,11 @@ export const WorkPage: React.FC = () => {
     planScheduleMap[selectedProjectId] || [],
     [planScheduleMap, selectedProjectId]
   );
+
+  const selectedProjectDetailsLoaded = !selectedProject || useDemo || !!loadedProjectIds[selectedProject.id];
+  const selectedProjectDetailsLoading = !!selectedProject
+    && !selectedProjectDetailsLoaded
+    && (loadingProjectId === selectedProject.id || !loadedProjectIds[selectedProject.id]);
 
   // Calculate metrics
   const metrics = useMemo((): WorkMetrics | null => {
@@ -463,7 +513,11 @@ export const WorkPage: React.FC = () => {
           } else {
             showNotification('success', 'Project berhasil diupdate');
           }
-          await loadData();
+          const refreshedProjects = await loadProjects(editingProject.id);
+          const refreshedProject = refreshedProjects.find(project => project.id === editingProject.id);
+          if (refreshedProject) {
+            await loadProjectDetails(refreshedProject, true);
+          }
           setShowProjectForm(false);
         } else {
           showNotification('error', 'Gagal mengupdate project');
@@ -480,8 +534,9 @@ export const WorkPage: React.FC = () => {
             await batchUpsertWorkPlanSchedule(scheduleWithProjectId);
           }
           showNotification('success', 'Project berhasil dibuat');
-          await loadData();
-          setSelectedProjectId(newProject.id);
+          const refreshedProjects = await loadProjects(newProject.id);
+          const refreshedProject = refreshedProjects.find(project => project.id === newProject.id) || newProject;
+          await loadProjectDetails(refreshedProject, true);
           setShowProjectForm(false);
         } else {
           showNotification('error', 'Gagal membuat project');
@@ -506,7 +561,22 @@ export const WorkPage: React.FC = () => {
     const success = await deleteWorkProject(deleteConfirm.id);
     if (success) {
       showNotification('success', 'Project berhasil dihapus');
-      await loadData();
+      setDailyDataMap(prev => {
+        const next = { ...prev };
+        delete next[deleteConfirm.id];
+        return next;
+      });
+      setPlanScheduleMap(prev => {
+        const next = { ...prev };
+        delete next[deleteConfirm.id];
+        return next;
+      });
+      setLoadedProjectIds(prev => {
+        const next = { ...prev };
+        delete next[deleteConfirm.id];
+        return next;
+      });
+      await loadProjects();
     } else {
       showNotification('error', 'Gagal menghapus project');
     }
@@ -580,7 +650,7 @@ export const WorkPage: React.FC = () => {
 
     if (success) {
       showNotification('success', 'Data harian berhasil disimpan');
-      await loadData();
+      await loadProjectDetails(selectedProject, true);
       setShowDailyDataForm(false);
     } else {
       showNotification('error', 'Gagal menyimpan data harian');
@@ -1094,6 +1164,7 @@ export const WorkPage: React.FC = () => {
             filteredProjects.map(project => {
               // Calculate percentage for each project from their own daily data
               const projectDailyData = dailyDataMap[project.id] || [];
+              const projectDetailsLoaded = useDemo || !!loadedProjectIds[project.id];
               const actualData = projectDailyData.filter(d => d.actualCumulative > 0);
               const latestActual = actualData[actualData.length - 1];
               const realTotal = latestActual?.actualCumulative || 0;
@@ -1112,7 +1183,7 @@ export const WorkPage: React.FC = () => {
                     <span>{project.faseName}</span>
                     <span className={`text-xs px-2 py-0.5 rounded-full ${selectedProjectId === project.id ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'
                       }`}>
-                      {realisasiPct.toFixed(1)}%
+                      {projectDetailsLoaded ? `${realisasiPct.toFixed(1)}%` : '...'}
                     </span>
                   </div>
                   <div className="text-xs mt-1 opacity-80">
@@ -1134,7 +1205,8 @@ export const WorkPage: React.FC = () => {
             <div className="flex flex-wrap justify-end gap-2 mb-4 animate-in fade-in duration-500">
               <button
                 onClick={() => handleEditProject(selectedProject)}
-                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+                disabled={selectedProjectDetailsLoading}
+                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Edit2 size={14} className="text-slate-500 group-hover:text-blue-600 transition-colors" />
                 <span className="hidden sm:inline">Edit Project</span>
@@ -1142,7 +1214,8 @@ export const WorkPage: React.FC = () => {
               </button>
               <button
                 onClick={handleOpenDailyDataForm}
-                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2"
+                disabled={selectedProjectDetailsLoading}
+                className="group flex items-center gap-1.5 rounded-md bg-white border border-slate-200 px-2.5 py-1.5 text-xs sm:text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-950 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={14} className="text-slate-500 group-hover:text-emerald-600 group-hover:rotate-90 transition-all" />
                 <span className="hidden sm:inline">Input Data Harian</span>
@@ -1157,6 +1230,15 @@ export const WorkPage: React.FC = () => {
               </button>
             </div>
 
+            {selectedProjectDetailsLoading ? (
+              <div className="mb-6 flex min-h-[260px] items-center justify-center rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex flex-col items-center gap-3 text-slate-500">
+                  <Loader2 className="h-8 w-8 animate-spin" />
+                  <p className="text-sm font-medium">Memuat detail {selectedProject.faseName}...</p>
+                </div>
+              </div>
+            ) : (
+              <>
             {/* No Data Message */}
             {!metrics && (
               <div className="bg-white rounded-xl shadow-lg p-8 mb-6 text-center">
@@ -1342,6 +1424,8 @@ export const WorkPage: React.FC = () => {
                 target={selectedProject.target}
                 planSchedule={planScheduleMap[selectedProject.id] || []}
               />
+            )}
+              </>
             )}
           </>
         )}
