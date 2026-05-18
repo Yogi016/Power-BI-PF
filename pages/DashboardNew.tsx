@@ -7,7 +7,7 @@ import { Project, ProjectMetrics, SCurveDataPoint } from '../types';
 import { fetchAllProjectsSCurveData, fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport, generateAllProjectsReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
-import { Loader2, TrendingUp, FileText, Database, Download, BookOpen, ChevronDown, Filter } from 'lucide-react';
+import { Calendar, Loader2, TrendingUp, FileText, Database, Download, BookOpen, ChevronDown, Filter, User } from 'lucide-react';
 
 interface DashboardNewProps {
   onOpenManageDataForSCurve?: (projectId: string | null) => void;
@@ -204,6 +204,59 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  };
+
+  const getStatusLabel = (status?: Project['status']) => {
+    switch (status) {
+      case 'active':
+        return 'Aktif';
+      case 'completed':
+        return 'Selesai';
+      case 'on-hold':
+        return 'Ditunda';
+      case 'cancelled':
+        return 'Dibatalkan';
+      default:
+        return status || '-';
+    }
+  };
+
+  const mobileMetricCards = selectedProject && displayMetrics
+    ? [
+        {
+          label: 'Actual',
+          value: `${displayMetrics.overallProgress.toFixed(1)}%`,
+          detail: `${displayMetrics.variance >= 0 ? '+' : ''}${displayMetrics.variance.toFixed(1)}% vs plan`,
+          tone: 'text-blue-700',
+        },
+        {
+          label: 'Plan',
+          value: `${displayMetrics.plannedProgress.toFixed(1)}%`,
+          detail: 'Target saat ini',
+          tone: 'text-amber-700',
+        },
+        {
+          label: 'Aktivitas',
+          value: `${displayMetrics.completedActivities}/${displayMetrics.totalActivities}`,
+          detail: `${displayMetrics.completionRate.toFixed(0)}% selesai`,
+          tone: 'text-emerald-700',
+        },
+        {
+          label: 'Sisa',
+          value: `${displayMetrics.daysRemaining}`,
+          detail: 'hari',
+          tone: 'text-purple-700',
+        },
+      ]
+    : [];
+
   const handleDownloadChartPng = async () => {
     if (!chartData.length || !sCurveChartRef.current) return;
 
@@ -274,13 +327,167 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-[1600px] mx-auto space-y-6">
+    <div className="min-h-screen bg-slate-50 p-3 pb-24 sm:p-6">
+      <div className="max-w-[1600px] mx-auto space-y-4 sm:space-y-6">
+        <div className="space-y-3 sm:hidden">
+          <div className="rounded-2xl bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 p-4 text-white shadow-lg">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-100">
+                  {selectedProject ? selectedProject.category || 'Project' : 'Semua Project'}
+                </p>
+                <h1 className="mt-1 line-clamp-2 text-2xl font-bold leading-tight">
+                  {selectedProject ? selectedProject.name : 'Semua Project'}
+                </h1>
+              </div>
+              <span className="shrink-0 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                {selectedProject ? getStatusLabel(selectedProject.status) : `${filteredProjects.length} project`}
+              </span>
+            </div>
+
+            {selectedProject ? (
+              <div className="mt-4 grid grid-cols-1 gap-2">
+                <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
+                  <User size={16} className="shrink-0 text-blue-100" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-100">PIC</p>
+                    <p className="truncate text-sm font-bold">{selectedProject.pic || '-'}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-3 py-2">
+                  <Calendar size={16} className="shrink-0 text-blue-100" />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-blue-100">Timeline</p>
+                    <p className="truncate text-sm font-bold">
+                      {formatDate(selectedProject.startDate)} - {formatDate(selectedProject.endDate)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <p className="mt-3 text-sm font-medium text-blue-100">
+                Agregasi progress dari project aktif yang tersedia
+              </p>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="grid grid-cols-1 gap-2">
+              <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                Project
+              </label>
+              <select
+                value={selectedProjectId ?? ''}
+                onChange={(event) => setSelectedProjectId(event.target.value || null)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              >
+                <option value="">Semua Project</option>
+                {filteredProjects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Tahun Project
+                </label>
+                <select
+                  value={projectYearFilter ?? ''}
+                  onChange={(event) => setProjectYearFilter(event.target.value ? Number(event.target.value) : null)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Semua</option>
+                  {reportYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  S-Curve
+                </label>
+                <select
+                  value={selectedYear ?? ''}
+                  onChange={(event) => setSelectedYear(event.target.value ? Number(event.target.value) : null)}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                >
+                  <option value="">Semua</option>
+                  {availableYears.map((year) => (
+                    <option key={year} value={year}>
+                      {year}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {mobileMetricCards.length > 0 && (
+            <div className="grid grid-cols-2 gap-2">
+              {mobileMetricCards.map((card) => (
+                <div key={card.label} className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{card.label}</p>
+                  <p className={`mt-1 text-xl font-bold ${card.tone}`}>{card.value}</p>
+                  <p className="mt-0.5 truncate text-xs font-medium text-slate-500">{card.detail}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">S-Curve</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  {selectedProject ? selectedProject.name : 'Semua Project'}
+                </p>
+              </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <TrendingUp size={20} />
+              </div>
+            </div>
+
+            {chartData.length > 0 ? (
+              <SCurveChart
+                data={chartData}
+                showWeekly={false}
+                yearLabel={selectedYear?.toString()}
+              />
+            ) : (
+              <div className="flex min-h-[260px] items-center justify-center rounded-lg border-2 border-dashed border-slate-200 bg-slate-50 p-4 text-center">
+                <div>
+                  <p className="text-sm font-semibold text-slate-600">Data S-Curve belum tersedia</p>
+                  {selectedProjectId && onOpenManageDataForSCurve && (
+                    <button
+                      type="button"
+                      onClick={() => onOpenManageDataForSCurve(selectedProjectId)}
+                      className="mt-3 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"
+                    >
+                      <Database size={14} />
+                      Isi S-Curve
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Project Header */}
-        {selectedProject && <ProjectHeader project={selectedProject} />}
+        {selectedProject && (
+          <div className="hidden sm:block">
+            <ProjectHeader project={selectedProject} />
+          </div>
+        )}
 
         {/* Project Selector & Timeline */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="hidden sm:grid sm:grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <ProjectSelector
               projects={projects}
@@ -388,10 +595,14 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
         </div>
 
         {/* Progress Metrics */}
-        {selectedProject && <ProgressMetrics metrics={displayMetrics} />}
+        {selectedProject && (
+          <div className="hidden sm:block">
+            <ProgressMetrics metrics={displayMetrics} />
+          </div>
+        )}
 
         {/* S-Curve Chart */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <div className="hidden sm:block bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-slate-900 mb-2">
