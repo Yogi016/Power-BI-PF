@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { Layout } from './components/Layout';
+import { AIChatbot } from './components/AIChatbot';
 import { Dashboard } from './pages/Dashboard';
 import { DashboardNew } from './pages/DashboardNew';
 import { ManageData } from './pages/ManageData';
@@ -63,6 +64,7 @@ const AuthenticatedApp: React.FC = () => {
           )
         )}
       </Layout>
+      <AIChatbot />
     </DataProvider>
   );
 };

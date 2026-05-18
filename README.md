@@ -29,7 +29,7 @@ Dashboard progres proyek dengan visualisasi S-Curve, timeline mingguan, dan peng
 ## Menjalankan lokal
 1) `npm install`  
 2) `npm run dev` lalu buka URL yang ditampilkan (Vite default `http://localhost:5173`).  
-3) (Opsional) set `GEMINI_API_KEY` di `.env.local` jika ingin dipakai di masa depan; saat ini tidak wajib.
+3) (Opsional) set `VITE_GEMINI_API_KEY` dan `VITE_GEMINI_MODEL=gemini-2.5-flash-lite` di `.env.local` untuk mengaktifkan AI Project Assistant saat uji coba lokal.
 
 ## Alur penggunaan
 1) Buka **Manage Data**:

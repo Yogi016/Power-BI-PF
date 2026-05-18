@@ -4,14 +4,22 @@
 
 import { formatBudgetJuta } from '../utils/formatters';
 
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models';
+const DEFAULT_GEMINI_MODEL = 'gemini-2.5-flash-lite';
 
 function getApiKey(): string {
   try {
-    // @ts-ignore - Vite injects import.meta.env at build time
-    return (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
+    return import.meta.env?.VITE_GEMINI_API_KEY || '';
   } catch {
     return '';
+  }
+}
+
+function getModelName(): string {
+  try {
+    return import.meta.env?.VITE_GEMINI_MODEL || DEFAULT_GEMINI_MODEL;
+  } catch {
+    return DEFAULT_GEMINI_MODEL;
   }
 }
 
@@ -54,14 +62,38 @@ export interface PortfolioSummaryResult {
  */
 export function isGeminiAvailable(): boolean {
   const key = getApiKey();
-  console.log('[Gemini] API key available:', !!key, 'length:', key.length);
   return !!key && key.length > 10;
+}
+
+function buildGeminiErrorMessage(status: number, rawText: string): string {
+  let parsed: any = null;
+  try {
+    parsed = JSON.parse(rawText);
+  } catch {
+    parsed = null;
+  }
+
+  const apiStatus = parsed?.error?.status;
+  const apiMessage = parsed?.error?.message || rawText;
+  const isQuotaError = status === 429 || apiStatus === 'RESOURCE_EXHAUSTED';
+
+  if (isQuotaError) {
+    return [
+      'Kuota Gemini API untuk API key atau Google Cloud project ini sedang habis atau belum aktif.',
+      'Cek quota di Google AI Studio, coba ulang beberapa saat lagi, buat API key/project baru, atau aktifkan billing jika free-tier project mendapat limit 0.',
+    ].join(' ');
+  }
+
+  return `Gemini API error ${status}: ${String(apiMessage).slice(0, 300)}`;
 }
 
 /**
  * Call Gemini API with a prompt
  */
-async function callGemini(prompt: string): Promise<string> {
+async function callGemini(
+  prompt: string,
+  options: { temperature?: number; maxOutputTokens?: number } = {}
+): Promise<string> {
   const apiKey = getApiKey();
   if (!apiKey || apiKey.length < 10) {
     throw new Error('Gemini API key not configured');
@@ -73,15 +105,15 @@ async function callGemini(prompt: string): Promise<string> {
   const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
 
   try {
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    const response = await fetch(`${GEMINI_API_BASE_URL}/${getModelName()}:generateContent?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 1500,
+          temperature: options.temperature ?? 0.7,
+          maxOutputTokens: options.maxOutputTokens ?? 1500,
           topP: 0.9,
         },
       }),
@@ -91,8 +123,8 @@ async function callGemini(prompt: string): Promise<string> {
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error('[Gemini] API error response:', response.status, errText);
-      throw new Error(`Gemini API error: ${response.status} - ${errText}`);
+      console.error('[Gemini] API error response:', response.status, errText.slice(0, 1000));
+      throw new Error(buildGeminiErrorMessage(response.status, errText));
     }
 
     const data = await response.json();
@@ -112,6 +144,43 @@ async function callGemini(prompt: string): Promise<string> {
     }
     throw error;
   }
+}
+
+export async function generateChatbotAnswer(
+  question: string,
+  dataContext: string
+): Promise<string> {
+  const prompt = `Kamu adalah Danta.AI, analis portfolio senior untuk aplikasi Project Fungsi Lingkungan.
+Tugasmu adalah membaca data, menimbang konteks secara diam-diam, lalu menjawab seperti konsultan data yang tenang, tajam, dan manusiawi.
+
+GAYA JAWABAN:
+- Jawab seperti AI profesional: natural, tidak kaku, tidak seperti template laporan.
+- Mulai dengan kesimpulan langsung dalam 1 kalimat.
+- Setelah itu beri konteks analitis dalam 1-2 paragraf pendek.
+- Hindari bullet jika tidak benar-benar perlu. Jika harus menyebut beberapa item, gunakan kalimat naratif atau maksimal 3 baris bernomor singkat.
+- Jangan gunakan Markdown: tidak boleh memakai **bold**, tanda *, heading ###, tabel, atau bullet simbol.
+- Jangan menampilkan chain-of-thought. Cukup berikan insight akhir, alasan ringkas, dan tindakan yang masuk akal.
+- Nada bicara: profesional, percaya diri, sedikit conversational, tidak berlebihan.
+
+ATURAN WAJIB:
+- Gunakan hanya DATA_SNAPSHOT di bawah ini.
+- Jangan mengarang angka, nama project, status, tanggal, dokumen, atau progress.
+- Jika data tidak tersedia, katakan data belum tersedia.
+- Untuk estimasi selesai, jelaskan bahwa itu estimasi sederhana berdasarkan progress dan tanggal yang tersedia.
+- Jika pertanyaan meminta daftar panjang, ringkas dulu insight utamanya lalu tampilkan maksimal 5 item paling relevan.
+- Jika DATA_SNAPSHOT.relevantSources berisi URL, sebutkan bahwa link referensi/evidence relevan tersedia di bawah jawaban.
+- Jangan membuat URL baru. Gunakan hanya URL yang ada di DATA_SNAPSHOT.
+- Bedakan fakta dari interpretasi dengan frasa natural seperti "Dari data yang ada..." atau "Yang perlu diperhatikan...".
+
+DATA_SNAPSHOT:
+${dataContext}
+
+PERTANYAAN USER:
+${question}
+
+JAWABAN:`;
+
+  return callGemini(prompt, { temperature: 0.35, maxOutputTokens: 1100 });
 }
 
 /**
