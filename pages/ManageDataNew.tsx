@@ -523,7 +523,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       name: '',
       pic: '',
       description: '',
-      category: 'Environmental',
+      category: '',
       location: '',
       startDate,
       endDate,
@@ -1335,16 +1335,52 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
-                <select
-                  value={formData.category || ''}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                >
-                  <option value="">Pilih Category</option>
-                  <option value="Environmental">Environmental</option>
-                  <option value="Social">Social</option>
-                  <option value="Infrastructure">Infrastructure</option>
-                </select>
+                <div className="flex flex-wrap gap-3 mt-1">
+                  {(['Climate', 'Conservation', 'Biodiversity'] as const).map((cat) => {
+                    const selectedCats = (formData.category || '').split(',').map(c => c.trim()).filter(Boolean);
+                    const isChecked = selectedCats.includes(cat);
+                    const colorMap: Record<string, string> = {
+                      Climate: 'bg-red-50 border-red-300 text-red-700 hover:bg-red-100',
+                      Conservation: 'bg-blue-50 border-blue-300 text-blue-700 hover:bg-blue-100',
+                      Biodiversity: 'bg-green-50 border-green-300 text-green-700 hover:bg-green-100',
+                    };
+                    const activeMap: Record<string, string> = {
+                      Climate: 'bg-red-500 border-red-500 text-white',
+                      Conservation: 'bg-blue-500 border-blue-500 text-white',
+                      Biodiversity: 'bg-green-500 border-green-500 text-white',
+                    };
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => {
+                          const current = (formData.category || '').split(',').map(c => c.trim()).filter(Boolean);
+                          const next = isChecked
+                            ? current.filter(c => c !== cat)
+                            : [...current, cat];
+                          setFormData({ ...formData, category: next.join(',') });
+                        }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 text-sm font-medium transition-all ${
+                          isChecked ? activeMap[cat] : colorMap[cat]
+                        }`}
+                      >
+                        <span className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                          isChecked ? 'border-white bg-white/30' : 'border-current'
+                        }`}>
+                          {isChecked && (
+                            <svg viewBox="0 0 10 10" className="w-2.5 h-2.5" fill="none" stroke="currentColor" strokeWidth="2">
+                              <polyline points="1,5 4,8 9,2" />
+                            </svg>
+                          )}
+                        </span>
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                {!(formData.category || '').trim() && (
+                  <p className="text-xs text-amber-600 mt-1.5">Pilih minimal 1 kategori</p>
+                )}
               </div>
 
               <div>
@@ -1785,6 +1821,30 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                     <span>{formatBudgetJuta(project.budget)}</span>
                   </div>
                 )}
+              </div>
+
+              <div className="flex flex-wrap gap-1 mb-3">
+                {(() => {
+                  const legacyMap: Record<string, string> = {
+                    Environmental: 'Climate',
+                    Social: 'Climate',
+                    Infrastructure: 'Climate',
+                  };
+                  const catColorMap: Record<string, string> = {
+                    Climate: 'bg-red-100 text-red-700',
+                    Conservation: 'bg-blue-100 text-blue-700',
+                    Biodiversity: 'bg-green-100 text-green-700',
+                  };
+                  // Normalize + deduplicate
+                  const normalized = [...new Set(
+                    (project.category || '').split(',').map(c => c.trim()).filter(Boolean).map(c => legacyMap[c] ?? c)
+                  )];
+                  return normalized.map((cat) => (
+                    <span key={cat} className={`px-2 py-0.5 rounded-full text-xs font-semibold ${catColorMap[cat] || 'bg-slate-100 text-slate-600'}`}>
+                      {cat}
+                    </span>
+                  ));
+                })()}
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-slate-100">
