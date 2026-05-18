@@ -84,6 +84,7 @@ export interface KPIMetric {
 export enum PageView {
   DASHBOARD = 'dashboard',
   MANAGE_DATA = 'manage_data',
+  CLOSE_PROJECT = 'close_project',
   GANTT = 'gantt',
   CALENDAR = 'calendar',
   WORK = 'work',

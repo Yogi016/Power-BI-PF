@@ -1,6 +1,7 @@
 import React from 'react';
 import { Project } from '../types';
 import { Calendar, User, MapPin, FileText } from 'lucide-react';
+import { formatBudgetJuta } from '../utils/formatters';
 
 interface ProjectHeaderProps {
   project: Project;
@@ -159,7 +160,7 @@ export const ProjectHeader: React.FC<ProjectHeaderProps> = ({ project }) => {
                     Budget
                   </p>
                   <p className="text-white text-sm font-semibold">
-                    Rp {(project.budget / 1000000).toFixed(0)}M
+                    {formatBudgetJuta(project.budget)}
                   </p>
                 </div>
               </div>

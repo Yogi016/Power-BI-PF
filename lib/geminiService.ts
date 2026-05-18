@@ -2,6 +2,8 @@
  * Gemini AI Service for generating project analysis narratives
  */
 
+import { formatBudgetJuta } from '../utils/formatters';
+
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
 
 function getApiKey(): string {
@@ -119,7 +121,7 @@ export async function generateProjectAnalysis(
   project: ProjectAnalysisData
 ): Promise<AIAnalysisResult> {
   const budgetStr = project.budget
-    ? `Rp ${(project.budget / 1_000_000).toFixed(0)} Juta`
+    ? formatBudgetJuta(project.budget)
     : 'Tidak tersedia';
 
   const prompt = `Kamu adalah analis senior project Pertamina Foundation yang berpengalaman. Analisis data project berikut dan berikan narasi profesional dalam Bahasa Indonesia. Gunakan bahasa formal dan ringkas.

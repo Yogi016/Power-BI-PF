@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   LayoutDashboard,
   Database,
-  Settings,
+  Archive,
   LogOut,
   ChevronLeft,
   ChevronRight,
@@ -177,11 +177,17 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
 
         <div className="p-3 border-t border-slate-200 shrink-0 space-y-1">
           <button
-            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors group ${collapsed ? 'justify-center' : ''
-              }`}
+            onClick={() => {
+              onPageChange(PageView.CLOSE_PROJECT);
+              closeMobileMenu();
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.CLOSE_PROJECT
+              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              } ${collapsed ? 'justify-center' : ''}`}
           >
-            <Settings size={20} className="flex-shrink-0 text-slate-400 group-hover:text-slate-600 transition-colors" />
-            {!collapsed && <span className="font-medium">Settings</span>}
+            <Archive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.CLOSE_PROJECT ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            {!collapsed && <span className="font-medium">Close Project</span>}
           </button>
           <button
             onClick={signOut}
@@ -249,6 +255,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               { page: PageView.GANTT, icon: <BarChart3 size={20} />, label: 'Gantt' },
               { page: PageView.LING_SIGN, icon: <PenTool size={20} />, label: 'Ling-Sign' },
               { page: PageView.DOKUMEN, icon: <FileText size={20} />, label: 'Dokumen' },
+              { page: PageView.CLOSE_PROJECT, icon: <Archive size={20} />, label: 'Close' },
             ].map(({ page, icon, label }) => (
               <button
                 key={page}

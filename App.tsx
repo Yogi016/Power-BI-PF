@@ -11,6 +11,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { WorkPage } from './pages/WorkPage';
 import { LingSignPage } from './pages/LingSignPage';
 import { DokumenPage } from './pages/DokumenPage';
+import { CloseProjectPage } from './pages/CloseProjectPage';
 import { LoginPage } from './pages/LoginPage';
 import { PageView } from './types';
 import { Loader2 } from 'lucide-react';
@@ -49,6 +50,8 @@ const AuthenticatedApp: React.FC = () => {
           <LingSignPage />
         ) : activePage === PageView.DOKUMEN ? (
           <DokumenPage />
+        ) : activePage === PageView.CLOSE_PROJECT ? (
+          <CloseProjectPage />
         ) : (
           useNewManageData ? (
             <ManageDataNew

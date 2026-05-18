@@ -41,7 +41,7 @@ function validateFile(
 // =====================================================
 
 /**
- * Fetch all projects from Supabase
+ * Fetch active projects from Supabase.
  */
 export async function fetchProjects(): Promise<Project[]> {
   if (!supabase) {
@@ -53,28 +53,58 @@ export async function fetchProjects(): Promise<Project[]> {
     const { data, error } = await supabase
       .from('projects')
       .select('*')
+      .neq('status', 'completed')
       .order('start_date', { ascending: false });
 
     if (error) throw error;
 
-    return (data || []).map(row => ({
-      id: row.id,
-      name: row.name,
-      pic: row.pic,
-      description: row.description,
-      category: row.category,
-      location: row.location,
-      startDate: row.start_date,
-      endDate: row.end_date,
-      status: row.status,
-      budget: row.budget,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-    }));
+    return (data || []).map(mapProjectRow);
   } catch (error) {
     console.error('Error fetching projects:', error);
     return [];
   }
+}
+
+/**
+ * Fetch closed projects from Supabase.
+ */
+export async function fetchClosedProjects(): Promise<Project[]> {
+  if (!supabase) {
+    console.warn('Supabase client not initialized');
+    return [];
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from('projects')
+      .select('*')
+      .eq('status', 'completed')
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || []).map(mapProjectRow);
+  } catch (error) {
+    console.error('Error fetching closed projects:', error);
+    return [];
+  }
+}
+
+function mapProjectRow(row: any): Project {
+  return {
+    id: row.id,
+    name: row.name,
+    pic: row.pic,
+    description: row.description,
+    category: row.category,
+    location: row.location,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    status: row.status,
+    budget: row.budget,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
 }
 
 /**

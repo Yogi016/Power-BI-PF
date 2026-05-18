@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import QRCode from 'qrcode';
+import { formatBudgetJuta } from './formatters';
 
 // =====================================================
 // TYPES
@@ -66,8 +67,7 @@ function formatDate(iso: string): string {
 }
 
 function formatCurrency(value?: number): string {
-    if (!value) return '-';
-    return `Rp ${value.toLocaleString('id-ID')}`;
+    return formatBudgetJuta(value);
 }
 
 /** Simple hash for verification code */

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Project } from '../types';
 import {
   fetchProjects,
@@ -14,6 +14,7 @@ import {
 } from '../lib/supabase';
 import { supabase } from '../lib/supabaseClient';
 import { generateProjectPDF, type SignatureInfo, type ProjectPDFData } from '../utils/generateProjectPDF';
+import { formatBudgetJuta } from '../utils/formatters';
 import {
   Plus,
   Edit2,
@@ -33,6 +34,8 @@ import {
   Image as ImageIcon,
   ExternalLink,
   Download,
+  Search,
+  Archive,
 } from 'lucide-react';
 
 interface ManageDataNewProps {
@@ -374,6 +377,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
   // Year filter state
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [projectSearch, setProjectSearch] = useState('');
 
   // Delete confirmation state
   const [deleteConfirm, setDeleteConfirm] = useState<{ projectId: string; projectName: string } | null>(null);
@@ -445,6 +449,40 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setNotification({ type, message });
     setTimeout(() => setNotification(null), 3000);
   };
+
+  const availableYears = useMemo(() => {
+    return Array.from(
+      new Set(projects.map((p) => new Date(p.startDate).getFullYear()))
+    ).sort((a, b) => b - a);
+  }, [projects]);
+
+  const filteredProjects = useMemo(() => {
+    const query = projectSearch.trim().toLowerCase();
+
+    return projects.filter((project) => {
+      const matchesYear = selectedYear
+        ? new Date(project.startDate).getFullYear() === selectedYear
+        : true;
+
+      if (!matchesYear) return false;
+      if (!query) return true;
+
+      const searchableText = [
+        project.name,
+        project.pic,
+        project.description,
+        project.category,
+        project.location,
+        project.status,
+        project.startDate ? new Date(project.startDate).getFullYear().toString() : '',
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+
+      return searchableText.includes(query);
+    });
+  }, [projects, projectSearch, selectedYear]);
 
   const resetSCurveEditor = (startDate?: string, endDate?: string, sourceActivities: ActivityFormRow[] = []) => {
     const draft = buildDraftMapFromActivities(startDate, endDate, sourceActivities);
@@ -866,6 +904,19 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
     setDeleteConfirm({ projectId, projectName });
   };
 
+  const handleCloseProject = async (project: Project) => {
+    const confirmed = window.confirm('Yakin ingin menutup project ini? Project akan dipindahkan ke Close Project.');
+    if (!confirmed) return;
+
+    const success = await updateProject(project.id, { status: 'completed' });
+    if (success) {
+      showNotification('success', `"${project.name}" dipindahkan ke Close Project`);
+      await loadProjects();
+    } else {
+      showNotification('error', 'Gagal menutup project');
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteConfirm) return;
 
@@ -1069,32 +1120,48 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
               <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mb-1 sm:mb-2">Manage Data</h1>
               <p className="text-sm sm:text-base text-slate-600">Kelola project, activities, dan S-Curve data</p>
             </div>
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              <div className="relative w-full sm:w-80">
+                <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="search"
+                  value={projectSearch}
+                  onChange={(e) => setProjectSearch(e.target.value)}
+                  placeholder="Cari proyek..."
+                  className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-10 pr-10 text-sm font-medium text-slate-700 shadow-sm outline-none transition-colors placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+                />
+                {projectSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setProjectSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Hapus pencarian"
+                  >
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+
               {/* Year Filter */}
-              {(() => {
-                const availableYears = Array.from(
-                  new Set(projects.map((p) => new Date(p.startDate).getFullYear()))
-                ).sort((a, b) => b - a);
-                return availableYears.length > 1 ? (
-                  <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
-                    <Calendar size={16} className="text-slate-500" />
-                    <select
-                      value={selectedYear ?? ''}
-                      onChange={(e) =>
-                        setSelectedYear(e.target.value ? Number(e.target.value) : null)
-                      }
-                      className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
-                    >
-                      <option value="">Semua Tahun</option>
-                      {availableYears.map((year) => (
-                        <option key={year} value={year}>
-                          {year}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                ) : null;
-              })()}
+              {availableYears.length > 1 && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm shadow-sm">
+                  <Calendar size={16} className="text-slate-500" />
+                  <select
+                    value={selectedYear ?? ''}
+                    onChange={(e) =>
+                      setSelectedYear(e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="outline-none bg-transparent text-slate-700 font-medium cursor-pointer"
+                  >
+                    <option value="">Semua Tahun</option>
+                    {availableYears.map((year) => (
+                      <option key={year} value={year}>
+                        {year}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <button
                 onClick={handleCreate}
                 className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors shadow-sm flex-1 sm:flex-none whitespace-nowrap"
@@ -1679,10 +1746,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
 
         {/* Projects List */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(selectedYear
-            ? projects.filter((p) => new Date(p.startDate).getFullYear() === selectedYear)
-            : projects
-          ).map((project) => (
+          {filteredProjects.map((project) => (
             <div
               key={project.id}
               className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 hover:shadow-md transition-shadow"
@@ -1718,7 +1782,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                 {project.budget && (
                   <div className="flex items-center gap-2 text-slate-600">
                     <span className="font-medium">💰</span>
-                    <span>Rp {(project.budget / 1000000).toFixed(0)}M</span>
+                    <span>{formatBudgetJuta(project.budget)}</span>
                   </div>
                 )}
               </div>
@@ -1747,12 +1811,21 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
                   <button
                     onClick={() => handleEdit(project)}
                     className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit Project"
                   >
                     <Edit2 size={16} />
                   </button>
                   <button
+                    onClick={() => handleCloseProject(project)}
+                    className="p-2 text-slate-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                    title="Close Project"
+                  >
+                    <Archive size={16} />
+                  </button>
+                  <button
                     onClick={() => handleDelete(project.id, project.name)}
                     className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Hapus Project"
                   >
                     <Trash2 size={16} />
                   </button>
@@ -1780,23 +1853,26 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         )}
 
         {/* Filtered empty state */}
-        {selectedYear &&
+        {(selectedYear || projectSearch.trim()) &&
           projects.length > 0 &&
-          projects.filter((p) => new Date(p.startDate).getFullYear() === selectedYear).length === 0 &&
+          filteredProjects.length === 0 &&
           !isCreating && (
             <div className="bg-white rounded-xl border-2 border-dashed border-slate-300 p-12 text-center">
               <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <Calendar size={32} className="text-slate-400" />
+                <Search size={32} className="text-slate-400" />
               </div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Tidak Ada Proyek Tahun {selectedYear}</h3>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Project Tidak Ditemukan</h3>
               <p className="text-slate-600 mb-4">
-                Tidak ditemukan proyek dengan tahun anggaran {selectedYear}.
+                Tidak ada project yang cocok dengan pencarian atau filter tahun saat ini.
               </p>
               <button
-                onClick={() => setSelectedYear(null)}
+                onClick={() => {
+                  setProjectSearch('');
+                  setSelectedYear(null);
+                }}
                 className="inline-flex items-center gap-2 bg-slate-200 hover:bg-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium transition-colors"
               >
-                Tampilkan Semua Tahun
+                Reset Filter
               </button>
             </div>
           )}

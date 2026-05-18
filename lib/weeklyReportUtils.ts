@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { fetchActivities, fetchSCurveData } from './supabase';
+import { formatBudgetJuta } from '../utils/formatters';
 
 // Page dimensions for A4 Landscape (PowerPoint style)
 const PAGE_WIDTH = 297; // mm
@@ -1332,7 +1333,7 @@ export async function generateAllProjectsReport(
       doc.text(`${proj.startDate?.substring(0, 10) || ''} — ${proj.endDate?.substring(0, 10) || ''}`, pageWidth / 2, 130, { align: 'center' });
 
       if (proj.budget) {
-        doc.text(`Budget: Rp ${(proj.budget / 1_000_000).toFixed(0)}M`, pageWidth / 2, 142, { align: 'center' });
+        doc.text(`Budget: ${formatBudgetJuta(proj.budget)}`, pageWidth / 2, 142, { align: 'center' });
       }
 
       // ── Executive Summary + S-Curve Slide ──

@@ -2,9 +2,8 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ProjectHeader } from '../components/ProjectHeader';
 import { ProgressMetrics } from '../components/ProgressMetrics';
 import { SCurveChart } from '../components/SCurveChart';
-import { TimelineSelector } from '../components/TimelineSelector';
 import { ProjectSelector } from '../components/ProjectSelector';
-import { Project, ProjectMetrics, PeriodType, SCurveDataPoint } from '../types';
+import { Project, ProjectMetrics, SCurveDataPoint } from '../types';
 import { fetchAllProjectsSCurveData, fetchProjects, fetchSCurveData, fetchProjectMetrics } from '../lib/supabase';
 import { generateWeeklyReport, generateAllProjectsReport } from '../lib/weeklyReportUtils';
 import html2canvas from 'html2canvas';
@@ -18,7 +17,6 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   // State
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('monthly');
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [projectYearFilter, setProjectYearFilter] = useState<number | null>(null);
   const [sCurveData, setSCurveData] = useState<SCurveDataPoint[]>([]);
@@ -53,22 +51,20 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
   useEffect(() => {
     const loadSCurveData = async () => {
       if (!selectedProjectId) {
-        const projectIds = projectYearFilter
-          ? projects
-            .filter((project) => new Date(project.startDate).getFullYear() === projectYearFilter)
-            .map((project) => project.id)
-          : undefined;
-        const data = await fetchAllProjectsSCurveData(selectedPeriod, projectIds);
+        const projectIds = projects
+          .filter((project) => projectYearFilter ? new Date(project.startDate).getFullYear() === projectYearFilter : true)
+          .map((project) => project.id);
+        const data = await fetchAllProjectsSCurveData('monthly', projectIds);
         setSCurveData(data);
         return;
       }
 
-      const data = await fetchSCurveData(selectedProjectId, selectedPeriod);
+      const data = await fetchSCurveData(selectedProjectId, 'monthly');
       setSCurveData(data);
     };
 
     loadSCurveData();
-  }, [selectedProjectId, selectedPeriod, projectYearFilter, projects]);
+  }, [selectedProjectId, projectYearFilter, projects]);
 
   // Load metrics when project changes
   useEffect(() => {
@@ -221,7 +217,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
       });
 
       const projectPart = selectedProject?.name ? sanitizeFileNamePart(selectedProject.name) : 'semua-project';
-      const periodPart = selectedPeriod === 'monthly' ? 'bulanan' : selectedPeriod === 'weekly' ? 'mingguan' : 'tahunan';
+      const periodPart = 'bulanan';
       const yearPart = selectedYear ? `-${selectedYear}` : '';
 
       const link = document.createElement('a');
@@ -297,15 +293,20 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
 
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-2">
-              Periode Tampilan
+              Filter Tahun
             </label>
-            <TimelineSelector
-              selectedPeriod={selectedPeriod}
-              onPeriodChange={setSelectedPeriod}
-              selectedYear={selectedYear}
-              availableYears={availableYears}
-              onYearChange={setSelectedYear}
-            />
+            <select
+              value={selectedYear ?? ''}
+              onChange={(e) => setSelectedYear(e.target.value ? Number(e.target.value) : null)}
+              className="w-full px-4 py-3 border border-slate-300 rounded-lg text-sm font-medium focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white shadow-sm hover:border-slate-400 transition-colors"
+            >
+              <option value="">Semua Tahun</option>
+              {availableYears.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
 
             {/* Generate Weekly Report Button */}
             {selectedProjectId && (
@@ -422,7 +423,7 @@ export const DashboardNew: React.FC<DashboardNewProps> = ({ onOpenManageDataForS
             <div ref={sCurveChartRef}>
               <SCurveChart
                 data={chartData}
-                showWeekly={selectedPeriod === 'weekly'}
+                showWeekly={false}
                 yearLabel={selectedYear?.toString()}
               />
             </div>
