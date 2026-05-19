@@ -422,8 +422,8 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
 
   // Draw pie chart
   const centerX = 62;
-  const centerY = 111;
-  const radius = 34;
+  const centerY = 98;
+  const radius = 27;
   let startAngle = -90;
 
   const statusColors: Record<string, string> = {
@@ -447,8 +447,8 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
   });
 
   doc.setFillColor(255, 255, 255);
-  doc.circle(centerX, centerY, 17, 'F');
-  doc.setFontSize(16);
+  doc.circle(centerX, centerY, 14, 'F');
+  doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(15, 23, 42);
   doc.text(String(total), centerX, centerY - 1, { align: 'center' });
@@ -457,23 +457,23 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
   doc.setTextColor(100, 116, 139);
   doc.text('activity', centerX, centerY + 6, { align: 'center' });
 
-  let legendY = 82;
+  let legendY = 74;
   const legendX = 115;
   Object.entries(statusCounts).forEach(([status, count]) => {
     const percentage = total > 0 ? (count / total) * 100 : 0;
     const color = getActivityStatusColor(status);
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(226, 232, 240);
-    doc.roundedRect(legendX, legendY - 6, 72, 10, 1.5, 1.5, 'FD');
+    doc.roundedRect(legendX, legendY - 5, 72, 8.5, 1.5, 1.5, 'FD');
     doc.setFillColor(color[0], color[1], color[2]);
     doc.circle(legendX + 5, legendY - 1, 2, 'F');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(15, 23, 42);
-    doc.text(getActivityStatusLabel(status), legendX + 10, legendY + 1);
+    doc.text(getActivityStatusLabel(status), legendX + 10, legendY + 0.5);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${count} (${percentage.toFixed(0)}%)`, legendX + 68, legendY + 1, { align: 'right' });
-    legendY += 12;
+    doc.text(`${count} (${percentage.toFixed(0)}%)`, legendX + 68, legendY + 0.5, { align: 'right' });
+    legendY += 10;
   });
 
   const tableData = activities.map(a => [
@@ -483,10 +483,10 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
     `${Number(a.weight || 0).toFixed(1)}%`,
     String(parseEvidenceField(a.evidence).filter(Boolean).length),
   ]);
-  createTable(doc, ['Code', 'Activity', 'Status', 'Bobot', 'Evidence'], tableData, MARGIN, 148, {
-    rowHeight: 6.5,
-    fontSize: 7,
-    headerFontSize: 7.5,
+  createTable(doc, ['Code', 'Activity', 'Status', 'Bobot', 'Evidence'], tableData, MARGIN, 130, {
+    rowHeight: 5.2,
+    fontSize: 5.8,
+    headerFontSize: 6.2,
     maxY: REPORT_CONTENT_BOTTOM,
   });
 
