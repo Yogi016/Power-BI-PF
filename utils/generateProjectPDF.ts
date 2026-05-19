@@ -30,6 +30,7 @@ export interface ProjectPDFData {
         endDate: string;
         status: string;
         weight: number;
+        evidence?: string[];
     }[];
     sCurveData?: {
         periodLabel: string;
@@ -102,6 +103,235 @@ async function loadImageAsDataURL(url: string): Promise<string | null> {
     } catch {
         return null;
     }
+}
+
+type EvidenceKind = 'image' | 'pdf' | 'file';
+
+interface EvidencePreview {
+    url: string;
+    label: string;
+    kind: EvidenceKind;
+    dataUrl?: string;
+    width?: number;
+    height?: number;
+}
+
+function normalizeEvidenceUrls(raw?: string[] | string | null): string[] {
+    if (!raw) return [];
+    if (Array.isArray(raw)) return raw.filter(Boolean);
+    if (typeof raw === 'string') {
+        try {
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed.filter(Boolean) : [raw].filter(Boolean);
+        } catch {
+            return raw.trim() ? [raw.trim()] : [];
+        }
+    }
+    return [];
+}
+
+function getEvidenceKind(url: string): EvidenceKind {
+    const normalized = url.toLowerCase().split(/[?#]/)[0];
+    if (/\.(jpg|jpeg|png|webp|gif|bmp)$/.test(normalized)) return 'image';
+    if (normalized.endsWith('.pdf')) return 'pdf';
+    return 'file';
+}
+
+function safeDecode(value: string): string {
+    try {
+        return decodeURIComponent(value);
+    } catch {
+        return value;
+    }
+}
+
+function getEvidenceFileName(fileUrl: string, index: number): string {
+    try {
+        const pathname = new URL(fileUrl).pathname;
+        const filename = pathname.split('/').filter(Boolean).pop();
+        return filename ? safeDecode(filename) : `Evidence ${index + 1}`;
+    } catch {
+        const filename = fileUrl.split('/').filter(Boolean).pop();
+        return filename ? safeDecode(filename) : `Evidence ${index + 1}`;
+    }
+}
+
+async function loadImagePreview(url: string): Promise<Pick<EvidencePreview, 'dataUrl' | 'width' | 'height'> | null> {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+
+        const timeout = window.setTimeout(() => resolve(null), 10000);
+
+        img.onload = () => {
+            window.clearTimeout(timeout);
+            try {
+                const maxSide = 520;
+                const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+                const canvas = document.createElement('canvas');
+                canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+                canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    resolve(null);
+                    return;
+                }
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                resolve({
+                    dataUrl: canvas.toDataURL('image/jpeg', 0.86),
+                    width: canvas.width,
+                    height: canvas.height,
+                });
+            } catch {
+                resolve(null);
+            }
+        };
+
+        img.onerror = () => {
+            window.clearTimeout(timeout);
+            resolve(null);
+        };
+
+        img.src = url;
+    });
+}
+
+async function loadPdfCoverPreview(url: string): Promise<Pick<EvidencePreview, 'dataUrl' | 'width' | 'height'> | null> {
+    let pdf: any = null;
+    try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+        const loadingTask = pdfjsLib.getDocument({ url });
+        pdf = await new Promise<any>((resolve, reject) => {
+            const timeout = window.setTimeout(() => {
+                void loadingTask.destroy();
+                reject(new Error('PDF evidence preview timed out'));
+            }, 12000);
+
+            loadingTask.promise
+                .then((value) => {
+                    window.clearTimeout(timeout);
+                    resolve(value);
+                })
+                .catch((error) => {
+                    window.clearTimeout(timeout);
+                    reject(error);
+                });
+        });
+        const page = await pdf.getPage(1);
+        const baseViewport = page.getViewport({ scale: 1 });
+        const scale = Math.min(1, 520 / Math.max(baseViewport.width, baseViewport.height));
+        const viewport = page.getViewport({ scale });
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(viewport.width));
+        canvas.height = Math.max(1, Math.round(viewport.height));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        await (page as any).render({ canvasContext: ctx, viewport }).promise;
+
+        return {
+            dataUrl: canvas.toDataURL('image/jpeg', 0.86),
+            width: canvas.width,
+            height: canvas.height,
+        };
+    } catch (error) {
+        console.warn('Failed to render PDF evidence cover:', url, error);
+        return null;
+    } finally {
+        if (pdf) {
+            void pdf.destroy();
+        }
+    }
+}
+
+async function buildEvidencePreview(url: string, index: number): Promise<EvidencePreview> {
+    const kind = getEvidenceKind(url);
+    const label = getEvidenceFileName(url, index);
+    const preview = kind === 'pdf'
+        ? await loadPdfCoverPreview(url)
+        : kind === 'image'
+            ? await loadImagePreview(url)
+            : null;
+
+    return {
+        url,
+        label,
+        kind,
+        ...(preview || {}),
+    };
+}
+
+async function buildActivityEvidencePreviews(
+    activities: ProjectPDFData['activities']
+): Promise<EvidencePreview[][]> {
+    return Promise.all(
+        activities.map((activity) =>
+            Promise.all(normalizeEvidenceUrls(activity.evidence).map((url, index) => buildEvidencePreview(url, index)))
+        )
+    );
+}
+
+function drawEvidenceFallback(doc: jsPDF, item: EvidencePreview, x: number, y: number, w: number, h: number): void {
+    const isPdf = item.kind === 'pdf';
+    doc.setFillColor(isPdf ? 254 : 248, isPdf ? 242 : 250, isPdf ? 242 : 252);
+    doc.setDrawColor(isPdf ? 248 : 203, isPdf ? 113 : 213, isPdf ? 113 : 225);
+    doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setTextColor(isPdf ? 220 : 71, isPdf ? 38 : 85, isPdf ? 38 : 105);
+    doc.text(isPdf ? 'PDF' : 'FILE', x + w / 2, y + h / 2 + 1, { align: 'center' });
+}
+
+function drawEvidencePreview(doc: jsPDF, item: EvidencePreview, x: number, y: number, w: number, h: number): void {
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+
+    if (item.dataUrl && item.width && item.height) {
+        const pad = 1.4;
+        const maxW = w - pad * 2;
+        const maxH = h - pad * 2;
+        const aspect = item.width / item.height;
+        let imageW = maxW;
+        let imageH = imageW / aspect;
+
+        if (imageH > maxH) {
+            imageH = maxH;
+            imageW = imageH * aspect;
+        }
+
+        try {
+            doc.addImage(
+                item.dataUrl,
+                'JPEG',
+                x + (w - imageW) / 2,
+                y + (h - imageH) / 2,
+                imageW,
+                imageH
+            );
+        } catch {
+            drawEvidenceFallback(doc, item, x, y, w, h);
+        }
+    } else {
+        drawEvidenceFallback(doc, item, x, y, w, h);
+    }
+
+    if (item.kind === 'pdf') {
+        doc.setFillColor(220, 38, 38);
+        doc.roundedRect(x + 1, y + 1, 7.5, 4, 0.8, 0.8, 'F');
+        doc.setFontSize(3.8);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(255, 255, 255);
+        doc.text('PDF', x + 4.75, y + 3.8, { align: 'center' });
+    }
+
+    doc.link(x, y, w, h, { url: item.url });
 }
 
 // =====================================================
@@ -208,6 +438,19 @@ export async function generateProjectPDF(data: ProjectPDFData): Promise<void> {
     y += 2;
 
     if (data.activities.length > 0) {
+        const evidencePreviews = await buildActivityEvidencePreviews(data.activities);
+        const evidenceColumnIndex = 6;
+        const getEvidenceTileCount = (items: EvidencePreview[]) => {
+            if (items.length === 0) return 0;
+            return items.length > 4 ? 4 : items.length;
+        };
+        const getEvidenceMinHeight = (items: EvidencePreview[]) => {
+            const tileCount = getEvidenceTileCount(items);
+            if (tileCount === 0) return 0;
+            const rows = Math.ceil(tileCount / 2);
+            return rows * 16 + (rows - 1) * 2 + 6;
+        };
+
         const tableData = data.activities.map((act) => [
             act.code || '-',
             act.activityName || '-',
@@ -215,46 +458,121 @@ export async function generateProjectPDF(data: ProjectPDFData): Promise<void> {
             formatDate(act.endDate),
             STATUS_LABELS[act.status] || act.status || '-',
             `${act.weight}%`,
+            '',
         ]);
 
         // Add total row
         const totalWeight = data.activities.reduce((sum, a) => sum + a.weight, 0);
-        tableData.push(['', 'TOTAL BOBOT', '', '', '', `${totalWeight.toFixed(1)}%`]);
+        tableData.push(['', 'TOTAL BOBOT', '', '', '', `${totalWeight.toFixed(1)}%`, '']);
 
         autoTable(doc, {
             startY: y,
-            head: [['Kode', 'Nama Kegiatan', 'Mulai', 'Selesai', 'Status', 'Bobot']],
+            head: [['Kode', 'Nama Kegiatan', 'Mulai', 'Selesai', 'Status', 'Bobot', 'Evidence']],
             body: tableData,
             margin: { left: margin, right: margin },
             styles: {
-                fontSize: 8,
-                cellPadding: 3,
+                fontSize: 7.2,
+                cellPadding: 2.2,
                 textColor: [15, 23, 42],
                 lineColor: [226, 232, 240],
                 lineWidth: 0.3,
+                valign: 'middle',
             },
             headStyles: {
                 fillColor: [16, 185, 129],
                 textColor: [255, 255, 255],
                 fontStyle: 'bold',
-                fontSize: 8,
+                fontSize: 7.2,
             },
             alternateRowStyles: {
                 fillColor: [248, 250, 252], // slate-50
             },
             columnStyles: {
-                0: { cellWidth: 15 },
+                0: { cellWidth: 13 },
                 1: { cellWidth: 'auto' },
-                2: { cellWidth: 28 },
-                3: { cellWidth: 28 },
-                4: { cellWidth: 28 },
-                5: { cellWidth: 18, halign: 'center' },
+                2: { cellWidth: 22 },
+                3: { cellWidth: 22 },
+                4: { cellWidth: 22 },
+                5: { cellWidth: 14, halign: 'center' },
+                6: { cellWidth: 36, halign: 'center' },
             },
             didParseCell: (hookData) => {
                 // Style the total row
                 if (hookData.row.index === tableData.length - 1 && hookData.section === 'body') {
                     hookData.cell.styles.fontStyle = 'bold';
                     hookData.cell.styles.fillColor = [241, 245, 249]; // slate-100
+                }
+
+                if (hookData.section === 'body' && hookData.column.index === evidenceColumnIndex) {
+                    hookData.cell.text = [''];
+                    const items = evidencePreviews[hookData.row.index] || [];
+                    const minHeight = getEvidenceMinHeight(items);
+                    if (minHeight > 0 && hookData.row.index < data.activities.length) {
+                        hookData.cell.styles.minCellHeight = minHeight;
+                    }
+                }
+            },
+            didDrawCell: (hookData) => {
+                if (
+                    hookData.section !== 'body' ||
+                    hookData.column.index !== evidenceColumnIndex ||
+                    hookData.row.index >= data.activities.length
+                ) {
+                    return;
+                }
+
+                const items = evidencePreviews[hookData.row.index] || [];
+                if (items.length === 0) {
+                    doc.setFontSize(7);
+                    doc.setFont('helvetica', 'normal');
+                    doc.setTextColor(148, 163, 184);
+                    doc.text('-', hookData.cell.x + hookData.cell.width / 2, hookData.cell.y + hookData.cell.height / 2 + 2, {
+                        align: 'center',
+                    });
+                    return;
+                }
+
+                const visibleItems = items.length > 4 ? items.slice(0, 3) : items.slice(0, 4);
+                const extraCount = items.length - visibleItems.length;
+                const tileCount = visibleItems.length + (extraCount > 0 ? 1 : 0);
+                const cols = Math.min(2, tileCount);
+                const gap = 2;
+                const pad = 2;
+                const tileW = (hookData.cell.width - pad * 2 - (cols - 1) * gap) / cols;
+                const tileH = 16;
+                const rows = Math.ceil(tileCount / cols);
+                const startY = hookData.cell.y + Math.max(2, (hookData.cell.height - (rows * tileH + (rows - 1) * gap)) / 2);
+
+                visibleItems.forEach((item, index) => {
+                    const col = index % cols;
+                    const row = Math.floor(index / cols);
+                    drawEvidencePreview(
+                        doc,
+                        item,
+                        hookData.cell.x + pad + col * (tileW + gap),
+                        startY + row * (tileH + gap),
+                        tileW,
+                        tileH
+                    );
+                });
+
+                if (extraCount > 0) {
+                    const index = visibleItems.length;
+                    const col = index % cols;
+                    const row = Math.floor(index / cols);
+                    const x = hookData.cell.x + pad + col * (tileW + gap);
+                    const yPos = startY + row * (tileH + gap);
+                    doc.setFillColor(241, 245, 249);
+                    doc.setDrawColor(203, 213, 225);
+                    doc.roundedRect(x, yPos, tileW, tileH, 1.5, 1.5, 'FD');
+                    doc.setFont('helvetica', 'bold');
+                    doc.setFontSize(6);
+                    doc.setTextColor(71, 85, 105);
+                    doc.text(`+${extraCount}`, x + tileW / 2, yPos + tileH / 2 - 1, { align: 'center' });
+                    doc.setFont('helvetica', 'normal');
+                    doc.setFontSize(4.8);
+                    doc.text('file', x + tileW / 2, yPos + tileH / 2 + 4, { align: 'center' });
+                    doc.link(x, yPos, tileW, tileH, { url: items[visibleItems.length]?.url || items[0].url });
                 }
             },
         });

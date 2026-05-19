@@ -982,7 +982,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       // Fetch activities for the project
       const { data: actData, error: actError } = await supabase
         .from('activities')
-        .select('code, activity_name, weight, start_date, end_date, status')
+        .select('code, activity_name, weight, evidence, start_date, end_date, status')
         .eq('project_id', pdfModalProject.id)
         .order('code', { ascending: true });
 
@@ -995,6 +995,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         endDate: a.end_date || '',
         status: a.status || 'not-started',
         weight: a.weight || 0,
+        evidence: parseEvidence(a.evidence),
       }));
 
       // Build signatures array

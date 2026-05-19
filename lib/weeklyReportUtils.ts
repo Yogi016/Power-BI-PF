@@ -623,8 +623,18 @@ async function createClosingSlide(doc: jsPDF, project: any, metrics: WeeklyMetri
 }
 
 // =====================================================
-// EVIDENCE PHOTOS SLIDE(S)
+// EVIDENCE SLIDE(S)
 // =====================================================
+
+type EvidenceFileType = 'image' | 'pdf' | 'file';
+
+interface EvidencePreviewItem {
+  url: string;
+  type: EvidenceFileType;
+  dataUrl?: string;
+  width?: number;
+  height?: number;
+}
 
 /**
  * Helper to load an image from a URL and return as HTMLImageElement
@@ -654,7 +664,7 @@ function parseEvidenceField(raw: any): string[] {
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
-    return [];
+    return typeof raw === 'string' && raw.trim() ? [raw.trim()] : [];
   }
 }
 
@@ -667,54 +677,225 @@ function isImageUrl(url: string): boolean {
   return imageExts.some(ext => lower.endsWith(ext));
 }
 
+function isPdfUrl(url: string): boolean {
+  return url.toLowerCase().split(/[?#]/)[0].endsWith('.pdf');
+}
+
+function getEvidenceFileType(url: string): EvidenceFileType {
+  if (isImageUrl(url)) return 'image';
+  if (isPdfUrl(url)) return 'pdf';
+  return 'file';
+}
+
+async function loadImagePreview(url: string): Promise<Pick<EvidencePreviewItem, 'dataUrl' | 'width' | 'height'> | null> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+
+    const timeout = window.setTimeout(() => resolve(null), 10000);
+
+    img.onload = () => {
+      window.clearTimeout(timeout);
+      try {
+        const maxSide = 620;
+        const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+        canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(null);
+          return;
+        }
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve({
+          dataUrl: canvas.toDataURL('image/jpeg', 0.86),
+          width: canvas.width,
+          height: canvas.height,
+        });
+      } catch {
+        resolve(null);
+      }
+    };
+
+    img.onerror = () => {
+      window.clearTimeout(timeout);
+      resolve(null);
+    };
+
+    img.src = url;
+  });
+}
+
+async function loadPdfCoverPreview(url: string): Promise<Pick<EvidencePreviewItem, 'dataUrl' | 'width' | 'height'> | null> {
+  let pdf: any = null;
+  try {
+    const pdfjsLib = await import('pdfjs-dist');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/build/pdf.worker.min.mjs', import.meta.url).toString();
+
+    const loadingTask = pdfjsLib.getDocument({ url });
+    pdf = await new Promise<any>((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        void loadingTask.destroy();
+        reject(new Error('PDF evidence preview timed out'));
+      }, 12000);
+
+      loadingTask.promise
+        .then((value) => {
+          window.clearTimeout(timeout);
+          resolve(value);
+        })
+        .catch((error) => {
+          window.clearTimeout(timeout);
+          reject(error);
+        });
+    });
+
+    const page = await pdf.getPage(1);
+    const baseViewport = page.getViewport({ scale: 1 });
+    const scale = Math.min(1, 620 / Math.max(baseViewport.width, baseViewport.height));
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(viewport.width));
+    canvas.height = Math.max(1, Math.round(viewport.height));
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    await (page as any).render({ canvasContext: ctx, viewport }).promise;
+    return {
+      dataUrl: canvas.toDataURL('image/jpeg', 0.86),
+      width: canvas.width,
+      height: canvas.height,
+    };
+  } catch (error) {
+    console.warn('Failed to render PDF evidence cover:', url, error);
+    return null;
+  } finally {
+    if (pdf) {
+      void pdf.destroy();
+    }
+  }
+}
+
+async function buildEvidencePreviewItem(url: string): Promise<EvidencePreviewItem> {
+  const type = getEvidenceFileType(url);
+  const preview = type === 'pdf'
+    ? await loadPdfCoverPreview(url)
+    : type === 'image'
+      ? await loadImagePreview(url)
+      : null;
+
+  return {
+    url,
+    type,
+    ...(preview || {}),
+  };
+}
+
+function drawEvidenceFallback(doc: jsPDF, item: EvidencePreviewItem, x: number, y: number, w: number, h: number): void {
+  const isPdf = item.type === 'pdf';
+  doc.setFillColor(isPdf ? 254 : 248, isPdf ? 242 : 250, isPdf ? 242 : 252);
+  doc.setDrawColor(isPdf ? 248 : 203, isPdf ? 113 : 213, isPdf ? 113 : 225);
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(isPdf ? 220 : 71, isPdf ? 38 : 85, isPdf ? 38 : 105);
+  doc.text(isPdf ? 'PDF' : 'FILE', x + w / 2, y + h / 2 + 2, { align: 'center' });
+}
+
+function drawEvidenceCard(doc: jsPDF, item: EvidencePreviewItem, x: number, y: number, w: number, h: number): void {
+  doc.setFillColor(249, 250, 251);
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(x, y, w, h, 1.5, 1.5, 'FD');
+
+  if (item.dataUrl && item.width && item.height) {
+    const pad = 2;
+    const maxW = w - 2 * pad;
+    const maxH = h - 2 * pad;
+    const aspect = item.width / item.height;
+    let dW = maxW;
+    let dH = dW / aspect;
+    if (dH > maxH) {
+      dH = maxH;
+      dW = dH * aspect;
+    }
+
+    try {
+      doc.addImage(item.dataUrl, 'JPEG', x + (w - dW) / 2, y + (h - dH) / 2, dW, dH);
+    } catch {
+      drawEvidenceFallback(doc, item, x, y, w, h);
+    }
+  } else {
+    drawEvidenceFallback(doc, item, x, y, w, h);
+  }
+
+  if (item.type === 'pdf') {
+    doc.setFillColor(220, 38, 38);
+    doc.roundedRect(x + 2, y + 2, 11, 5.5, 1, 1, 'F');
+    doc.setFontSize(5);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(255, 255, 255);
+    doc.text('PDF', x + 7.5, y + 5.8, { align: 'center' });
+  }
+
+  doc.link(x, y, w, h, { url: item.url });
+}
+
 /**
- * Create evidence photo slides — grouped by activity, compact layout
+ * Create evidence slides — grouped by activity, compact layout
  * Multiple activities pack onto one page to save space.
  */
 async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void> {
-  // Group evidence by activity
-  interface ActivityEvidence {
+  interface EvidenceGridItem {
     code: string;
     name: string;
     status: string;
-    urls: string[];
+    item: EvidencePreviewItem;
   }
 
-  const activityEvidenceList: ActivityEvidence[] = [];
+  const evidenceItems: EvidenceGridItem[] = [];
   for (const activity of activities) {
-    const allUrls = parseEvidenceField(activity.evidence);
-    const imageUrls = allUrls.filter(isImageUrl);
-    if (imageUrls.length > 0) {
-      activityEvidenceList.push({
-        code: activity.code || '',
-        name: activity.activityName || activity.activity || 'Unknown',
-        status: activity.status || 'not-started',
-        urls: imageUrls,
+    const allUrls = parseEvidenceField(activity.evidence).filter(Boolean);
+    if (allUrls.length > 0) {
+      const previews = await Promise.all(allUrls.map((url) => buildEvidencePreviewItem(url)));
+      previews.forEach((item) => {
+        evidenceItems.push({
+          code: activity.code || '',
+          name: activity.activityName || activity.activity || 'Unknown',
+          status: activity.status || 'not-started',
+          item,
+        });
       });
     }
   }
 
-  if (activityEvidenceList.length === 0) {
+  if (evidenceItems.length === 0) {
     doc.addPage();
-    addSlideHeader(doc, 'Dokumentasi Kegiatan', 6);
+    addSlideHeader(doc, 'Dokumentasi Evidence', 6);
     doc.setFontSize(14);
     doc.setTextColor(100, 100, 100);
-    doc.text('Belum ada foto dokumentasi kegiatan', PAGE_WIDTH / 2, 100, { align: 'center' });
+    doc.text('Belum ada evidence kegiatan', PAGE_WIDTH / 2, 100, { align: 'center' });
     addSlideFooter(doc, 6);
     return;
   }
 
-  // Compact layout constants
   const CONTENT_LEFT = MARGIN;
   const CONTENT_RIGHT = PAGE_WIDTH - MARGIN;
   const CONTENT_WIDTH = CONTENT_RIGHT - CONTENT_LEFT;
-  const CONTENT_TOP = 42;
+  const CONTENT_TOP = 43;
   const CONTENT_BOTTOM = PAGE_HEIGHT - 16;
-  const HEADER_H = 9;       // Compact activity header
-  const PHOTO_H = 35;       // Compact photo height
-  const PHOTO_GAP = 3;
-  const SECTION_GAP = 5;    // Gap between activity sections
-  const MAX_PER_ROW = 4;    // 4 photos per row for compactness
+  const GRID_COLUMNS = 3;
+  const GRID_ROWS = 2;
+  const ITEMS_PER_PAGE = GRID_COLUMNS * GRID_ROWS;
+  const CARD_GAP_X = 5;
+  const CARD_GAP_Y = 6;
+  const CARD_W = (CONTENT_WIDTH - (GRID_COLUMNS - 1) * CARD_GAP_X) / GRID_COLUMNS;
+  const CARD_H = (CONTENT_BOTTOM - CONTENT_TOP - (GRID_ROWS - 1) * CARD_GAP_Y) / GRID_ROWS;
+  const CARD_HEADER_H = 12;
 
   const statusColors: Record<string, [number, number, number]> = {
     'completed': [34, 197, 94],
@@ -732,113 +913,67 @@ async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void
     'on-hold': 'Ditunda',
   };
 
-  let cursorY = CONTENT_BOTTOM + 1; // Force first page
-
-  const startNewPage = () => {
+  for (let pageStart = 0; pageStart < evidenceItems.length; pageStart += ITEMS_PER_PAGE) {
+    const pageItems = evidenceItems.slice(pageStart, pageStart + ITEMS_PER_PAGE);
     doc.addPage();
-    addSlideHeader(doc, 'Dokumentasi Kegiatan', 6);
+    addSlideHeader(doc, 'Dokumentasi Evidence', 6);
     addSlideFooter(doc, 6);
-    cursorY = CONTENT_TOP;
-  };
 
-  const ensureSpace = (needed: number) => {
-    if (cursorY + needed > CONTENT_BOTTOM) {
-      startNewPage();
-    }
-  };
+    pageItems.forEach((evidence, index) => {
+      const col = index % GRID_COLUMNS;
+      const row = Math.floor(index / GRID_COLUMNS);
+      const cardX = CONTENT_LEFT + col * (CARD_W + CARD_GAP_X);
+      const cardY = CONTENT_TOP + row * (CARD_H + CARD_GAP_Y);
 
-  for (const actEvidence of activityEvidenceList) {
-    // Need at least header + 1 photo row
-    ensureSpace(HEADER_H + 2 + PHOTO_H + SECTION_GAP);
+      const statusColor = statusColors[evidence.status] || statusColors['not-started'];
+      const statusLabel = statusLabels[evidence.status] || evidence.status;
+      const title = evidence.code ? `${evidence.code}. ${evidence.name}` : evidence.name;
 
-    // ─── Compact Header ───
-    const statusColor = statusColors[actEvidence.status] || statusColors['not-started'];
-    const statusLabel = statusLabels[actEvidence.status] || actEvidence.status;
-
-    // Left accent
-    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.rect(CONTENT_LEFT, cursorY, 2.5, HEADER_H, 'F');
-
-    // Header bg
-    doc.setFillColor(245, 247, 250);
-    doc.rect(CONTENT_LEFT + 2.5, cursorY, CONTENT_WIDTH - 2.5, HEADER_H, 'F');
-
-    // Activity name
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(30, 41, 59);
-    const headerText = actEvidence.code
-      ? `${actEvidence.code}. ${actEvidence.name}`
-      : actEvidence.name;
-    const displayHeader = headerText.length > 80 ? headerText.substring(0, 77) + '...' : headerText;
-    doc.text(displayHeader, CONTENT_LEFT + 5, cursorY + 6);
-
-    // Status badge (compact)
-    doc.setFontSize(6);
-    const badgeW = doc.getTextWidth(statusLabel) + 6;
-    const badgeX = CONTENT_RIGHT - badgeW - 3;
-    doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-    doc.roundedRect(badgeX, cursorY + 1.5, badgeW, 6, 1.5, 1.5, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(255, 255, 255);
-    doc.text(statusLabel, badgeX + badgeW / 2, cursorY + 5.5, { align: 'center' });
-
-    // Photo count
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${actEvidence.urls.length} foto`, badgeX - 20, cursorY + 5.5);
-
-    cursorY += HEADER_H + 2;
-
-    // ─── Photos ───
-    const loadPromises = actEvidence.urls.map(url => loadImageFromUrl(url));
-    const images = await Promise.all(loadPromises);
-
-    const photoW = (CONTENT_WIDTH - (MAX_PER_ROW - 1) * PHOTO_GAP) / MAX_PER_ROW;
-
-    for (let i = 0; i < actEvidence.urls.length; i++) {
-      const colIdx = i % MAX_PER_ROW;
-
-      if (colIdx === 0 && i > 0) {
-        cursorY += PHOTO_H + PHOTO_GAP;
-        ensureSpace(PHOTO_H + PHOTO_GAP);
-      }
-
-      const photoX = CONTENT_LEFT + colIdx * (photoW + PHOTO_GAP);
-
-      // Cell
-      doc.setFillColor(249, 250, 251);
+      doc.setFillColor(255, 255, 255);
       doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.2);
-      doc.roundedRect(photoX, cursorY, photoW, PHOTO_H, 1.5, 1.5, 'FD');
+      doc.setLineWidth(0.25);
+      doc.roundedRect(cardX, cardY, CARD_W, CARD_H, 2, 2, 'FD');
 
-      const img = images[i];
-      const pad = 2;
-      const maxW = photoW - 2 * pad;
-      const maxH = PHOTO_H - 2 * pad;
+      doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+      doc.rect(cardX, cardY, 2.5, CARD_HEADER_H, 'F');
 
-      if (img) {
-        const aspect = img.width / img.height;
-        let dW = maxW;
-        let dH = dW / aspect;
-        if (dH > maxH) { dH = maxH; dW = dH * aspect; }
-        const imgX = photoX + (photoW - dW) / 2;
-        const imgY = cursorY + (PHOTO_H - dH) / 2;
-        try {
-          doc.addImage(img, 'JPEG', imgX, imgY, dW, dH);
-        } catch {
-          doc.setFontSize(6);
-          doc.setTextColor(160, 160, 160);
-          doc.text('Gagal', photoX + photoW / 2, cursorY + PHOTO_H / 2, { align: 'center' });
-        }
-      } else {
-        doc.setFontSize(6);
-        doc.setTextColor(180, 180, 180);
-        doc.text('Gagal', photoX + photoW / 2, cursorY + PHOTO_H / 2, { align: 'center' });
-      }
+      doc.setFillColor(248, 250, 252);
+      doc.rect(cardX + 2.5, cardY, CARD_W - 2.5, CARD_HEADER_H, 'F');
+
+      doc.setFontSize(6.3);
+      doc.setFont('helvetica', 'bold');
+      const badgeW = doc.getTextWidth(statusLabel) + 6;
+      const badgeX = cardX + CARD_W - badgeW - 3;
+      doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
+      doc.roundedRect(badgeX, cardY + 3, badgeW, 5.5, 1.4, 1.4, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.text(statusLabel, badgeX + badgeW / 2, cardY + 6.9, { align: 'center' });
+
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(30, 41, 59);
+      const titleWidth = Math.max(20, CARD_W - badgeW - 13);
+      const titleLine = doc.splitTextToSize(title, titleWidth)[0] || title;
+      doc.text(titleLine, cardX + 5, cardY + 7.3);
+
+      const previewX = cardX + 3;
+      const previewY = cardY + CARD_HEADER_H + 3;
+      const previewW = CARD_W - 6;
+      const previewH = CARD_H - CARD_HEADER_H - 6;
+      drawEvidenceCard(doc, evidence.item, previewX, previewY, previewW, previewH);
+    });
+
+    if (evidenceItems.length > ITEMS_PER_PAGE) {
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(100, 116, 139);
+      doc.text(
+        `${pageStart + 1}-${pageStart + pageItems.length} dari ${evidenceItems.length} evidence`,
+        PAGE_WIDTH / 2,
+        PAGE_HEIGHT - 10,
+        { align: 'center' }
+      );
     }
-
-    cursorY += PHOTO_H + SECTION_GAP;
   }
 }
 
