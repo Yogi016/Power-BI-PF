@@ -7,6 +7,7 @@ import { formatBudgetJuta } from '../utils/formatters';
 const PAGE_WIDTH = 297; // mm
 const PAGE_HEIGHT = 210; // mm
 const MARGIN = 20; // mm
+const REPORT_CONTENT_BOTTOM = PAGE_HEIGHT - 22; // keep body content above footer/date
 
 // Colors
 const COLORS = {
@@ -28,6 +29,46 @@ interface WeeklyMetrics {
   onHold: number;
   overallProgress: number;
   status: 'on-track' | 'at-risk' | 'delayed';
+}
+
+const ACTIVITY_STATUS_LABELS: Record<string, string> = {
+  'completed': 'Selesai',
+  'in-progress': 'Berjalan',
+  'delayed': 'Terlambat',
+  'not-started': 'Belum Mulai',
+  'on-hold': 'Ditunda',
+};
+
+const ACTIVITY_STATUS_COLORS: Record<string, [number, number, number]> = {
+  'completed': [16, 185, 129],
+  'in-progress': [59, 130, 246],
+  'delayed': [239, 68, 68],
+  'not-started': [148, 163, 184],
+  'on-hold': [245, 158, 11],
+};
+
+function getActivityStatusLabel(status?: string): string {
+  return ACTIVITY_STATUS_LABELS[status || 'not-started'] || status || '-';
+}
+
+function getActivityStatusColor(status?: string): [number, number, number] {
+  return ACTIVITY_STATUS_COLORS[status || 'not-started'] || ACTIVITY_STATUS_COLORS['not-started'];
+}
+
+function formatDateValue(value?: string | Date | null): string {
+  if (!value) return '-';
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? '-' : formatDate(date);
+}
+
+function countEvidenceItems(activities: any[]): number {
+  return activities.reduce((sum, activity) => sum + parseEvidenceField(activity.evidence).filter(Boolean).length, 0);
+}
+
+function getTotalWeight(activities: any[], predicate: (activity: any) => boolean = () => true): number {
+  return activities
+    .filter(predicate)
+    .reduce((sum, activity) => sum + Number(activity.weight || 0), 0);
 }
 
 /**
@@ -81,7 +122,7 @@ export async function generateWeeklyReport(
     await createCoverSlide(doc, project, start, end);
     doc.addPage();
 
-    await createExecutiveSummary(doc, project, metrics);
+    await createExecutiveSummary(doc, project, metrics, activities, start, end);
     doc.addPage();
 
     await createSCurveSlide(doc, scurveData);
@@ -90,21 +131,12 @@ export async function generateWeeklyReport(
     await createStatusBreakdown(doc, activities);
     doc.addPage();
 
-    await createCompletedActivities(doc, activities, start, end);
+    await createActivitySnapshot(doc, activities, start, end);
 
-    // Evidence photos slide(s) — auto-paginated
+    // Evidence slide(s) — auto-paginated
     await createEvidenceSlides(doc, activities);
 
     doc.addPage();
-    await createOngoingActivities(doc, activities);
-    doc.addPage();
-
-    await createIssuesSlide(doc, activities);
-    doc.addPage();
-
-    await createNextWeekPlan(doc, activities, end);
-    doc.addPage();
-
     await createClosingSlide(doc, project, metrics);
 
     console.log('All slides generated');
@@ -210,114 +242,102 @@ async function createCoverSlide(
 async function createExecutiveSummary(
   doc: jsPDF,
   project: any,
-  metrics: WeeklyMetrics
+  metrics: WeeklyMetrics,
+  activities: any[],
+  weekStart: Date,
+  weekEnd: Date
 ): Promise<void> {
   addSlideHeader(doc, 'Executive Summary', 2);
 
-  let yPos = 50;
-
-  // Overall Progress with visual bar
-  doc.setFontSize(13);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Overall Progress', MARGIN, yPos);
-
-  yPos += 10;
-  doc.setFontSize(36); // Reduced from 42 to 36
-  doc.setTextColor(59, 130, 246);
-  doc.text(`${metrics.overallProgress.toFixed(1)}%`, MARGIN, yPos);
-
-  // Progress bar
-  yPos += 8;
-  const barWidth = 80;
-  const barHeight = 8;
-
-  // Background bar
-  doc.setFillColor(226, 232, 240); // Gray
-  doc.roundedRect(MARGIN, yPos, barWidth, barHeight, 2, 2, 'F');
-
-  // Progress bar
-  const progressWidth = (metrics.overallProgress / 100) * barWidth;
-  doc.setFillColor(59, 130, 246); // Blue
-  doc.roundedRect(MARGIN, yPos, progressWidth, barHeight, 2, 2, 'F');
-
-  // Status indicator with badge
-  yPos += 15;
-  doc.setFontSize(14);
-
   const statusColor = metrics.status === 'on-track' ? [16, 185, 129] : metrics.status === 'at-risk' ? [245, 158, 11] : [239, 68, 68];
   const statusText = metrics.status === 'on-track' ? 'On Track' : metrics.status === 'at-risk' ? 'At Risk' : 'Delayed';
+  const evidenceCount = countEvidenceItems(activities);
+  const completedCount = activities.filter(a => a.status === 'completed').length;
+  const completedWeight = getTotalWeight(activities, a => a.status === 'completed');
+  const activeWeight = getTotalWeight(activities, a => a.status === 'in-progress');
+  const totalWeight = getTotalWeight(activities);
+  const budgetText = project.budget ? formatBudgetJuta(project.budget) : '-';
+  const timelineText = `${formatDateValue(project.startDate)} - ${formatDateValue(project.endDate)}`;
 
-  // Status badge background
-  doc.setFillColor(statusColor[0], statusColor[1], statusColor[2]);
-  doc.roundedRect(MARGIN, yPos - 5, 35, 8, 2, 2, 'F');
-
-  // Status text
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.text(statusText, MARGIN + 17.5, yPos, { align: 'center' });
-
-  // Metrics grid with better layout
-  yPos = 50;
-  const col2X = 130;
-
-  doc.setFontSize(16);
-  doc.setTextColor(0, 0, 0);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Key Metrics', col2X, yPos);
-
-  yPos += 12;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(11);
-
-  const metricsData = [
-    { label: 'Total Activities', value: metrics.totalActivities, color: [100, 116, 139] },
-    { label: 'Completed This Week', value: metrics.completedThisWeek, color: [16, 185, 129] },
-    { label: 'In Progress', value: metrics.inProgress, color: [59, 130, 246] },
-    { label: 'Delayed', value: metrics.delayed, color: [239, 68, 68] },
-    { label: 'Not Started', value: metrics.notStarted, color: [148, 163, 184] },
-    { label: 'On Hold', value: metrics.onHold, color: [245, 158, 11] },
-  ];
-
-  metricsData.forEach((item, index) => {
-    const y = yPos + (index * 10);
-
-    // Color indicator
-    doc.setFillColor(item.color[0], item.color[1], item.color[2]);
-    doc.circle(col2X, y - 2, 2, 'F');
-
-    // Label
-    doc.setTextColor(0, 0, 0);
-    doc.text(item.label + ':', col2X + 5, y);
-
-    // Value with background
-    doc.setFont('helvetica', 'bold');
-    const valueText = item.value.toString();
-    const valueWidth = doc.getTextWidth(valueText);
-
-    doc.setFillColor(241, 245, 249);
-    doc.roundedRect(col2X + 70, y - 4, valueWidth + 4, 6, 1, 1, 'F');
-
-    doc.setTextColor(item.color[0], item.color[1], item.color[2]);
-    doc.text(valueText, col2X + 72, y);
-
-    doc.setFont('helvetica', 'normal');
-  });
-
-  // Summary box
-  yPos += 75;
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(MARGIN, yPos, PAGE_WIDTH - 2 * MARGIN, 25, 3, 3, 'F');
-
-  doc.setTextColor(0, 0, 0);
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(MARGIN, 44, PAGE_WIDTH - 2 * MARGIN, 18, 2, 2, 'F');
+  doc.setTextColor(15, 23, 42);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('Summary:', MARGIN + 5, yPos + 8);
+  doc.text(project.name || 'Project', MARGIN + 5, 52);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  doc.text(`PIC: ${project.pic || '-'}  |  Periode report: ${formatDate(weekStart)} - ${formatDate(weekEnd)}`, MARGIN + 5, 58);
+
+  const cardGap = 4;
+  const cardW = (PAGE_WIDTH - 2 * MARGIN - cardGap * 3) / 4;
+  const cardH = 26;
+  const cards = [
+    { label: 'Overall Progress', value: `${metrics.overallProgress.toFixed(1)}%`, sub: `${completedCount}/${metrics.totalActivities} activity selesai`, color: [59, 130, 246] },
+    { label: 'Status Project', value: statusText, sub: metrics.delayed > 0 ? `${metrics.delayed} activity terlambat` : 'Tidak ada delay', color: statusColor },
+    { label: 'Bobot Selesai', value: `${completedWeight.toFixed(1)}%`, sub: `Total bobot: ${totalWeight.toFixed(1)}%`, color: [16, 185, 129] },
+    { label: 'Evidence', value: `${evidenceCount}`, sub: 'file/foto/dokumen', color: [139, 92, 246] },
+    { label: 'In Progress', value: `${metrics.inProgress}`, sub: `${activeWeight.toFixed(1)}% bobot berjalan`, color: [59, 130, 246] },
+    { label: 'Not Started', value: `${metrics.notStarted}`, sub: 'belum dimulai', color: [148, 163, 184] },
+    { label: 'Budget', value: budgetText, sub: project.category || 'Kategori belum diisi', color: [245, 158, 11] },
+    { label: 'Timeline', value: project.location || '-', sub: timelineText, color: [20, 184, 166] },
+  ];
+
+  cards.forEach((card, index) => {
+    const col = index % 4;
+    const row = Math.floor(index / 4);
+    const x = MARGIN + col * (cardW + cardGap);
+    const y = 70 + row * (cardH + 5);
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, cardW, cardH, 2, 2, 'FD');
+    doc.setFillColor(card.color[0], card.color[1], card.color[2]);
+    doc.rect(x, y, 2.5, cardH, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(card.label, x + 6, y + 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(String(card.value).length > 12 ? 10 : 13);
+    doc.setTextColor(card.color[0], card.color[1], card.color[2]);
+    const valueLine = doc.splitTextToSize(String(card.value), cardW - 10)[0] || String(card.value);
+    doc.text(valueLine, x + 6, y + 16);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    const subLine = doc.splitTextToSize(card.sub, cardW - 10)[0] || card.sub;
+    doc.text(subLine, x + 6, y + 22);
+  });
+
+  const yPos = 136;
+  const barWidth = PAGE_WIDTH - 2 * MARGIN;
+  const barHeight = 9;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Progress Portfolio Project', MARGIN, yPos);
+  doc.setFillColor(226, 232, 240);
+  doc.roundedRect(MARGIN, yPos + 5, barWidth, barHeight, 2, 2, 'F');
+  doc.setFillColor(59, 130, 246);
+  doc.roundedRect(MARGIN, yPos + 5, Math.min(barWidth, (metrics.overallProgress / 100) * barWidth), barHeight, 2, 2, 'F');
+  doc.setFontSize(7);
+  doc.setTextColor(100, 116, 139);
+  doc.text('0%', MARGIN, yPos + 19);
+  doc.text('100%', MARGIN + barWidth, yPos + 19, { align: 'right' });
+
+  doc.setFillColor(241, 245, 249);
+  doc.roundedRect(MARGIN, 162, PAGE_WIDTH - 2 * MARGIN, 24, 3, 3, 'F');
+
+  doc.setTextColor(15, 23, 42);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Catatan ringkas', MARGIN + 5, 170);
 
   doc.setFont('helvetica', 'normal');
-  const summaryText = `Project "${project.name}" is ${metrics.overallProgress.toFixed(1)}% complete with ${metrics.completedThisWeek} activities completed this week. Status: ${statusText}.`;
+  const summaryText = `${project.name} berada pada ${metrics.overallProgress.toFixed(1)}% progress dengan ${completedCount} activity selesai, ${metrics.inProgress} berjalan, ${metrics.notStarted} belum mulai, dan ${metrics.delayed} terlambat. Evidence tersedia sebanyak ${evidenceCount} file untuk mendukung pemeriksaan progress.`;
   const splitText = doc.splitTextToSize(summaryText, PAGE_WIDTH - 2 * MARGIN - 10);
-  doc.text(splitText, MARGIN + 5, yPos + 15);
+  doc.text(splitText.slice(0, 2), MARGIN + 5, 177);
 
   addSlideFooter(doc, 2);
 }
@@ -356,7 +376,6 @@ async function createSCurveSlide(doc: jsPDF, scurveData: any): Promise<void> {
 async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<void> {
   addSlideHeader(doc, 'Progress by Status', 4);
 
-  // Count by status
   const statusCounts = {
     'not-started': 0,
     'in-progress': 0,
@@ -372,12 +391,39 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
     }
   });
 
-  // Draw pie chart
-  const centerX = 80;
-  const centerY = 100;
-  const radius = 40;
-
   const total = Object.values(statusCounts).reduce((a, b) => a + b, 0);
+  const evidenceCount = countEvidenceItems(activities);
+  const completedWeight = getTotalWeight(activities, a => a.status === 'completed');
+  const delayedWeight = getTotalWeight(activities, a => a.status === 'delayed');
+
+  const insightCards = [
+    { label: 'Total Activity', value: String(total), color: [59, 130, 246] },
+    { label: 'Bobot Selesai', value: `${completedWeight.toFixed(1)}%`, color: [16, 185, 129] },
+    { label: 'Bobot Delay', value: `${delayedWeight.toFixed(1)}%`, color: [239, 68, 68] },
+    { label: 'Evidence', value: String(evidenceCount), color: [139, 92, 246] },
+  ];
+
+  const cardW = 55;
+  insightCards.forEach((card, index) => {
+    const x = MARGIN + index * (cardW + 4);
+    const y = 44;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, cardW, 22, 2, 2, 'FD');
+    doc.setFontSize(6.8);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text(card.label, x + 4, y + 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(card.color[0], card.color[1], card.color[2]);
+    doc.text(card.value, x + 4, y + 16);
+  });
+
+  // Draw pie chart
+  const centerX = 62;
+  const centerY = 111;
+  const radius = 34;
   let startAngle = -90;
 
   const statusColors: Record<string, string> = {
@@ -389,7 +435,7 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
   };
 
   Object.entries(statusCounts).forEach(([status, count]) => {
-    if (count > 0) {
+    if (count > 0 && total > 0) {
       const percentage = (count / total) * 100;
       const angle = (percentage / 100) * 360;
 
@@ -400,197 +446,137 @@ async function createStatusBreakdown(doc: jsPDF, activities: any[]): Promise<voi
     }
   });
 
-  // Legend
-  let legendY = 60;
-  const legendX = 150;
-
-  doc.setFontSize(12);
+  doc.setFillColor(255, 255, 255);
+  doc.circle(centerX, centerY, 17, 'F');
+  doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text('Status Distribution', legendX, legendY);
-  legendY += 10;
-
+  doc.setTextColor(15, 23, 42);
+  doc.text(String(total), centerX, centerY - 1, { align: 'center' });
+  doc.setFontSize(6.5);
   doc.setFont('helvetica', 'normal');
+  doc.setTextColor(100, 116, 139);
+  doc.text('activity', centerX, centerY + 6, { align: 'center' });
+
+  let legendY = 82;
+  const legendX = 115;
   Object.entries(statusCounts).forEach(([status, count]) => {
-    doc.setFillColor(statusColors[status]);
-    doc.rect(legendX, legendY - 3, 5, 5, 'F');
+    const percentage = total > 0 ? (count / total) * 100 : 0;
+    const color = getActivityStatusColor(status);
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(legendX, legendY - 6, 72, 10, 1.5, 1.5, 'FD');
+    doc.setFillColor(color[0], color[1], color[2]);
+    doc.circle(legendX + 5, legendY - 1, 2, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(15, 23, 42);
+    doc.text(getActivityStatusLabel(status), legendX + 10, legendY + 1);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${count} (${percentage.toFixed(0)}%)`, legendX + 68, legendY + 1, { align: 'right' });
+    legendY += 12;
+  });
 
-    doc.setTextColor(0, 0, 0);
-    const label = status.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-    doc.text(`${label}: ${count} (${((count / total) * 100).toFixed(1)}%)`, legendX + 8, legendY);
-
-    legendY += 8;
+  const tableData = activities.map(a => [
+    a.code || '-',
+    a.activityName || a.activity || '-',
+    getActivityStatusLabel(a.status),
+    `${Number(a.weight || 0).toFixed(1)}%`,
+    String(parseEvidenceField(a.evidence).filter(Boolean).length),
+  ]);
+  createTable(doc, ['Code', 'Activity', 'Status', 'Bobot', 'Evidence'], tableData, MARGIN, 148, {
+    rowHeight: 6.5,
+    fontSize: 7,
+    headerFontSize: 7.5,
+    maxY: REPORT_CONTENT_BOTTOM,
   });
 
   addSlideFooter(doc, 4);
 }
 
 /**
- * Slide 5: Completed Activities
+ * Slide 5: Activity Snapshot
  */
-async function createCompletedActivities(
+async function createActivitySnapshot(
   doc: jsPDF,
   activities: any[],
   weekStart: Date,
   weekEnd: Date
 ): Promise<void> {
-  addSlideHeader(doc, 'Completed Activities This Week', 5);
+  addSlideHeader(doc, 'Activity Snapshot', 5);
 
-  const completed = activities.filter(a => a.status === 'completed');
+  const completedThisWeek = activities.filter(a => {
+    if (a.status !== 'completed' || !a.endDate) return false;
+    const endDate = new Date(a.endDate);
+    return endDate >= weekStart && endDate <= weekEnd;
+  }).length;
 
-  if (completed.length === 0) {
+  const snapshotCards = [
+    { label: 'Selesai Minggu Ini', value: String(completedThisWeek), color: [16, 185, 129] },
+    { label: 'Sedang Berjalan', value: String(activities.filter(a => a.status === 'in-progress').length), color: [59, 130, 246] },
+    { label: 'Terlambat', value: String(activities.filter(a => a.status === 'delayed').length), color: [239, 68, 68] },
+    { label: 'Belum Mulai', value: String(activities.filter(a => a.status === 'not-started').length), color: [148, 163, 184] },
+    { label: 'Total Evidence', value: String(countEvidenceItems(activities)), color: [139, 92, 246] },
+  ];
+
+  const cardW = (PAGE_WIDTH - 2 * MARGIN - 16) / 5;
+  snapshotCards.forEach((card, index) => {
+    const x = MARGIN + index * (cardW + 4);
+    const y = 44;
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, y, cardW, 22, 2, 2, 'FD');
+    doc.setFillColor(card.color[0], card.color[1], card.color[2]);
+    doc.rect(x, y, 2, 22, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(100, 116, 139);
+    doc.text(card.label, x + 5, y + 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(13);
+    doc.setTextColor(card.color[0], card.color[1], card.color[2]);
+    doc.text(card.value, x + 5, y + 17);
+  });
+
+  if (activities.length === 0) {
     doc.setFontSize(14);
     doc.setTextColor(100, 100, 100);
-    doc.text('No activities completed this week', PAGE_WIDTH / 2, 100, { align: 'center' });
-  } else {
-    // Table
-    const tableData = completed.slice(0, 10).map(a => [
-      a.code || '',
-      a.activityName || a.activity || '',
-      a.pic || '',
-      a.endDate || '',
-    ]);
-
-    createTable(doc,
-      ['Code', 'Activity Name', 'PIC', 'Completion Date'],
-      tableData,
-      MARGIN,
-      55
-    );
-
-    if (completed.length > 10) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`... and ${completed.length - 10} more`, MARGIN, 170);
-    }
+    doc.text('Belum ada activity', PAGE_WIDTH / 2, 110, { align: 'center' });
+    addSlideFooter(doc, 5);
+    return;
   }
+
+  const sortedActivities = [...activities].sort((a, b) => {
+    const order: Record<string, number> = { delayed: 0, 'in-progress': 1, completed: 2, 'not-started': 3, 'on-hold': 4 };
+    return (order[a.status] ?? 5) - (order[b.status] ?? 5);
+  });
+
+  const tableData = sortedActivities.map(a => [
+    a.code || '-',
+    a.activityName || a.activity || '-',
+    getActivityStatusLabel(a.status),
+    formatDateValue(a.startDate),
+    formatDateValue(a.endDate),
+    `${Number(a.weight || 0).toFixed(1)}%`,
+  ]);
+
+  createTable(doc,
+    ['Code', 'Activity', 'Status', 'Mulai', 'Selesai', 'Bobot'],
+    tableData,
+    MARGIN,
+    76,
+    {
+      rowHeight: 6.8,
+      fontSize: 7,
+      headerFontSize: 7.5,
+      maxY: REPORT_CONTENT_BOTTOM,
+    }
+  );
 
   addSlideFooter(doc, 5);
 }
 
 /**
- * Slide 6: Ongoing Activities
- */
-async function createOngoingActivities(doc: jsPDF, activities: any[]): Promise<void> {
-  addSlideHeader(doc, 'Ongoing Activities', 6);
-
-  const ongoing = activities.filter(a => a.status === 'in-progress');
-
-  if (ongoing.length === 0) {
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text('No ongoing activities', PAGE_WIDTH / 2, 100, { align: 'center' });
-  } else {
-    const tableData = ongoing.slice(0, 10).map(a => [
-      a.code || '',
-      a.activityName || a.activity || '',
-      a.pic || '',
-      a.endDate || '',
-    ]);
-
-    createTable(doc,
-      ['Code', 'Activity Name', 'PIC', 'Expected End'],
-      tableData,
-      MARGIN,
-      55
-    );
-
-    if (ongoing.length > 10) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`... and ${ongoing.length - 10} more`, MARGIN, 170);
-    }
-  }
-
-  addSlideFooter(doc, 6);
-}
-
-/**
- * Slide 7: Issues & Delays
- */
-async function createIssuesSlide(doc: jsPDF, activities: any[]): Promise<void> {
-  addSlideHeader(doc, 'Issues & Delays', 7);
-
-  const delayed = activities.filter(a => a.status === 'delayed');
-
-  if (delayed.length === 0) {
-    doc.setFontSize(14);
-    doc.setTextColor(16, 185, 129); // Green
-    doc.text('✓ No delayed activities', PAGE_WIDTH / 2, 100, { align: 'center' });
-  } else {
-    const tableData = delayed.slice(0, 10).map(a => [
-      a.code || '',
-      a.activityName || a.activity || '',
-      a.pic || '',
-      a.endDate || '',
-    ]);
-
-    createTable(doc,
-      ['Code', 'Activity Name', 'PIC', 'Due Date'],
-      tableData,
-      MARGIN,
-      55
-    );
-
-    if (delayed.length > 10) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`... and ${delayed.length - 10} more`, MARGIN, 170);
-    }
-  }
-
-  addSlideFooter(doc, 7);
-}
-
-/**
- * Slide 8: Next Week Plan
- */
-async function createNextWeekPlan(doc: jsPDF, activities: any[], weekEnd: Date): Promise<void> {
-  addSlideHeader(doc, 'Next Week Plan', 8);
-
-  const nextWeekStart = new Date(weekEnd);
-  nextWeekStart.setDate(nextWeekStart.getDate() + 1);
-
-  const nextWeekEnd = new Date(nextWeekStart);
-  nextWeekEnd.setDate(nextWeekEnd.getDate() + 7);
-
-  // Activities starting next week
-  const upcoming = activities.filter(a => {
-    if (!a.startDate) return false;
-    const start = new Date(a.startDate);
-    return start >= nextWeekStart && start <= nextWeekEnd;
-  });
-
-  if (upcoming.length === 0) {
-    doc.setFontSize(14);
-    doc.setTextColor(100, 100, 100);
-    doc.text('No activities scheduled for next week', PAGE_WIDTH / 2, 100, { align: 'center' });
-  } else {
-    const tableData = upcoming.slice(0, 10).map(a => [
-      a.code || '',
-      a.activityName || a.activity || '',
-      a.pic || '',
-      a.startDate || '',
-    ]);
-
-    createTable(doc,
-      ['Code', 'Activity Name', 'PIC', 'Start Date'],
-      tableData,
-      MARGIN,
-      55
-    );
-
-    if (upcoming.length > 10) {
-      doc.setFontSize(10);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`... and ${upcoming.length - 10} more`, MARGIN, 170);
-    }
-  }
-
-  addSlideFooter(doc, 8);
-}
-
-/**
- * Slide 9: Closing Slide
+ * Closing Slide
  */
 async function createClosingSlide(doc: jsPDF, project: any, metrics: WeeklyMetrics): Promise<void> {
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -1015,29 +1001,42 @@ function createTable(
   headers: string[],
   data: string[][],
   x: number,
-  y: number
+  y: number,
+  options: {
+    rowHeight?: number;
+    fontSize?: number;
+    headerFontSize?: number;
+    maxY?: number;
+    overflowLabel?: string;
+  } = {}
 ): void {
   const colWidth = (PAGE_WIDTH - 2 * MARGIN) / headers.length;
-  const rowHeight = 8;
+  const rowHeight = options.rowHeight || 8;
+  const maxY = options.maxY || REPORT_CONTENT_BOTTOM;
+  const headerFontSize = options.headerFontSize || 11;
+  const bodyFontSize = options.fontSize || 10;
+  const maxRows = Math.max(0, Math.floor((maxY - y - rowHeight) / rowHeight));
+  const visibleRows = data.slice(0, maxRows);
 
   // Header
   doc.setFillColor(59, 130, 246);
   doc.rect(x, y, PAGE_WIDTH - 2 * MARGIN, rowHeight, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(headerFontSize);
   doc.setFont('helvetica', 'bold');
 
   headers.forEach((header, i) => {
-    doc.text(header, x + i * colWidth + 2, y + 6);
+    const text = doc.splitTextToSize(header, colWidth - 4)[0] || header;
+    doc.text(text, x + i * colWidth + 2, y + rowHeight - 2.2);
   });
 
   // Rows
   doc.setTextColor(0, 0, 0);
   doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
+  doc.setFontSize(bodyFontSize);
 
-  data.forEach((row, rowIndex) => {
+  visibleRows.forEach((row, rowIndex) => {
     const rowY = y + (rowIndex + 1) * rowHeight;
 
     // Alternate row colors
@@ -1047,10 +1046,19 @@ function createTable(
     }
 
     row.forEach((cell, colIndex) => {
-      const text = cell.length > 30 ? cell.substring(0, 27) + '...' : cell;
-      doc.text(text, x + colIndex * colWidth + 2, rowY + 6);
+      const rawText = String(cell || '-');
+      const text = doc.splitTextToSize(rawText, colWidth - 4)[0] || rawText;
+      doc.text(text, x + colIndex * colWidth + 2, rowY + rowHeight - 2.2);
     });
   });
+
+  if (data.length > visibleRows.length) {
+    const noteY = Math.min(maxY, y + (visibleRows.length + 1) * rowHeight + 5);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(Math.max(6.5, bodyFontSize - 0.5));
+    doc.setTextColor(100, 116, 139);
+    doc.text(options.overflowLabel || `+${data.length - visibleRows.length} baris lain`, x, noteY);
+  }
 }
 
 function drawPieSlice(
