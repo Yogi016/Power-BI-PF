@@ -6,8 +6,8 @@ import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, Wo
 // STORAGE VALIDATION HELPERS
 // =====================================================
 
-const MAX_EVIDENCE_SIZE_MB = 20;
-const MAX_DOCUMENT_SIZE_MB = 50;
+const MAX_EVIDENCE_SIZE_MB = 100;
+const MAX_DOCUMENT_SIZE_MB = 100;
 
 const ALLOWED_EVIDENCE_TYPES = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
