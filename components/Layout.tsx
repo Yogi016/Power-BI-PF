@@ -12,7 +12,8 @@ import {
   Calendar,
   Briefcase,
   PenTool,
-  FileText
+  FileText,
+  FolderArchive
 } from 'lucide-react';
 import { PageView } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -26,14 +27,33 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, children }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const { user, signOut } = useAuth();
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
+  const handleMobilePageChange = (page: PageView) => {
+    onPageChange(page);
+    setMobileMoreOpen(false);
+  };
 
   // Derive user display info
   const userEmail = user?.email || '';
   const userName = user?.user_metadata?.name || user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
   const userInitials = userName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
+  const mobilePrimaryItems = [
+    { page: PageView.DASHBOARD, icon: <LayoutDashboard className="h-[18px] w-[18px]" />, label: 'Dash', ariaLabel: 'Dashboard' },
+    { page: PageView.MANAGE_DATA, icon: <Database className="h-[18px] w-[18px]" />, label: 'Data', ariaLabel: 'Manage Data' },
+    { page: PageView.DOKUMEN, icon: <FileText className="h-[18px] w-[18px]" />, label: 'Dok', ariaLabel: 'Dokumen' },
+    { page: PageView.ASSET, icon: <FolderArchive className="h-[18px] w-[18px]" />, label: 'Asset', ariaLabel: 'Asset' },
+  ];
+  const mobileMoreItems = [
+    { page: PageView.WORK, icon: <Briefcase className="h-[18px] w-[18px]" />, label: 'Work', ariaLabel: 'Work' },
+    { page: PageView.GANTT, icon: <BarChart3 className="h-[18px] w-[18px]" />, label: 'Gantt Chart', ariaLabel: 'Gantt Chart' },
+    { page: PageView.CALENDAR, icon: <Calendar className="h-[18px] w-[18px]" />, label: 'Calendar', ariaLabel: 'Calendar' },
+    { page: PageView.LING_SIGN, icon: <PenTool className="h-[18px] w-[18px]" />, label: 'Ling-Sign', ariaLabel: 'Ling-Sign' },
+    { page: PageView.CLOSE_PROJECT, icon: <Archive className="h-[18px] w-[18px]" />, label: 'Close Project', ariaLabel: 'Close Project' },
+  ];
+  const isMoreActive = mobileMoreItems.some(item => item.page === activePage);
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden font-sans">
@@ -173,6 +193,20 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             <FileText size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DOKUMEN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Dokumen</span>}
           </button>
+
+          <button
+            onClick={() => {
+              onPageChange(PageView.ASSET);
+              closeMobileMenu();
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.ASSET
+              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              } ${collapsed ? 'justify-center' : ''}`}
+          >
+            <FolderArchive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.ASSET ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            {!collapsed && <span>Asset</span>}
+          </button>
         </nav>
 
         <div className="p-3 border-t border-slate-200 shrink-0 space-y-1">
@@ -246,28 +280,57 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
         </div>
 
         {/* Mobile Bottom Navigation */}
+        {mobileMoreOpen && (
+          <button
+            type="button"
+            className="fixed inset-0 z-30 bg-slate-900/10 lg:hidden"
+            onClick={() => setMobileMoreOpen(false)}
+            aria-label="Tutup menu lainnya"
+          />
+        )}
         <nav
           className="lg:hidden fixed inset-x-0 bottom-0 z-40 px-3 pb-2"
           style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 0.5rem)' }}
           aria-label="Navigasi utama mobile"
         >
-          <div className="mx-auto max-w-md rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_-10px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
-            <div className="grid grid-cols-7 gap-1">
-            {[
-              { page: PageView.DASHBOARD, icon: <LayoutDashboard className="h-[18px] w-[18px]" />, label: 'Dash', ariaLabel: 'Dashboard' },
-              { page: PageView.MANAGE_DATA, icon: <Database className="h-[18px] w-[18px]" />, label: 'Data', ariaLabel: 'Manage Data' },
-              { page: PageView.WORK, icon: <Briefcase className="h-[18px] w-[18px]" />, label: 'Work', ariaLabel: 'Work' },
-              { page: PageView.GANTT, icon: <BarChart3 className="h-[18px] w-[18px]" />, label: 'Gantt', ariaLabel: 'Gantt Chart' },
-              { page: PageView.LING_SIGN, icon: <PenTool className="h-[18px] w-[18px]" />, label: 'Sign', ariaLabel: 'Ling-Sign' },
-              { page: PageView.DOKUMEN, icon: <FileText className="h-[18px] w-[18px]" />, label: 'Dok', ariaLabel: 'Dokumen' },
-              { page: PageView.CLOSE_PROJECT, icon: <Archive className="h-[18px] w-[18px]" />, label: 'Close', ariaLabel: 'Close Project' },
-            ].map(({ page, icon, label, ariaLabel }) => {
+          <div className="relative mx-auto max-w-md">
+            {mobileMoreOpen && (
+              <div className="absolute inset-x-0 bottom-[8rem] rounded-2xl border border-slate-200/80 bg-white/95 p-2 shadow-[0_-14px_34px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+                <div className="grid grid-cols-2 gap-1">
+                  {mobileMoreItems.map(({ page, icon, label, ariaLabel }) => {
+                    const isActive = activePage === page;
+
+                    return (
+                      <button
+                        key={page}
+                        onClick={() => handleMobilePageChange(page)}
+                        aria-label={ariaLabel}
+                        aria-current={isActive ? 'page' : undefined}
+                        className={`flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${isActive
+                          ? 'bg-emerald-50 text-emerald-700'
+                          : 'text-slate-600 active:bg-slate-100'
+                        }`}
+                      >
+                        <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl ${isActive ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                          {icon}
+                        </span>
+                        <span className="min-w-0 truncate">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-2xl border border-slate-200/80 bg-white/95 p-1.5 shadow-[0_-10px_30px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+              <div className="grid grid-cols-5 gap-1">
+            {mobilePrimaryItems.map(({ page, icon, label, ariaLabel }) => {
               const isActive = activePage === page;
 
               return (
               <button
                 key={page}
-                onClick={() => onPageChange(page)}
+                onClick={() => handleMobilePageChange(page)}
                   aria-label={ariaLabel}
                   aria-current={isActive ? 'page' : undefined}
                   className={`group relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 ${isActive
@@ -290,6 +353,30 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               </button>
               );
             })}
+                <button
+                  type="button"
+                  onClick={() => setMobileMoreOpen(prev => !prev)}
+                  aria-label="Menu lainnya"
+                  aria-expanded={mobileMoreOpen}
+                  className={`group relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 ${isMoreActive || mobileMoreOpen
+                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                    : 'text-slate-500 active:bg-slate-100'
+                  }`}
+                >
+                  {(isMoreActive || mobileMoreOpen) && (
+                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.45)]" />
+                  )}
+                  <span className={`grid h-7 w-7 place-items-center rounded-xl transition-all duration-200 ${isMoreActive || mobileMoreOpen
+                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm'
+                    : 'text-slate-500 group-active:scale-95'
+                    }`}>
+                    <Menu className="h-[18px] w-[18px]" />
+                  </span>
+                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isMoreActive || mobileMoreOpen ? 'text-emerald-700' : 'text-slate-500'}`}>
+                    Lainnya
+                  </span>
+                </button>
+            </div>
             </div>
           </div>
         </nav>

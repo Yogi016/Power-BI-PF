@@ -441,7 +441,7 @@ export const AIChatbot: React.FC = () => {
       className={`fixed z-[70] ${
         open
           ? 'inset-x-2 bottom-2 sm:inset-auto sm:bottom-6 sm:right-6'
-          : 'bottom-24 right-4 lg:bottom-6 lg:right-6'
+          : 'inset-x-3 bottom-[5.35rem] sm:inset-auto sm:bottom-6 sm:right-6'
       }`}
     >
       <DantaStyles />
@@ -595,13 +595,22 @@ export const AIChatbot: React.FC = () => {
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="group relative flex h-14 items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 text-white shadow-xl transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-200"
+          className="group relative mx-auto flex h-11 w-full max-w-md items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white/95 px-2.5 text-left text-slate-600 shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur-xl transition hover:border-emerald-200 hover:bg-white focus:outline-none focus:ring-4 focus:ring-emerald-100 sm:mx-0 sm:h-14 sm:w-auto sm:justify-center sm:gap-2 sm:rounded-lg sm:border-0 sm:bg-emerald-600 sm:px-4 sm:text-white sm:shadow-xl sm:backdrop-blur-none sm:hover:bg-emerald-700 sm:focus:ring-emerald-200"
           aria-label="Buka Danta.AI"
           title="Danta.AI"
         >
-          <MessageCircle size={24} />
-          <span className="hidden text-sm font-black tracking-normal sm:block">Danta.AI</span>
-          <span className="absolute -right-1 -top-1 h-3 w-3 rounded-full border-2 border-white bg-emerald-400" />
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100 transition group-hover:bg-emerald-100 sm:h-auto sm:w-auto sm:bg-transparent sm:text-white sm:ring-0 sm:group-hover:bg-transparent">
+            <MessageCircle size={19} />
+          </span>
+          <span className="min-w-0 flex-1 sm:flex-none">
+            <span className="block truncate text-[13px] font-bold leading-tight text-slate-800 sm:hidden">Tanya Danta.AI</span>
+            <span className="hidden text-sm font-black tracking-normal sm:block">Danta.AI</span>
+            <span className="block truncate text-[10px] font-medium leading-tight text-slate-400 sm:hidden">Insight project, evidence, dokumen</span>
+          </span>
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-sm transition group-hover:bg-emerald-700 sm:hidden">
+            <Send size={15} />
+          </span>
+          <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400 sm:-right-1 sm:-top-1 sm:h-3 sm:w-3" />
         </button>
       )}
     </div>

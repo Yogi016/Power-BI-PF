@@ -90,6 +90,21 @@ export enum PageView {
   WORK = 'work',
   LING_SIGN = 'ling_sign',
   DOKUMEN = 'dokumen',
+  ASSET = 'asset',
+}
+
+export interface AssetItem {
+  id: string;
+  fileName: string;
+  fileUrl: string;
+  storageKey: string;
+  mimeType?: string | null;
+  fileSize: number;
+  category?: string | null;
+  description?: string | null;
+  uploadedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // =====================================================

@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem } from '../types';
+import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem, AssetItem } from '../types';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
 
 // =====================================================
@@ -8,6 +8,7 @@ import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, Wo
 
 const MAX_EVIDENCE_SIZE_MB = 100;
 const MAX_DOCUMENT_SIZE_MB = 100;
+const MAX_ASSET_SIZE_MB = 100;
 
 const ALLOWED_EVIDENCE_TYPES = [
   'image/jpeg', 'image/png', 'image/webp', 'image/gif',
@@ -33,6 +34,12 @@ function validateFile(
   }
   if (!allowedTypes.includes(file.type)) {
     throw new Error(`Format file tidak didukung: ${file.type || 'unknown'}. Format yang diizinkan: ${allowedTypes.join(', ')}`);
+  }
+}
+
+function validateFileSize(file: File, maxSizeMB: number): void {
+  if (file.size > maxSizeMB * 1024 * 1024) {
+    throw new Error(`Ukuran file melebihi batas ${maxSizeMB}MB. Ukuran saat ini: ${(file.size / 1024 / 1024).toFixed(1)}MB`);
   }
 }
 
@@ -1628,7 +1635,7 @@ export async function uploadEvidence(
 /**
  * Delete an evidence file from storage using its public URL.
  */
-export async function deleteStorageFileByUrl(publicUrl: string, bucketType: 'evidence' | 'dokumen' = 'evidence'): Promise<boolean> {
+export async function deleteStorageFileByUrl(publicUrl: string, bucketType: 'evidence' | 'dokumen' | 'assets' = 'evidence'): Promise<boolean> {
   try {
     if (!publicUrl) return false;
 
@@ -2245,5 +2252,156 @@ export async function uploadDocumentFile(file: File, categoryName: string): Prom
   } catch (error) {
     console.error('Error uploading document file:', error);
     return null;
+  }
+}
+
+// =====================================================
+// ASSET OPERATIONS
+// =====================================================
+
+function mapAssetRow(row: any): AssetItem {
+  return {
+    id: row.id,
+    fileName: row.file_name,
+    fileUrl: row.file_url,
+    storageKey: row.storage_key,
+    mimeType: row.mime_type,
+    fileSize: Number(row.file_size || 0),
+    category: row.category,
+    description: row.description,
+    uploadedBy: row.uploaded_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function sanitizeAssetFileName(fileName: string): string {
+  const cleaned = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_');
+  return cleaned || 'asset.bin';
+}
+
+function buildAssetStorageKey(fileName: string): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const timestamp = now.getTime();
+  return `assets/${year}/${month}/${timestamp}_${sanitizeAssetFileName(fileName)}`;
+}
+
+export async function uploadAssetFile(file: File): Promise<{ url: string; storageKey: string } | null> {
+  try {
+    validateFileSize(file, MAX_ASSET_SIZE_MB);
+
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
+
+    if (!workerUrl || !publicUrlBase) {
+      throw new Error('Konfigurasi R2 belum lengkap. Periksa VITE_R2_WORKER_URL dan VITE_R2_PUBLIC_URL.');
+    }
+
+    const storageKey = buildAssetStorageKey(file.name);
+    const response = await fetch(`${workerUrl}/${storageKey}`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `Upload via worker failed: ${response.status}`);
+    }
+
+    return {
+      url: `${publicUrlBase}/${storageKey}`,
+      storageKey,
+    };
+  } catch (error) {
+    console.error('Error uploading asset file:', error);
+    throw error;
+  }
+}
+
+export async function fetchAssets(): Promise<AssetItem[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('assets')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []).map(mapAssetRow);
+  } catch (error) {
+    console.error('Error fetching assets:', error);
+    return [];
+  }
+}
+
+export async function createAsset(asset: Omit<AssetItem, 'id' | 'createdAt' | 'updatedAt'>): Promise<AssetItem | null> {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('assets')
+      .insert({
+        file_name: asset.fileName,
+        file_url: asset.fileUrl,
+        storage_key: asset.storageKey,
+        mime_type: asset.mimeType || null,
+        file_size: asset.fileSize,
+        category: asset.category || null,
+        description: asset.description || null,
+        uploaded_by: asset.uploadedBy || null,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return mapAssetRow(data);
+  } catch (error) {
+    console.error('Error creating asset:', error);
+    return null;
+  }
+}
+
+export async function updateAsset(
+  id: string,
+  updates: Pick<Partial<AssetItem>, 'fileName' | 'category' | 'description'>
+): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const updateData: any = {};
+    if (updates.fileName !== undefined) updateData.file_name = updates.fileName;
+    if (updates.category !== undefined) updateData.category = updates.category || null;
+    if (updates.description !== undefined) updateData.description = updates.description || null;
+
+    const { error } = await supabase
+      .from('assets')
+      .update(updateData)
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating asset:', error);
+    return false;
+  }
+}
+
+export async function deleteAsset(asset: AssetItem): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const storageDeleted = await deleteStorageFileByUrl(asset.fileUrl, 'assets');
+    if (!storageDeleted) return false;
+
+    const { error } = await supabase
+      .from('assets')
+      .delete()
+      .eq('id', asset.id);
+
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error deleting asset:', error);
+    return false;
   }
 }
