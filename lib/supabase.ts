@@ -2280,15 +2280,27 @@ function sanitizeAssetFileName(fileName: string): string {
   return cleaned || 'asset.bin';
 }
 
-function buildAssetStorageKey(fileName: string): string {
+function sanitizeAssetFolderName(folderName: string): string {
+  const cleaned = folderName
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return cleaned || 'general';
+}
+
+function buildAssetStorageKey(fileName: string, folderName?: string): string {
   const now = new Date();
+  const timestamp = now.getTime();
+  if (folderName?.trim()) {
+    return `assets/${sanitizeAssetFolderName(folderName)}/${timestamp}_${sanitizeAssetFileName(fileName)}`;
+  }
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
-  const timestamp = now.getTime();
   return `assets/${year}/${month}/${timestamp}_${sanitizeAssetFileName(fileName)}`;
 }
 
-export async function uploadAssetFile(file: File): Promise<{ url: string; storageKey: string } | null> {
+export async function uploadAssetFile(file: File, folderName?: string): Promise<{ url: string; storageKey: string } | null> {
   try {
     validateFileSize(file, MAX_ASSET_SIZE_MB);
 
@@ -2299,7 +2311,7 @@ export async function uploadAssetFile(file: File): Promise<{ url: string; storag
       throw new Error('Konfigurasi R2 belum lengkap. Periksa VITE_R2_WORKER_URL dan VITE_R2_PUBLIC_URL.');
     }
 
-    const storageKey = buildAssetStorageKey(file.name);
+    const storageKey = buildAssetStorageKey(file.name, folderName);
     const response = await fetch(`${workerUrl}/${storageKey}`, {
       method: 'PUT',
       body: file,

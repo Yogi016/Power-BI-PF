@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
+  ChevronDown,
   ChevronUp,
   CheckCircle2,
   Download,
@@ -8,6 +9,7 @@ import {
   ExternalLink,
   File,
   FileArchive,
+  Folder,
   FileImage,
   FileText,
   Loader2,
@@ -22,6 +24,16 @@ import { createAsset, deleteAsset, fetchAssets, updateAsset, uploadAssetFile } f
 import { useAuth } from '../context/AuthContext';
 
 type Notice = { type: 'success' | 'error'; message: string } | null;
+
+interface AssetFolderGroup {
+  id: string;
+  name: string;
+  category: string | null;
+  description: string | null;
+  assets: AssetItem[];
+  totalSize: number;
+  latestCreatedAt?: string;
+}
 
 const formatBytes = (bytes: number) => {
   if (!bytes) return '0 B';
@@ -48,6 +60,18 @@ const getAssetIcon = (asset: AssetItem) => {
   return File;
 };
 
+const getAssetFolderName = (asset: AssetItem) => {
+  if (asset.category?.trim()) return asset.category.trim();
+
+  const keyParts = asset.storageKey.split('/');
+  const possibleFolder = keyParts[0] === 'assets' ? keyParts[1] : '';
+  if (possibleFolder && !/^\d{4}$/.test(possibleFolder)) {
+    return possibleFolder.replace(/_/g, ' ');
+  }
+
+  return 'Tanpa Folder';
+};
+
 export const AssetPage: React.FC = () => {
   const { user } = useAuth();
   const [assets, setAssets] = useState<AssetItem[]>([]);
@@ -60,6 +84,7 @@ export const AssetPage: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [notice, setNotice] = useState<Notice>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
   const [editForm, setEditForm] = useState({ fileName: '', category: '', description: '' });
   const [deleteTarget, setDeleteTarget] = useState<AssetItem | null>(null);
@@ -94,6 +119,44 @@ export const AssetPage: React.FC = () => {
     });
   }, [assets, categoryFilter, searchQuery]);
 
+  const assetGroups = useMemo<AssetFolderGroup[]>(() => {
+    const groupMap = new Map<string, AssetFolderGroup>();
+
+    filteredAssets.forEach(asset => {
+      const folderName = getAssetFolderName(asset);
+      const groupId = folderName.toLowerCase();
+      const existing = groupMap.get(groupId);
+
+      if (existing) {
+        existing.assets.push(asset);
+        existing.totalSize += asset.fileSize;
+        if (!existing.latestCreatedAt || (asset.createdAt && asset.createdAt > existing.latestCreatedAt)) {
+          existing.latestCreatedAt = asset.createdAt;
+        }
+        return;
+      }
+
+      groupMap.set(groupId, {
+        id: groupId,
+        name: folderName,
+        category: asset.category || null,
+        description: asset.description || null,
+        assets: [asset],
+        totalSize: asset.fileSize,
+        latestCreatedAt: asset.createdAt,
+      });
+    });
+
+    return Array.from(groupMap.values())
+      .map(group => ({
+        ...group,
+        assets: group.assets.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+      }))
+      .sort((a, b) => (b.latestCreatedAt || '').localeCompare(a.latestCreatedAt || ''));
+  }, [filteredAssets]);
+
+  const visibleAssetCount = filteredAssets.length;
+
   const resetUploadForm = () => {
     setSelectedFiles([]);
     setCategory('');
@@ -110,8 +173,12 @@ export const AssetPage: React.FC = () => {
     setNotice(null);
     try {
       let successCount = 0;
+      const uploadFolderName = category.trim()
+        || selectedFiles[0]?.name.replace(/\.[^.]+$/, '')
+        || 'general';
+
       for (const file of selectedFiles) {
-        const uploaded = await uploadAssetFile(file);
+        const uploaded = await uploadAssetFile(file, uploadFolderName);
         if (!uploaded) throw new Error(`Upload gagal untuk ${file.name}.`);
 
         const created = await createAsset({
@@ -327,7 +394,7 @@ export const AssetPage: React.FC = () => {
             <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Daftar Asset</h2>
-                <p className="text-xs text-slate-500">{filteredAssets.length} dari {assets.length} asset ditampilkan</p>
+                <p className="text-xs text-slate-500">{assetGroups.length} folder, {visibleAssetCount} dari {assets.length} asset ditampilkan</p>
               </div>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -356,7 +423,7 @@ export const AssetPage: React.FC = () => {
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               Memuat asset...
             </div>
-          ) : filteredAssets.length === 0 ? (
+          ) : assetGroups.length === 0 ? (
             <div className="flex h-52 flex-col items-center justify-center px-4 text-center text-slate-500">
               <File className="mb-3 h-10 w-10 text-slate-300" />
               <p className="text-sm font-medium text-slate-700">Belum ada asset yang cocok.</p>
@@ -364,57 +431,93 @@ export const AssetPage: React.FC = () => {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {filteredAssets.map(asset => {
-                const Icon = getAssetIcon(asset);
+              {assetGroups.map(group => {
+                const expanded = expandedFolders[group.id] || false;
                 return (
-                  <div key={asset.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex min-w-0 items-start gap-3">
-                      <div className="grid h-10 w-10 flex-shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
-                        <Icon size={20} />
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-slate-900">{asset.fileName}</p>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                          <span>{formatBytes(asset.fileSize)}</span>
-                          <span>{formatDate(asset.createdAt)}</span>
-                          {asset.category && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">{asset.category}</span>}
+                  <div key={group.id} className="bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setExpandedFolders(prev => ({ ...prev, [group.id]: !expanded }))}
+                      className="flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="flex min-w-0 items-start gap-3">
+                        <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                          <Folder size={22} />
                         </div>
-                        {asset.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{asset.description}</p>}
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-bold text-slate-900">{group.name}</p>
+                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                            <span>{group.assets.length} file</span>
+                            <span>{formatBytes(group.totalSize)}</span>
+                            <span>{formatDate(group.latestCreatedAt)}</span>
+                            {group.category && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">{group.category}</span>}
+                          </div>
+                          {group.description && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{group.description}</p>}
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                      <a
-                        href={asset.fileUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        <ExternalLink size={14} />
-                        Buka
-                      </a>
-                      <a
-                        href={asset.fileUrl}
-                        download={asset.fileName}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        <Download size={14} />
-                        Unduh
-                      </a>
-                      <button
-                        onClick={() => startEdit(asset)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                      >
-                        <Edit3 size={14} />
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => setDeleteTarget(asset)}
-                        className="inline-flex items-center gap-1.5 rounded-md border border-red-200 px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
-                      >
-                        <Trash2 size={14} />
-                        Hapus
-                      </button>
-                    </div>
+                      <span className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 sm:self-center">
+                        {expanded ? 'Tutup' : 'Lihat file'}
+                        <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                      </span>
+                    </button>
+
+                    {expanded && (
+                      <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50">
+                        {group.assets.map(asset => {
+                          const Icon = getAssetIcon(asset);
+                          return (
+                            <div key={asset.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:pl-16">
+                              <div className="flex min-w-0 items-start gap-3">
+                                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
+                                  <Icon size={18} />
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-semibold text-slate-900">{asset.fileName}</p>
+                                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                    <span>{formatBytes(asset.fileSize)}</span>
+                                    <span>{formatDate(asset.createdAt)}</span>
+                                  </div>
+                                  {asset.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{asset.description}</p>}
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                <a
+                                  href={asset.fileUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  <ExternalLink size={14} />
+                                  Buka
+                                </a>
+                                <a
+                                  href={asset.fileUrl}
+                                  download={asset.fileName}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  <Download size={14} />
+                                  Unduh
+                                </a>
+                                <button
+                                  onClick={() => startEdit(asset)}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                >
+                                  <Edit3 size={14} />
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => setDeleteTarget(asset)}
+                                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                                >
+                                  <Trash2 size={14} />
+                                  Hapus
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
