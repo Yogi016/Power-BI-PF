@@ -13,6 +13,7 @@ import {
   FileImage,
   FileText,
   Loader2,
+  MapPin,
   Plus,
   Search,
   Trash2,
@@ -28,12 +29,29 @@ type Notice = { type: 'success' | 'error'; message: string } | null;
 interface AssetFolderGroup {
   id: string;
   name: string;
+  location: string;
   category: string | null;
   description: string | null;
   assets: AssetItem[];
   totalSize: number;
   latestCreatedAt?: string;
 }
+
+interface AssetLocationGroup {
+  id: string;
+  name: string;
+  folders: AssetFolderGroup[];
+  assetCount: number;
+  totalSize: number;
+  latestCreatedAt?: string;
+}
+
+type FolderEditTarget =
+  | { type: 'location'; name: string; assets: AssetItem[] }
+  | { type: 'folder'; name: string; location: string; assets: AssetItem[] };
+
+const DEFAULT_LOCATION = 'Tanpa Lokasi';
+const DEFAULT_FOLDER = 'Tanpa Folder';
 
 const formatBytes = (bytes: number) => {
   if (!bytes) return '0 B';
@@ -60,16 +78,69 @@ const getAssetIcon = (asset: AssetItem) => {
   return File;
 };
 
-const getAssetFolderName = (asset: AssetItem) => {
-  if (asset.category?.trim()) return asset.category.trim();
+const normalizePathPart = (value: string) => value.trim().replace(/\s+/g, ' ');
 
-  const keyParts = asset.storageKey.split('/');
-  const possibleFolder = keyParts[0] === 'assets' ? keyParts[1] : '';
-  if (possibleFolder && !/^\d{4}$/.test(possibleFolder)) {
-    return possibleFolder.replace(/_/g, ' ');
+const getDisplayPathPart = (value: string) => normalizePathPart(value.replace(/_/g, ' '));
+
+const getStorageFolderSegments = (asset: AssetItem) => {
+  const keyParts = asset.storageKey.split('/').filter(Boolean);
+  if (keyParts[0] !== 'assets') return [];
+
+  const folderParts = keyParts.slice(1, -1);
+  const isDatedFallback = /^\d{4}$/.test(folderParts[0] || '') && /^\d{2}$/.test(folderParts[1] || '');
+  return isDatedFallback ? [] : folderParts.map(getDisplayPathPart).filter(Boolean);
+};
+
+const getAssetPathParts = (asset: AssetItem) => {
+  const categoryParts = (asset.category || '')
+    .split(/[\\/]/)
+    .map(normalizePathPart)
+    .filter(Boolean);
+
+  if (categoryParts.length >= 2) {
+    return {
+      location: categoryParts[0],
+      folder: categoryParts.slice(1).join(' / '),
+    };
   }
 
-  return 'Tanpa Folder';
+  if (categoryParts.length === 1) {
+    return {
+      location: DEFAULT_LOCATION,
+      folder: categoryParts[0],
+    };
+  }
+
+  const storageParts = getStorageFolderSegments(asset);
+  if (storageParts.length >= 2) {
+    return {
+      location: storageParts[0],
+      folder: storageParts.slice(1).join(' / '),
+    };
+  }
+
+  if (storageParts.length === 1) {
+    return {
+      location: DEFAULT_LOCATION,
+      folder: storageParts[0],
+    };
+  }
+
+  return {
+    location: DEFAULT_LOCATION,
+    folder: DEFAULT_FOLDER,
+  };
+};
+
+const buildAssetCategoryPath = (location: string, folder: string) => {
+  const cleanLocation = normalizePathPart(location);
+  const cleanFolder = normalizePathPart(folder);
+
+  if (cleanLocation && cleanLocation !== DEFAULT_LOCATION) {
+    return `${cleanLocation}/${cleanFolder || DEFAULT_FOLDER}`;
+  }
+
+  return cleanFolder || null;
 };
 
 export const AssetPage: React.FC = () => {
@@ -78,15 +149,19 @@ export const AssetPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [category, setCategory] = useState('');
+  const [location, setLocation] = useState('');
+  const [folderName, setFolderName] = useState('');
   const [description, setDescription] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [locationFilter, setLocationFilter] = useState('all');
   const [notice, setNotice] = useState<Notice>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [expandedLocations, setExpandedLocations] = useState<Record<string, boolean>>({});
   const [expandedFolders, setExpandedFolders] = useState<Record<string, boolean>>({});
   const [editingAsset, setEditingAsset] = useState<AssetItem | null>(null);
-  const [editForm, setEditForm] = useState({ fileName: '', category: '', description: '' });
+  const [editForm, setEditForm] = useState({ fileName: '', location: '', folderName: '', description: '' });
+  const [folderEditTarget, setFolderEditTarget] = useState<FolderEditTarget | null>(null);
+  const [folderEditForm, setFolderEditForm] = useState({ location: '', folderName: '' });
   const [deleteTarget, setDeleteTarget] = useState<AssetItem | null>(null);
 
   const loadAssets = async () => {
@@ -100,32 +175,57 @@ export const AssetPage: React.FC = () => {
     loadAssets();
   }, []);
 
-  const categories = useMemo(() => {
-    const unique = new Set(assets.map(asset => asset.category).filter(Boolean) as string[]);
+  const locations = useMemo(() => {
+    const unique = new Set(assets.map(asset => getAssetPathParts(asset).location));
     return Array.from(unique).sort((a, b) => a.localeCompare(b));
   }, [assets]);
 
   const filteredAssets = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return assets.filter(asset => {
-      const matchesCategory = categoryFilter === 'all' || asset.category === categoryFilter;
+      const pathParts = getAssetPathParts(asset);
+      const matchesLocation = locationFilter === 'all' || pathParts.location === locationFilter;
       const matchesQuery = !query || [
         asset.fileName,
+        pathParts.location,
+        pathParts.folder,
         asset.category || '',
         asset.description || '',
         asset.uploadedBy || '',
       ].some(value => value.toLowerCase().includes(query));
-      return matchesCategory && matchesQuery;
+      return matchesLocation && matchesQuery;
     });
-  }, [assets, categoryFilter, searchQuery]);
+  }, [assets, locationFilter, searchQuery]);
 
-  const assetGroups = useMemo<AssetFolderGroup[]>(() => {
-    const groupMap = new Map<string, AssetFolderGroup>();
+  const assetLocationGroups = useMemo<AssetLocationGroup[]>(() => {
+    const locationMap = new Map<string, AssetLocationGroup & { folderMap: Map<string, AssetFolderGroup> }>();
 
     filteredAssets.forEach(asset => {
-      const folderName = getAssetFolderName(asset);
-      const groupId = folderName.toLowerCase();
-      const existing = groupMap.get(groupId);
+      const pathParts = getAssetPathParts(asset);
+      const locationId = pathParts.location.toLowerCase();
+      const folderId = `${locationId}::${pathParts.folder.toLowerCase()}`;
+      let locationGroup = locationMap.get(locationId);
+
+      if (!locationGroup) {
+        locationGroup = {
+          id: locationId,
+          name: pathParts.location,
+          folders: [],
+          folderMap: new Map<string, AssetFolderGroup>(),
+          assetCount: 0,
+          totalSize: 0,
+          latestCreatedAt: asset.createdAt,
+        };
+        locationMap.set(locationId, locationGroup);
+      }
+
+      locationGroup.assetCount += 1;
+      locationGroup.totalSize += asset.fileSize;
+      if (!locationGroup.latestCreatedAt || (asset.createdAt && asset.createdAt > locationGroup.latestCreatedAt)) {
+        locationGroup.latestCreatedAt = asset.createdAt;
+      }
+
+      const existing = locationGroup.folderMap.get(folderId);
 
       if (existing) {
         existing.assets.push(asset);
@@ -136,30 +236,40 @@ export const AssetPage: React.FC = () => {
         return;
       }
 
-      groupMap.set(groupId, {
-        id: groupId,
-        name: folderName,
+      const folderGroup: AssetFolderGroup = {
+        id: folderId,
+        name: pathParts.folder,
+        location: pathParts.location,
         category: asset.category || null,
         description: asset.description || null,
         assets: [asset],
         totalSize: asset.fileSize,
         latestCreatedAt: asset.createdAt,
-      });
+      };
+      locationGroup.folderMap.set(folderId, folderGroup);
+      locationGroup.folders.push(folderGroup);
     });
 
-    return Array.from(groupMap.values())
-      .map(group => ({
-        ...group,
-        assets: group.assets.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+    return Array.from(locationMap.values())
+      .map(locationGroup => ({
+        ...locationGroup,
+        folders: locationGroup.folders
+          .map(group => ({
+            ...group,
+            assets: group.assets.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')),
+          }))
+          .sort((a, b) => (b.latestCreatedAt || '').localeCompare(a.latestCreatedAt || '')),
       }))
       .sort((a, b) => (b.latestCreatedAt || '').localeCompare(a.latestCreatedAt || ''));
   }, [filteredAssets]);
 
   const visibleAssetCount = filteredAssets.length;
+  const visibleFolderCount = assetLocationGroups.reduce((total, group) => total + group.folders.length, 0);
 
   const resetUploadForm = () => {
     setSelectedFiles([]);
-    setCategory('');
+    setLocation('');
+    setFolderName('');
     setDescription('');
   };
 
@@ -173,12 +283,13 @@ export const AssetPage: React.FC = () => {
     setNotice(null);
     try {
       let successCount = 0;
-      const uploadFolderName = category.trim()
+      const uploadFolderName = folderName.trim()
         || selectedFiles[0]?.name.replace(/\.[^.]+$/, '')
         || 'general';
+      const categoryPath = buildAssetCategoryPath(location, uploadFolderName);
 
       for (const file of selectedFiles) {
-        const uploaded = await uploadAssetFile(file, uploadFolderName);
+        const uploaded = await uploadAssetFile(file, categoryPath || uploadFolderName);
         if (!uploaded) throw new Error(`Upload gagal untuk ${file.name}.`);
 
         const created = await createAsset({
@@ -187,7 +298,7 @@ export const AssetPage: React.FC = () => {
           storageKey: uploaded.storageKey,
           mimeType: file.type || 'application/octet-stream',
           fileSize: file.size,
-          category: category.trim() || null,
+          category: categoryPath,
           description: description.trim() || null,
           uploadedBy: user?.email || null,
         });
@@ -209,10 +320,12 @@ export const AssetPage: React.FC = () => {
   };
 
   const startEdit = (asset: AssetItem) => {
+    const pathParts = getAssetPathParts(asset);
     setEditingAsset(asset);
     setEditForm({
       fileName: asset.fileName,
-      category: asset.category || '',
+      location: pathParts.location === DEFAULT_LOCATION ? '' : pathParts.location,
+      folderName: pathParts.folder === DEFAULT_FOLDER ? '' : pathParts.folder,
       description: asset.description || '',
     });
   };
@@ -221,7 +334,7 @@ export const AssetPage: React.FC = () => {
     if (!editingAsset || !editForm.fileName.trim()) return;
     const ok = await updateAsset(editingAsset.id, {
       fileName: editForm.fileName.trim(),
-      category: editForm.category.trim() || null,
+      category: buildAssetCategoryPath(editForm.location, editForm.folderName),
       description: editForm.description.trim() || null,
     });
     if (ok) {
@@ -230,6 +343,67 @@ export const AssetPage: React.FC = () => {
       setNotice({ type: 'success', message: 'Metadata asset berhasil diperbarui.' });
     } else {
       setNotice({ type: 'error', message: 'Metadata asset gagal diperbarui.' });
+    }
+  };
+
+  const startEditLocationGroup = (group: AssetLocationGroup) => {
+    setFolderEditTarget({
+      type: 'location',
+      name: group.name,
+      assets: group.folders.flatMap(folder => folder.assets),
+    });
+    setFolderEditForm({
+      location: group.name === DEFAULT_LOCATION ? '' : group.name,
+      folderName: '',
+    });
+  };
+
+  const startEditFolderGroup = (group: AssetFolderGroup) => {
+    setFolderEditTarget({
+      type: 'folder',
+      name: group.name,
+      location: group.location,
+      assets: group.assets,
+    });
+    setFolderEditForm({
+      location: group.location === DEFAULT_LOCATION ? '' : group.location,
+      folderName: group.name === DEFAULT_FOLDER ? '' : group.name,
+    });
+  };
+
+  const handleUpdateFolderGroup = async () => {
+    if (!folderEditTarget) return;
+
+    let updates: Promise<boolean>[];
+
+    if (folderEditTarget.type === 'location') {
+      const nextLocation = normalizePathPart(folderEditForm.location);
+      updates = folderEditTarget.assets.map(asset => {
+        const pathParts = getAssetPathParts(asset);
+        return updateAsset(asset.id, {
+          category: buildAssetCategoryPath(nextLocation, pathParts.folder),
+        });
+      });
+    } else {
+      const nextFolderName = folderEditForm.folderName.trim() || folderEditTarget.name;
+      updates = folderEditTarget.assets.map(asset => updateAsset(asset.id, {
+        category: buildAssetCategoryPath(folderEditForm.location, nextFolderName),
+      }));
+    }
+
+    const results = await Promise.all(updates);
+
+    if (results.every(Boolean)) {
+      setFolderEditTarget(null);
+      await loadAssets();
+      setNotice({
+        type: 'success',
+        message: folderEditTarget.type === 'location'
+          ? 'Nama lokasi berhasil diperbarui.'
+          : 'Nama folder berhasil diperbarui.',
+      });
+    } else {
+      setNotice({ type: 'error', message: 'Sebagian asset gagal diperbarui. Coba ulangi lagi.' });
     }
   };
 
@@ -289,7 +463,7 @@ export const AssetPage: React.FC = () => {
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Upload Asset</h2>
-                <p className="mt-0.5 text-xs text-slate-500">File masuk ke folder R2 `assets/`.</p>
+                <p className="mt-0.5 text-xs text-slate-500">File masuk ke struktur R2 assets/lokasi/folder.</p>
               </div>
               <button
                 type="button"
@@ -358,11 +532,20 @@ export const AssetPage: React.FC = () => {
 
               <div className="space-y-3">
                 <div>
-                  <label className="mb-1 block text-sm font-medium text-slate-700">Kategori</label>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Lokasi</label>
                   <input
-                    value={category}
-                    onChange={event => setCategory(event.target.value)}
-                    placeholder="Contoh: Kontrak, Foto, Template"
+                    value={location}
+                    onChange={event => setLocation(event.target.value)}
+                    placeholder="Contoh: Blora"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Folder / Petak</label>
+                  <input
+                    value={folderName}
+                    onChange={event => setFolderName(event.target.value)}
+                    placeholder="Contoh: Petak 160 Ngrawoh Bodeh Menden"
                     className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                   />
                 </div>
@@ -394,27 +577,27 @@ export const AssetPage: React.FC = () => {
             <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <h2 className="text-sm font-bold text-slate-900">Daftar Asset</h2>
-                <p className="text-xs text-slate-500">{assetGroups.length} folder, {visibleAssetCount} dari {assets.length} asset ditampilkan</p>
+                <p className="text-xs text-slate-500">{assetLocationGroups.length} lokasi, {visibleFolderCount} folder, {visibleAssetCount} dari {assets.length} asset ditampilkan</p>
               </div>
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={searchQuery}
-                onChange={event => setSearchQuery(event.target.value)}
-                placeholder="Cari nama file, kategori, deskripsi..."
-                className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-              />
-            </div>
-            <select
-              value={categoryFilter}
-              onChange={event => setCategoryFilter(event.target.value)}
-              className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
-            >
-              <option value="all">Semua kategori</option>
-              {categories.map(item => <option key={item} value={item}>{item}</option>)}
-            </select>
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={searchQuery}
+                  onChange={event => setSearchQuery(event.target.value)}
+                  placeholder="Cari nama file, lokasi, folder, deskripsi..."
+                  className="w-full rounded-lg border border-slate-200 py-2 pl-9 pr-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <select
+                value={locationFilter}
+                onChange={event => setLocationFilter(event.target.value)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+              >
+                <option value="all">Semua lokasi</option>
+                {locations.map(item => <option key={item} value={item}>{item}</option>)}
+              </select>
             </div>
           </div>
 
@@ -423,7 +606,7 @@ export const AssetPage: React.FC = () => {
               <Loader2 className="mr-2 h-5 w-5 animate-spin" />
               Memuat asset...
             </div>
-          ) : assetGroups.length === 0 ? (
+          ) : assetLocationGroups.length === 0 ? (
             <div className="flex h-52 flex-col items-center justify-center px-4 text-center text-slate-500">
               <File className="mb-3 h-10 w-10 text-slate-300" />
               <p className="text-sm font-medium text-slate-700">Belum ada asset yang cocok.</p>
@@ -431,88 +614,152 @@ export const AssetPage: React.FC = () => {
             </div>
           ) : (
             <div className="divide-y divide-slate-100">
-              {assetGroups.map(group => {
-                const expanded = expandedFolders[group.id] || false;
+              {assetLocationGroups.map(locationGroup => {
+                const locationExpanded = expandedLocations[locationGroup.id] ?? assetLocationGroups.length === 1;
                 return (
-                  <div key={group.id} className="bg-white">
-                    <button
-                      type="button"
-                      onClick={() => setExpandedFolders(prev => ({ ...prev, [group.id]: !expanded }))}
-                      className="flex w-full flex-col gap-3 p-4 text-left transition-colors hover:bg-slate-50 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
-                          <Folder size={22} />
+                  <div key={locationGroup.id} className="bg-white">
+                    <div className="flex w-full flex-col gap-3 bg-slate-50/80 p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => setExpandedLocations(prev => ({ ...prev, [locationGroup.id]: !locationExpanded }))}
+                        className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                      >
+                        <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-teal-50 text-teal-700">
+                          <MapPin size={21} />
                         </div>
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-bold text-slate-900">{group.name}</p>
+                          <p className="truncate text-sm font-bold text-slate-900">{locationGroup.name}</p>
                           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                            <span>{group.assets.length} file</span>
-                            <span>{formatBytes(group.totalSize)}</span>
-                            <span>{formatDate(group.latestCreatedAt)}</span>
-                            {group.category && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-700">{group.category}</span>}
+                            <span>{locationGroup.folders.length} folder</span>
+                            <span>{locationGroup.assetCount} file</span>
+                            <span>{formatBytes(locationGroup.totalSize)}</span>
+                            <span>{formatDate(locationGroup.latestCreatedAt)}</span>
                           </div>
-                          {group.description && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{group.description}</p>}
                         </div>
+                      </button>
+                      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <button
+                          type="button"
+                          onClick={() => startEditLocationGroup(locationGroup)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          <Edit3 size={14} />
+                          Edit nama
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedLocations(prev => ({ ...prev, [locationGroup.id]: !locationExpanded }))}
+                          className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          {locationExpanded ? 'Tutup' : 'Lihat folder'}
+                          <ChevronDown size={14} className={`transition-transform ${locationExpanded ? 'rotate-180' : ''}`} />
+                        </button>
                       </div>
-                      <span className="inline-flex items-center gap-2 self-start rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 sm:self-center">
-                        {expanded ? 'Tutup' : 'Lihat file'}
-                        <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-                      </span>
-                    </button>
+                    </div>
 
-                    {expanded && (
-                      <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50">
-                        {group.assets.map(asset => {
-                          const Icon = getAssetIcon(asset);
+                    {locationExpanded && (
+                      <div className="divide-y divide-slate-100 border-t border-slate-100">
+                        {locationGroup.folders.map(group => {
+                          const expanded = expandedFolders[group.id] || false;
                           return (
-                            <div key={asset.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:pl-16">
-                              <div className="flex min-w-0 items-start gap-3">
-                                <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
-                                  <Icon size={18} />
-                                </div>
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-semibold text-slate-900">{asset.fileName}</p>
-                                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-                                    <span>{formatBytes(asset.fileSize)}</span>
-                                    <span>{formatDate(asset.createdAt)}</span>
+                            <div key={group.id} className="bg-white">
+                              <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:pl-8">
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedFolders(prev => ({ ...prev, [group.id]: !expanded }))}
+                                  className="flex min-w-0 flex-1 items-start gap-3 text-left"
+                                >
+                                  <div className="grid h-11 w-11 flex-shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
+                                    <Folder size={22} />
                                   </div>
-                                  {asset.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{asset.description}</p>}
+                                  <div className="min-w-0">
+                                    <p className="truncate text-sm font-bold text-slate-900">{group.name}</p>
+                                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                      <span>{group.assets.length} file</span>
+                                      <span>{formatBytes(group.totalSize)}</span>
+                                      <span>{formatDate(group.latestCreatedAt)}</span>
+                                      <span className="rounded-full bg-teal-50 px-2 py-0.5 font-medium text-teal-700">{group.location}</span>
+                                    </div>
+                                    {group.description && <p className="mt-1 line-clamp-1 text-xs text-slate-500">{group.description}</p>}
+                                  </div>
+                                </button>
+                                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                  <button
+                                    type="button"
+                                    onClick={() => startEditFolderGroup(group)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  >
+                                    <Edit3 size={14} />
+                                    Edit nama
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setExpandedFolders(prev => ({ ...prev, [group.id]: !expanded }))}
+                                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                                  >
+                                    {expanded ? 'Tutup' : 'Lihat file'}
+                                    <ChevronDown size={14} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                                  </button>
                                 </div>
                               </div>
-                              <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-                                <a
-                                  href={asset.fileUrl}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                  <ExternalLink size={14} />
-                                  Buka
-                                </a>
-                                <a
-                                  href={asset.fileUrl}
-                                  download={asset.fileName}
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                  <Download size={14} />
-                                  Unduh
-                                </a>
-                                <button
-                                  onClick={() => startEdit(asset)}
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                                >
-                                  <Edit3 size={14} />
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => setDeleteTarget(asset)}
-                                  className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
-                                >
-                                  <Trash2 size={14} />
-                                  Hapus
-                                </button>
-                              </div>
+
+                              {expanded && (
+                                <div className="divide-y divide-slate-100 border-t border-slate-100 bg-slate-50/50">
+                                  {group.assets.map(asset => {
+                                    const Icon = getAssetIcon(asset);
+                                    return (
+                                      <div key={asset.id} className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:pl-20">
+                                        <div className="flex min-w-0 items-start gap-3">
+                                          <div className="grid h-9 w-9 flex-shrink-0 place-items-center rounded-lg bg-white text-slate-600 shadow-sm ring-1 ring-slate-200">
+                                            <Icon size={18} />
+                                          </div>
+                                          <div className="min-w-0">
+                                            <p className="truncate text-sm font-semibold text-slate-900">{asset.fileName}</p>
+                                            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
+                                              <span>{formatBytes(asset.fileSize)}</span>
+                                              <span>{formatDate(asset.createdAt)}</span>
+                                            </div>
+                                            {asset.description && <p className="mt-1 line-clamp-2 text-xs text-slate-500">{asset.description}</p>}
+                                          </div>
+                                        </div>
+                                        <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                                          <a
+                                            href={asset.fileUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                          >
+                                            <ExternalLink size={14} />
+                                            Buka
+                                          </a>
+                                          <a
+                                            href={asset.fileUrl}
+                                            download={asset.fileName}
+                                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                          >
+                                            <Download size={14} />
+                                            Unduh
+                                          </a>
+                                          <button
+                                            onClick={() => startEdit(asset)}
+                                            className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                                          >
+                                            <Edit3 size={14} />
+                                            Edit
+                                          </button>
+                                          <button
+                                            onClick={() => setDeleteTarget(asset)}
+                                            className="inline-flex items-center gap-1.5 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50"
+                                          >
+                                            <Trash2 size={14} />
+                                            Hapus
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -546,10 +793,20 @@ export const AssetPage: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-slate-700">Kategori</label>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Lokasi</label>
                 <input
-                  value={editForm.category}
-                  onChange={event => setEditForm(prev => ({ ...prev, category: event.target.value }))}
+                  value={editForm.location}
+                  onChange={event => setEditForm(prev => ({ ...prev, location: event.target.value }))}
+                  placeholder="Contoh: Blora"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Folder / Petak</label>
+                <input
+                  value={editForm.folderName}
+                  onChange={event => setEditForm(prev => ({ ...prev, folderName: event.target.value }))}
+                  placeholder="Contoh: Petak 160 Ngrawoh Bodeh Menden"
                   className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
                 />
               </div>
@@ -568,6 +825,58 @@ export const AssetPage: React.FC = () => {
                 Batal
               </button>
               <button onClick={handleUpdate} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                Simpan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {folderEditTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm" onClick={() => setFolderEditTarget(null)} />
+          <div className="relative w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="text-base font-bold text-slate-900">
+                  {folderEditTarget.type === 'location' ? 'Edit nama lokasi' : 'Edit nama folder'}
+                </h2>
+                <p className="mt-0.5 text-xs text-slate-500">{folderEditTarget.name}</p>
+              </div>
+              <button onClick={() => setFolderEditTarget(null)} className="rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="space-y-3 p-5">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-slate-700">Lokasi</label>
+                <input
+                  value={folderEditForm.location}
+                  onChange={event => setFolderEditForm(prev => ({ ...prev, location: event.target.value }))}
+                  placeholder="Contoh: Blora"
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                />
+              </div>
+              {folderEditTarget.type === 'folder' && (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-slate-700">Folder / Petak</label>
+                  <input
+                    value={folderEditForm.folderName}
+                    onChange={event => setFolderEditForm(prev => ({ ...prev, folderName: event.target.value }))}
+                    placeholder="Contoh: Petak 160 Ngrawoh Bodeh Menden"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+                  />
+                </div>
+              )}
+              <p className="text-xs text-slate-500">
+                {folderEditTarget.assets.length} file akan ditandai mengikuti nama ini.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+              <button onClick={() => setFolderEditTarget(null)} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50">
+                Batal
+              </button>
+              <button onClick={handleUpdateFolderGroup} className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
                 Simpan
               </button>
             </div>

@@ -2283,6 +2283,22 @@ function sanitizeAssetFileName(fileName: string): string {
 function sanitizeAssetFolderName(folderName: string): string {
   const cleaned = folderName
     .trim()
+    .split(/[\\/]/)
+    .map(segment => segment
+      .trim()
+      .replace(/[^a-zA-Z0-9._-]/g, '_')
+      .replace(/_+/g, '_')
+      .replace(/^_+|_+$/g, '')
+    )
+    .filter(Boolean)
+    .join('/');
+
+  return cleaned || 'general';
+}
+
+function sanitizeAssetFolderSegment(folderName: string): string {
+  const cleaned = folderName
+    .trim()
     .replace(/[^a-zA-Z0-9._-]/g, '_')
     .replace(/_+/g, '_')
     .replace(/^_+|_+$/g, '');
@@ -2297,7 +2313,7 @@ function buildAssetStorageKey(fileName: string, folderName?: string): string {
   }
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, '0');
-  return `assets/${year}/${month}/${timestamp}_${sanitizeAssetFileName(fileName)}`;
+  return `assets/${sanitizeAssetFolderSegment(String(year))}/${sanitizeAssetFolderSegment(month)}/${timestamp}_${sanitizeAssetFileName(fileName)}`;
 }
 
 export async function uploadAssetFile(file: File, folderName?: string): Promise<{ url: string; storageKey: string } | null> {
