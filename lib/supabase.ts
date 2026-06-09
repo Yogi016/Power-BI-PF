@@ -7,7 +7,7 @@ import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, Wo
 // =====================================================
 
 const MAX_EVIDENCE_SIZE_MB = 100;
-const MAX_DOCUMENT_SIZE_MB = 100;
+const MAX_DOCUMENT_SIZE_MB = 300;
 const MAX_ASSET_SIZE_MB = 100;
 
 const ALLOWED_EVIDENCE_TYPES = [
