@@ -31,6 +31,19 @@ interface WeeklyMetrics {
   status: 'on-track' | 'at-risk' | 'delayed';
 }
 
+interface WeeklyReportAssetSource {
+  id: string;
+  title: string;
+  subtitle: string;
+  url: string;
+  meta?: string;
+}
+
+interface WeeklyReportOptions {
+  assetSources?: WeeklyReportAssetSource[];
+  draftSummary?: string;
+}
+
 const ACTIVITY_STATUS_LABELS: Record<string, string> = {
   'completed': 'Selesai',
   'in-progress': 'Berjalan',
@@ -77,7 +90,8 @@ function getTotalWeight(activities: any[], predicate: (activity: any) => boolean
 export async function generateWeeklyReport(
   projectId: string,
   weekStart?: Date,
-  weekEnd?: Date
+  weekEnd?: Date,
+  options: WeeklyReportOptions = {}
 ): Promise<void> {
   try {
     console.log('Starting report generation for project:', projectId);
@@ -135,6 +149,11 @@ export async function generateWeeklyReport(
 
     // Evidence slide(s) — auto-paginated
     await createEvidenceSlides(doc, activities);
+
+    if (options.assetSources && options.assetSources.length > 0) {
+      doc.addPage();
+      createAssetReferencesSlide(doc, options.assetSources, options.draftSummary);
+    }
 
     doc.addPage();
     await createClosingSlide(doc, project, metrics);
@@ -961,6 +980,71 @@ async function createEvidenceSlides(doc: jsPDF, activities: any[]): Promise<void
       );
     }
   }
+}
+
+function createAssetReferencesSlide(
+  doc: jsPDF,
+  assetSources: WeeklyReportAssetSource[],
+  draftSummary?: string,
+): void {
+  addSlideHeader(doc, 'Asset R2 Referensi', 7);
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Asset pendukung yang dipilih Danta.AI', MARGIN, 48);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(71, 85, 105);
+  const intro = 'Daftar ini berasal dari metadata asset R2 yang relevan dengan project. Klik area URL pada PDF untuk membuka sumber asli.';
+  doc.text(doc.splitTextToSize(intro, PAGE_WIDTH - 2 * MARGIN), MARGIN, 56);
+
+  if (draftSummary) {
+    doc.setFillColor(248, 250, 252);
+    doc.roundedRect(MARGIN, 68, PAGE_WIDTH - 2 * MARGIN, 24, 2, 2, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(8);
+    doc.setTextColor(15, 23, 42);
+    doc.text('Ringkasan draft Danta', MARGIN + 5, 76);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(71, 85, 105);
+    doc.text(doc.splitTextToSize(draftSummary, PAGE_WIDTH - 2 * MARGIN - 10).slice(0, 2), MARGIN + 5, 84);
+  }
+
+  const tableTop = draftSummary ? 104 : 76;
+  const rows = assetSources.slice(0, 10).map((source, index) => [
+    String(index + 1),
+    source.title,
+    source.subtitle,
+    source.meta || '-',
+  ]);
+
+  createTable(doc, ['No', 'Nama File', 'Folder / Keterangan', 'Tipe / Ukuran'], rows, MARGIN, tableTop, {
+    rowHeight: 9,
+    fontSize: 6.8,
+    headerFontSize: 7,
+    maxY: REPORT_CONTENT_BOTTOM - 10,
+    overflowLabel: `+${Math.max(0, assetSources.length - 10)} asset lain tidak ditampilkan`,
+  });
+
+  const linkTop = Math.min(REPORT_CONTENT_BOTTOM - 16, tableTop + 9 + Math.min(rows.length, 10) * 9 + 8);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Link cepat:', MARGIN, linkTop);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  assetSources.slice(0, 4).forEach((source, index) => {
+    const y = linkTop + 7 + index * 6;
+    const label = doc.splitTextToSize(`${index + 1}. ${source.title}`, PAGE_WIDTH - 2 * MARGIN)[0] || source.title;
+    doc.setTextColor(37, 99, 235);
+    doc.text(label, MARGIN, y);
+    doc.link(MARGIN, y - 4, PAGE_WIDTH - 2 * MARGIN, 5, { url: source.url });
+  });
+
+  addSlideFooter(doc, 7);
 }
 
 // =====================================================

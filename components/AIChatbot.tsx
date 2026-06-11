@@ -16,7 +16,10 @@ import {
   User,
   X,
 } from 'lucide-react';
-import { answerProjectQuestion, type ChatbotSource } from '../lib/chatbotData';
+import { answerProjectQuestion } from '../lib/chatbotData';
+import { generateWeeklyReport } from '../lib/weeklyReportUtils';
+import type { ReportAction } from '../lib/reportAgent';
+import type { ChatbotSource } from '../lib/chatbotTypes';
 
 interface SpeechRecognitionAlternativeLike {
   transcript: string;
@@ -70,6 +73,8 @@ interface ChatMessage {
   content: string;
   usedAI?: boolean;
   sources?: ChatbotSource[];
+  action?: ReportAction;
+  actionStatus?: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
 }
 
 const createMessageId = () => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -247,6 +252,67 @@ const ThinkingPanel: React.FC<{ stepIndex: number }> = ({ stepIndex }) => (
   </div>
 );
 
+const ReportActionCard: React.FC<{
+  messageId: string;
+  action: ReportAction;
+  status?: ChatMessage['actionStatus'];
+  onConfirm: (messageId: string, action: ReportAction) => void;
+  onCancel: (messageId: string, action: ReportAction) => void;
+}> = ({ messageId, action, status = 'pending', onConfirm, onCancel }) => {
+  const confirmDisabled = status === 'running' || status === 'completed' || status === 'cancelled';
+  const cancelDisabled = status !== 'pending' && status !== 'failed';
+  const confirmText = status === 'running'
+    ? 'Membuat PDF...'
+    : status === 'failed'
+      ? 'Coba lagi generate PDF'
+      : action.confirmLabel;
+
+  return (
+    <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-xs text-slate-700">
+      <p className="font-black text-emerald-900">{action.draft.title}</p>
+      <p className="mt-1 text-slate-600">Periode: {action.draft.periodLabel}</p>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        <div className="rounded-md bg-white px-2 py-1.5">
+          <p className="font-black text-slate-900">{action.draft.activityCount}</p>
+          <p className="text-[10px] text-slate-500">Aktivitas</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-1.5">
+          <p className="font-black text-slate-900">{action.draft.evidenceCount}</p>
+          <p className="text-[10px] text-slate-500">Evidence</p>
+        </div>
+        <div className="rounded-md bg-white px-2 py-1.5">
+          <p className="font-black text-slate-900">{action.draft.relevantAssetCount}</p>
+          <p className="text-[10px] text-slate-500">Asset R2</p>
+        </div>
+      </div>
+      {action.draft.risks.length > 0 && (
+        <p className="mt-2 text-slate-600">Risiko utama: {action.draft.risks[0]}</p>
+      )}
+      {action.draft.recommendations.length > 0 && (
+        <p className="mt-1 text-slate-600">Rekomendasi: {action.draft.recommendations[0]}</p>
+      )}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          disabled={confirmDisabled}
+          onClick={() => onConfirm(messageId, action)}
+          className="rounded-md bg-emerald-600 px-3 py-1.5 font-bold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+        >
+          {confirmText}
+        </button>
+        <button
+          type="button"
+          disabled={cancelDisabled}
+          onClick={() => onCancel(messageId, action)}
+          className="rounded-md border border-slate-200 bg-white px-3 py-1.5 font-bold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {action.cancelLabel}
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const AIChatbot: React.FC = () => {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
@@ -267,11 +333,11 @@ export const AIChatbot: React.FC = () => {
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   const suggestedPrompts = useMemo(() => [
+    'Buat laporan mingguan project Mahakam',
     'Project mana paling berisiko?',
     'Kasih evidence project terlambat',
+    'Asset R2 apa yang relevan?',
     'Ringkas portfolio hari ini',
-    'Link dokumen terbaru',
-    'Estimasi selesai project ini',
   ], []);
 
   useEffect(() => {
@@ -326,6 +392,8 @@ export const AIChatbot: React.FC = () => {
           content: response.answer,
           usedAI: response.usedAI,
           sources: response.sources,
+          action: response.action,
+          actionStatus: response.action ? 'pending' : undefined,
         },
       ]);
     } catch (error) {
@@ -347,6 +415,44 @@ export const AIChatbot: React.FC = () => {
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     void sendQuestion(input);
+  };
+
+  const updateActionStatus = (
+    messageId: string,
+    actionStatus: ChatMessage['actionStatus'],
+    content?: string,
+  ) => {
+    setMessages((current) => current.map((message) => (
+      message.id === messageId
+        ? { ...message, actionStatus, content: content || message.content }
+        : message
+    )));
+  };
+
+  const confirmReportAction = async (messageId: string, action: ReportAction) => {
+    updateActionStatus(messageId, 'running', `${action.draft.summary}\n\nSedang membuat PDF report...`);
+    try {
+      await generateWeeklyReport(
+        action.projectId,
+        new Date(action.weekStartIso),
+        new Date(action.weekEndIso),
+        {
+          assetSources: action.assetSources,
+          draftSummary: action.draft.summary,
+        },
+      );
+      updateActionStatus(messageId, 'completed', `${action.draft.summary}\n\nPDF report untuk ${action.projectName} sudah dibuat.`);
+    } catch (error) {
+      updateActionStatus(
+        messageId,
+        'failed',
+        error instanceof Error ? error.message : 'Gagal membuat PDF report.',
+      );
+    }
+  };
+
+  const cancelReportAction = (messageId: string, action: ReportAction) => {
+    updateActionStatus(messageId, 'cancelled', `Draft report untuk ${action.projectName} dibatalkan. Tidak ada PDF yang dibuat.`);
   };
 
   const toggleVoiceInput = () => {
@@ -499,6 +605,15 @@ export const AIChatbot: React.FC = () => {
                     >
                       <AnswerText text={message.content} isUser={isUser} />
                       {!isUser && <SourceCards sources={message.sources} />}
+                      {!isUser && message.action && (
+                        <ReportActionCard
+                          messageId={message.id}
+                          action={message.action}
+                          status={message.actionStatus}
+                          onConfirm={(messageId, action) => void confirmReportAction(messageId, action)}
+                          onCancel={cancelReportAction}
+                        />
+                      )}
                       {!isUser && message.usedAI === false && (
                         <p className="mt-2 inline-flex rounded-md bg-amber-50 px-2 py-1 text-[11px] font-bold text-amber-700">
                           Jawaban sistem
@@ -552,7 +667,7 @@ export const AIChatbot: React.FC = () => {
                       }
                     }}
                     rows={1}
-                    placeholder={isListening ? 'Mendengarkan...' : 'Tanya project, evidence, dokumen...'}
+                    placeholder={isListening ? 'Mendengarkan...' : 'Tanya project, laporan, asset R2, evidence...'}
                     className="max-h-28 min-h-11 flex-1 resize-none rounded-lg border-0 bg-transparent px-3 py-2.5 text-sm text-slate-800 outline-none"
                     disabled={loading}
                   />

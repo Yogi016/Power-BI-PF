@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { generateChatbotAnswer, isGeminiAvailable } from './geminiService';
+import { prepareReportAction, type ReportAction } from './reportAgent';
 import {
   assetToSource,
   buildAssetSummary,
@@ -8,10 +9,10 @@ import {
   type ChatbotAssetRow,
   type ChatbotAssetSummary,
 } from './chatbotAssetUtils';
+import type { ChatbotSource } from './chatbotTypes';
 
 type ProjectStatus = 'active' | 'completed' | 'on-hold' | 'cancelled';
 type RiskLevel = 'low' | 'medium' | 'high' | 'completed' | 'unknown';
-type SourceType = 'evidence' | 'document' | 'asset';
 
 interface ProjectRow {
   id: string;
@@ -71,16 +72,6 @@ interface DocumentRow {
 interface DocumentCategoryRow {
   id: string;
   name: string;
-}
-
-export interface ChatbotSource {
-  id: string;
-  type: SourceType;
-  title: string;
-  subtitle: string;
-  url: string;
-  projectName?: string;
-  meta?: string;
 }
 
 interface EvidenceLink {
@@ -179,6 +170,7 @@ export interface ChatbotAnswer {
   answer: string;
   usedAI: boolean;
   sources: ChatbotSource[];
+  action?: ReportAction;
 }
 
 const MAX_PROJECTS_IN_CONTEXT = 80;
@@ -927,6 +919,16 @@ function buildFallbackAnswer(question: string, snapshot: ChatbotSnapshot, source
 }
 
 export async function answerProjectQuestion(question: string): Promise<ChatbotAnswer> {
+  const reportResult = await prepareReportAction(question);
+  if (reportResult) {
+    return {
+      answer: reportResult.answer,
+      usedAI: false,
+      sources: reportResult.sources,
+      action: reportResult.action,
+    };
+  }
+
   const snapshot = await loadChatbotSnapshot();
   const sources = buildRelevantSources(question, snapshot);
 
