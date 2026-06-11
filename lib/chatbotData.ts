@@ -1,9 +1,17 @@
 import { supabase } from './supabaseClient';
 import { generateChatbotAnswer, isGeminiAvailable } from './geminiService';
+import {
+  assetToSource,
+  buildAssetSummary,
+  scoreAssetSource,
+  type ChatbotAssetLink,
+  type ChatbotAssetRow,
+  type ChatbotAssetSummary,
+} from './chatbotAssetUtils';
 
 type ProjectStatus = 'active' | 'completed' | 'on-hold' | 'cancelled';
 type RiskLevel = 'low' | 'medium' | 'high' | 'completed' | 'unknown';
-type SourceType = 'evidence' | 'document';
+type SourceType = 'evidence' | 'document' | 'asset';
 
 interface ProjectRow {
   id: string;
@@ -145,6 +153,8 @@ interface ChatbotSnapshot {
     totalDocuments: number;
     softfileDocuments: number;
     hardfileDocuments: number;
+    totalAssets: number;
+    totalAssetSize: number;
   };
   projects: ProjectInsight[];
   documents: {
@@ -161,6 +171,7 @@ interface ChatbotSnapshot {
     }>;
     items: DocumentLink[];
   };
+  assets: ChatbotAssetSummary;
   warnings: string[];
 }
 
@@ -515,6 +526,7 @@ async function loadChatbotSnapshot(): Promise<ChatbotSnapshot> {
     actualResult,
     documentsResult,
     categoriesResult,
+    assetsResult,
   ] = await Promise.all([
     readQuery<ProjectRow>(
       supabase.from('projects').select('*').order('start_date', { ascending: false }),
@@ -550,6 +562,13 @@ async function loadChatbotSnapshot(): Promise<ChatbotSnapshot> {
       supabase.from('document_categories').select('id, name'),
       'document_categories'
     ),
+    readQuery<ChatbotAssetRow>(
+      supabase
+        .from('assets')
+        .select('id, file_name, file_url, storage_key, mime_type, file_size, category, description, uploaded_by, created_at, updated_at')
+        .order('created_at', { ascending: false }),
+      'assets'
+    ),
   ]);
 
   const warnings = [
@@ -559,6 +578,7 @@ async function loadChatbotSnapshot(): Promise<ChatbotSnapshot> {
     actualResult.warning,
     documentsResult.warning,
     categoriesResult.warning,
+    assetsResult.warning,
   ].filter(Boolean) as string[];
 
   const progressByProject = buildLatestProgress(baselineResult.data, actualResult.data);
@@ -566,6 +586,7 @@ async function loadChatbotSnapshot(): Promise<ChatbotSnapshot> {
   const projects = buildProjectInsights(projectsResult.data, activitiesResult.data, progressByProject, today);
   const ongoingProjects = projects.filter((project) => project.status === 'active' || project.status === 'on-hold');
   const documentSummary = buildDocumentSummary(documentsResult.data, categoriesResult.data);
+  const assetSummary = buildAssetSummary(assetsResult.data);
 
   return {
     generatedAt: new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }),
@@ -586,9 +607,12 @@ async function loadChatbotSnapshot(): Promise<ChatbotSnapshot> {
       totalDocuments: documentsResult.data.length,
       softfileDocuments: documentsResult.data.filter((document) => document.has_softfile).length,
       hardfileDocuments: documentsResult.data.filter((document) => document.has_hardfile).length,
+      totalAssets: assetSummary.totalAssets,
+      totalAssetSize: assetSummary.totalSize,
     },
     projects,
     documents: documentSummary,
+    assets: assetSummary,
     warnings,
   };
 }
@@ -665,7 +689,25 @@ function documentToSource(document: DocumentLink): ChatbotSource | null {
   };
 }
 
+function compactAsset(asset: ChatbotAssetLink) {
+  return {
+    fileName: asset.fileName,
+    location: asset.location,
+    folder: asset.folder,
+    type: asset.fileType,
+    sizeBytes: asset.fileSize,
+    uploadedBy: asset.uploadedBy || '-',
+    createdAt: asset.createdAt || '-',
+    description: asset.description || '-',
+    url: asset.fileUrl,
+  };
+}
+
 function scoreSource(source: ChatbotSource, tokens: string[], question: string): number {
+  if (source.type === 'asset') {
+    return scoreAssetSource(source, tokens, question);
+  }
+
   const searchable = sourceText(source);
   let score = 0;
 
@@ -719,11 +761,25 @@ function buildRelevantSources(question: string, snapshot: ChatbotSnapshot): Chat
     }
   });
 
+  snapshot.assets.items.forEach((asset) => {
+    const source = assetToSource(asset);
+    if (scoreSource(source, tokens, question) > 0 || /asset|aset|r2|folder|shapefile|data spasial|peta/i.test(question)) {
+      addUniqueSource(candidates, source);
+    }
+  });
+
   if (candidates.length === 0 && /dokumen|surat|softfile|hardfile/i.test(question)) {
     snapshot.documents.items
       .slice(0, MAX_SOURCES_IN_UI)
       .map(documentToSource)
       .forEach((source) => source && addUniqueSource(candidates, source));
+  }
+
+  if (candidates.length === 0 && /asset|aset|r2|folder|shapefile|data spasial|peta/i.test(question)) {
+    snapshot.assets.items
+      .slice(0, MAX_SOURCES_IN_UI)
+      .map(assetToSource)
+      .forEach((source) => addUniqueSource(candidates, source));
   }
 
   return candidates
@@ -765,6 +821,13 @@ function buildDataContext(snapshot: ChatbotSnapshot, sources: ChatbotSource[]): 
       byCategory: snapshot.documents.byCategory,
       recent: snapshot.documents.recent,
     },
+    assets: {
+      totalAssets: snapshot.assets.totalAssets,
+      totalSize: snapshot.assets.totalSize,
+      byLocation: snapshot.assets.byLocation,
+      byFolder: snapshot.assets.byFolder.slice(0, 24),
+      recent: snapshot.assets.recent.map(compactAsset),
+    },
     warnings: snapshot.warnings,
   };
 
@@ -779,6 +842,29 @@ function findProjectFromQuestion(question: string, projects: ProjectInsight[]): 
 function buildFallbackAnswer(question: string, snapshot: ChatbotSnapshot, sources: ChatbotSource[]): string {
   const normalizedQuestion = question.toLowerCase();
   const selectedProject = findProjectFromQuestion(question, snapshot.projects);
+  const asksAsset = /asset|aset|r2|folder|shapefile|data spasial|peta/i.test(question);
+
+  if (asksAsset) {
+    if (snapshot.assets.totalAssets === 0) {
+      return 'Saya belum menemukan metadata asset dari data yang tersedia. Kalau file sudah diupload, kemungkinan tabel assets belum bisa dibaca oleh client atau belum ada asset yang tersimpan.';
+    }
+
+    if (sources.length === 0) {
+      return `Saya membaca ${snapshot.assets.totalAssets} asset tersimpan, tetapi belum menemukan asset yang cukup cocok dengan pertanyaan itu. Coba sebutkan nama folder, lokasi, atau ekstensi file agar pencariannya lebih presisi.`;
+    }
+
+    const sampleSources = sources
+      .filter((source) => source.type === 'asset')
+      .slice(0, 3)
+      .map((source) => `${source.title} di ${source.subtitle}`)
+      .join('; ');
+
+    return [
+      `Saya menemukan ${sources.filter((source) => source.type === 'asset').length || sources.length} referensi asset yang relevan, dan link R2-nya bisa dibuka dari kartu sumber di bawah jawaban ini.`,
+      `Secara total, sistem membaca ${snapshot.assets.totalAssets} asset dari ${snapshot.assets.byLocation.length} lokasi/folder utama.`,
+      sampleSources ? `Contoh yang paling dekat: ${sampleSources}.` : '',
+    ].filter(Boolean).join('\n');
+  }
 
   if (/evidence|bukti|foto|lampiran|dokumen|surat|softfile|hardfile|pdf|link|file/i.test(question)) {
     if (sources.length === 0) {
@@ -836,7 +922,7 @@ function buildFallbackAnswer(question: string, snapshot: ChatbotSnapshot, source
   return [
     `Portfolio saat ini terbaca berisi ${snapshot.totals.totalProjects} project, dengan ${snapshot.totals.ongoingProjects} masih ongoing dan ${snapshot.totals.completedProjects} completed.`,
     `Dari sisi eksekusi, ada ${snapshot.totals.totalActivities} aktivitas tercatat. Saya melihat ${snapshot.totals.delayedProjects} project punya aktivitas delayed dan ${snapshot.totals.overdueProjects} project sudah melewati end date, jadi fokus monitoring sebaiknya diarahkan ke project yang telat sekaligus punya gap progress terbesar.`,
-    `Untuk dokumen, sistem membaca ${snapshot.totals.totalDocuments} metadata dokumen, termasuk ${snapshot.totals.softfileDocuments} softfile dan ${snapshot.totals.hardfileDocuments} hardfile.`
+    `Untuk dokumen, sistem membaca ${snapshot.totals.totalDocuments} metadata dokumen, termasuk ${snapshot.totals.softfileDocuments} softfile dan ${snapshot.totals.hardfileDocuments} hardfile. Asset R2 yang terbaca berjumlah ${snapshot.totals.totalAssets} file.`
   ].join('\n');
 }
 
