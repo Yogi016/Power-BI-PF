@@ -2415,6 +2415,71 @@ export async function deleteDocument(id: string): Promise<boolean> {
 // DOCUMENT FILE UPLOAD
 // =====================================================
 
+function sanitizeDocumentPathSegment(value: string): string {
+  const cleaned = value
+    .trim()
+    .replace(/[^a-zA-Z0-9._-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return cleaned || 'general';
+}
+
+function sanitizeDocumentFileName(fileName: string): string {
+  const cleaned = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/_+/g, '_');
+  return cleaned || 'document.bin';
+}
+
+function buildCooperationDocumentStorageKey(fileName: string, documentType: CooperationDocumentType): string {
+  const now = new Date();
+  const year = String(now.getFullYear());
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return [
+    'documents',
+    'pks-mou',
+    sanitizeDocumentPathSegment(documentType.toLowerCase()),
+    year,
+    month,
+    `${now.getTime()}_${sanitizeDocumentFileName(fileName)}`,
+  ].join('/');
+}
+
+export async function uploadCooperationDocumentFile(
+  file: File,
+  documentType: CooperationDocumentType
+): Promise<{ url: string; storageKey: string } | null> {
+  try {
+    validateFile(file, ALLOWED_DOCUMENT_TYPES, MAX_DOCUMENT_SIZE_MB);
+
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
+
+    if (!workerUrl || !publicUrlBase) {
+      throw new Error('Konfigurasi R2 belum lengkap. Periksa VITE_R2_WORKER_URL dan VITE_R2_PUBLIC_URL.');
+    }
+
+    const storageKey = buildCooperationDocumentStorageKey(file.name, documentType);
+    const response = await fetch(`${workerUrl}/${storageKey}`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `Upload via worker failed: ${response.status}`);
+    }
+
+    return {
+      url: `${publicUrlBase}/${storageKey}`,
+      storageKey,
+    };
+  } catch (error) {
+    console.error('Error uploading cooperation document file:', error);
+    throw error;
+  }
+}
+
 export async function uploadDocumentFile(file: File, categoryName: string): Promise<string | null> {
   try {
     // Validasi file sebelum upload

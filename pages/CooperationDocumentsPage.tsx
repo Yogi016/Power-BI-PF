@@ -15,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { createCooperationDocumentDraft, fetchCooperationDocuments, fetchProjects, uploadDocumentFile } from '../lib/supabase';
+import { createCooperationDocumentDraft, fetchCooperationDocuments, fetchProjects, uploadCooperationDocumentFile } from '../lib/supabase';
 import {
   buildCooperationTasks,
   buildRoleDocumentInbox,
@@ -213,8 +213,8 @@ export const CooperationDocumentsPage: React.FC = () => {
     setSavingDraft(true);
 
     try {
-      const fileUrl = await uploadDocumentFile(selectedFile, 'pks-mou');
-      if (!fileUrl) throw new Error('Upload file gagal.');
+      const uploaded = await uploadCooperationDocumentFile(selectedFile, createForm.documentType);
+      if (!uploaded) throw new Error('Upload file ke R2 gagal.');
 
       const selectedProject = projects.find(project => project.id === createForm.projectId);
       const documentId = await createCooperationDocumentDraft({
@@ -232,7 +232,8 @@ export const CooperationDocumentsPage: React.FC = () => {
         version: {
           versionLabel: 'Draft v1',
           fileName: selectedFile.name,
-          fileUrl,
+          fileUrl: uploaded.url,
+          storageKey: uploaded.storageKey,
           uploadedBy: user?.id || null,
           statusAtUpload: 'draft-internal',
           revisionNotes: 'Upload draft awal oleh Staff Officer.',
@@ -252,7 +253,7 @@ export const CooperationDocumentsPage: React.FC = () => {
       await reloadCooperationDocuments();
       resetCreateForm();
       setShowCreateForm(false);
-      setNotice({ type: 'success', message: 'Draft PKS/MOU berhasil dibuat dan evidence Draft v1 tersimpan.' });
+      setNotice({ type: 'success', message: 'Draft PKS/MOU berhasil dibuat dan evidence Draft v1 tersimpan di R2.' });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Draft PKS/MOU gagal dibuat.';
       setNotice({ type: 'error', message });
@@ -316,7 +317,7 @@ export const CooperationDocumentsPage: React.FC = () => {
             </div>
             <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
               <Upload size={13} />
-              Evidence Draft v1
+              R2 documents/pks-mou
             </span>
           </div>
 
@@ -429,13 +430,14 @@ export const CooperationDocumentsPage: React.FC = () => {
             </label>
 
             <label className="space-y-1.5 lg:col-span-2">
-              <span className="text-xs font-bold uppercase text-slate-500">Upload Draft</span>
+              <span className="text-xs font-bold uppercase text-slate-500">Upload Draft ke R2</span>
               <input
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,image/jpeg,image/png"
                 onChange={event => setSelectedFile(event.target.files?.[0] || null)}
                 className="w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-white hover:bg-slate-100"
               />
+              <p className="text-xs text-slate-500">File disimpan di prefix R2: documents/pks-mou/jenis/tahun/bulan.</p>
             </label>
 
             <label className="space-y-1.5 lg:col-span-3">
