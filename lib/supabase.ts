@@ -1,5 +1,23 @@
 import { supabase } from './supabaseClient';
-import { Project, SCurveDataPoint, ActivityData, ProjectMetrics, WorkProject, WorkDailyData, DocumentCategory, DocumentItem, AssetItem } from '../types';
+import {
+  Project,
+  SCurveDataPoint,
+  ActivityData,
+  ProjectMetrics,
+  WorkProject,
+  WorkDailyData,
+  DocumentCategory,
+  DocumentItem,
+  AssetItem,
+  CooperationDocument,
+  CooperationDocumentApproval,
+  CooperationDocumentStatus,
+  CooperationDocumentType,
+  CooperationDocumentVersion,
+  CooperationProjectLink,
+  CooperationRevisionSource,
+  UserRole,
+} from '../types';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
 
 // =====================================================
@@ -1964,6 +1982,99 @@ export async function verifySignature(code: string): Promise<{
   } catch (error) {
     console.error('Error verifying signature:', error);
     return null;
+  }
+}
+
+// =====================================================
+// COOPERATION DOCUMENT OPERATIONS
+// =====================================================
+
+function mapCooperationVersionRow(row: any): CooperationDocumentVersion {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    versionLabel: row.version_label,
+    fileName: row.file_name,
+    fileUrl: row.file_url,
+    storageKey: row.storage_key,
+    uploadedBy: row.uploaded_by,
+    uploadedAt: row.uploaded_at,
+    statusAtUpload: row.status_at_upload as CooperationDocumentStatus,
+    revisionNotes: row.revision_notes,
+    revisionSource: row.revision_source as CooperationRevisionSource | null,
+  };
+}
+
+function mapCooperationApprovalRow(row: any): CooperationDocumentApproval {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    approverRole: row.approver_role as UserRole,
+    approverUserId: row.approver_user_id,
+    action: row.action,
+    comment: row.comment,
+    fromStatus: row.from_status as CooperationDocumentStatus,
+    toStatus: row.to_status as CooperationDocumentStatus,
+    createdAt: row.created_at,
+  };
+}
+
+function mapCooperationProjectLinkRow(row: any): CooperationProjectLink {
+  return {
+    id: row.id,
+    documentId: row.document_id,
+    projectId: row.project_id,
+    projectName: row.project_name,
+    documentWeight: Number(row.document_weight) || 0,
+    linkedAt: row.linked_at,
+  };
+}
+
+function mapCooperationDocumentRow(row: any): CooperationDocument {
+  return {
+    id: row.id,
+    title: row.title,
+    documentType: row.document_type as CooperationDocumentType,
+    partnerName: row.partner_name,
+    documentNumber: row.document_number,
+    startDate: row.start_date,
+    endDate: row.end_date,
+    status: row.status as CooperationDocumentStatus,
+    internalPic: row.internal_pic,
+    projectHead: row.project_head,
+    projectManager: row.project_manager,
+    scopeSummary: row.scope_summary,
+    legalInternalNotes: row.legal_internal_notes,
+    partnerNotes: row.partner_notes,
+    currentVersionId: row.current_version_id,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    versions: (row.cooperation_document_versions || []).map(mapCooperationVersionRow),
+    approvals: (row.cooperation_document_approvals || []).map(mapCooperationApprovalRow),
+    projectLinks: (row.cooperation_document_project_links || []).map(mapCooperationProjectLinkRow),
+  };
+}
+
+export async function fetchCooperationDocuments(): Promise<CooperationDocument[]> {
+  if (!supabase) return [];
+
+  try {
+    const { data, error } = await supabase
+      .from('cooperation_documents')
+      .select(`
+        *,
+        cooperation_document_versions (*),
+        cooperation_document_approvals (*),
+        cooperation_document_project_links (*)
+      `)
+      .order('updated_at', { ascending: false });
+
+    if (error) throw error;
+    return (data || []).map(mapCooperationDocumentRow);
+  } catch (error) {
+    console.warn('Cooperation documents unavailable, using UI fallback data:', error);
+    return [];
   }
 }
 

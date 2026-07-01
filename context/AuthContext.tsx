@@ -1,10 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import type { User, Session } from '@supabase/supabase-js';
+import { getRoleProfile, resolveUserRole } from '../lib/roleUtils';
+import type { RoleProfile, UserRole } from '../types';
 
 interface AuthContextType {
     user: User | null;
     session: Session | null;
+    role: UserRole;
+    roleProfile: RoleProfile;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<{ error: string | null }>;
     signOut: () => Promise<void>;
@@ -16,6 +20,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
     const [loading, setLoading] = useState(true);
+    const role = resolveUserRole(user);
+    const roleProfile = getRoleProfile(role);
 
     useEffect(() => {
         if (!supabase) {
@@ -71,7 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, session, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, session, role, roleProfile, loading, signIn, signOut }}>
             {children}
         </AuthContext.Provider>
     );

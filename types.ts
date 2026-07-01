@@ -93,6 +93,15 @@ export enum PageView {
   ASSET = 'asset',
 }
 
+export type UserRole = 'vp_lingkungan' | 'project_manager' | 'project_head' | 'staff_officer';
+
+export interface RoleProfile {
+  role: UserRole;
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
 export interface AssetItem {
   id: string;
   fileName: string;
@@ -257,6 +266,120 @@ export interface WorkPlanSchedule {
   dailyTarget: number;
   weight: number; // Percentage (0-100)
   planCumulative: number;
+}
+
+// =====================================================
+// DOKUMEN KERJA SAMA INTERFACES
+// =====================================================
+
+export type CooperationDocumentType =
+  | 'PKS'
+  | 'MOU'
+  | 'MoA'
+  | 'Addendum'
+  | 'BAST'
+  | 'NDA'
+  | 'SK'
+  | 'Surat Dukungan'
+  | 'Lainnya';
+
+export type CooperationDocumentStatus =
+  | 'usulan'
+  | 'draft-internal'
+  | 'review-project-head'
+  | 'review-legal-internal'
+  | 'review-mitra'
+  | 'revisi-final'
+  | 'validasi-project-manager'
+  | 'menunggu-approval-vp'
+  | 'disetujui-vp'
+  | 'siap-ttd'
+  | 'proses-ttd'
+  | 'aktif'
+  | 'monitoring-implementasi'
+  | 'selesai'
+  | 'expired'
+  | 'diperpanjang'
+  | 'diarsipkan';
+
+export type CooperationTaskStatus = 'completed' | 'in-progress' | 'not-started' | 'delayed' | 'locked';
+
+export type CooperationRevisionSource = 'internal' | 'project-head' | 'project-manager' | 'vp' | 'mitra';
+
+export interface CooperationDocumentVersion {
+  id: string;
+  documentId: string;
+  versionLabel: string;
+  fileName: string;
+  fileUrl: string;
+  storageKey?: string | null;
+  uploadedBy?: string | null;
+  uploadedAt: string;
+  statusAtUpload: CooperationDocumentStatus;
+  revisionNotes?: string | null;
+  revisionSource?: CooperationRevisionSource | null;
+}
+
+export interface CooperationDocumentApproval {
+  id: string;
+  documentId: string;
+  approverRole: UserRole;
+  approverUserId?: string | null;
+  action: 'approved' | 'rejected' | 'requested_revision';
+  comment?: string | null;
+  fromStatus: CooperationDocumentStatus;
+  toStatus: CooperationDocumentStatus;
+  createdAt: string;
+}
+
+export interface CooperationProjectLink {
+  id: string;
+  documentId: string;
+  projectId: string;
+  projectName: string;
+  documentWeight: number;
+  linkedAt: string;
+}
+
+export interface CooperationDocument {
+  id: string;
+  title: string;
+  documentType: CooperationDocumentType;
+  partnerName: string;
+  documentNumber?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  status: CooperationDocumentStatus;
+  internalPic: string;
+  projectHead?: string | null;
+  projectManager?: string | null;
+  scopeSummary?: string | null;
+  legalInternalNotes?: string | null;
+  partnerNotes?: string | null;
+  currentVersionId?: string | null;
+  createdBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  versions: CooperationDocumentVersion[];
+  approvals: CooperationDocumentApproval[];
+  projectLinks: CooperationProjectLink[];
+}
+
+export interface CooperationGeneratedTask {
+  id: string;
+  label: string;
+  status: CooperationTaskStatus;
+  weight: number;
+  evidence: CooperationDocumentVersion[];
+}
+
+export interface WeightedActivityInput {
+  id: string;
+  weight: number;
+}
+
+export interface WeightedActivityOutput extends WeightedActivityInput {
+  adjustedWeight: number;
 }
 
 // =====================================================

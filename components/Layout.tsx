@@ -28,7 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const { user, roleProfile, signOut } = useAuth();
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const handleMobilePageChange = (page: PageView) => {
@@ -253,7 +253,12 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-slate-900 leading-none mb-1">{userName}</p>
-              <p className="text-xs text-slate-500 leading-none">{userEmail}</p>
+              <div className="flex items-center justify-end gap-2">
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-normal text-emerald-700">
+                  {roleProfile.label}
+                </span>
+                <p className="text-xs text-slate-500 leading-none">{userEmail}</p>
+              </div>
             </div>
             <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm ring-2 ring-white shadow-sm">
               {userInitials}
@@ -269,8 +274,13 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             className="h-7 w-auto object-contain"
             loading="lazy"
           />
-          <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs ring-2 ring-white shadow-sm">
-            {userInitials}
+          <div className="flex items-center gap-2">
+            <span className="max-w-32 truncate rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+              {roleProfile.shortLabel}
+            </span>
+            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs ring-2 ring-white shadow-sm">
+              {userInitials}
+            </div>
           </div>
         </header>
 
