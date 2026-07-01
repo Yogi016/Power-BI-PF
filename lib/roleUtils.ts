@@ -1,5 +1,5 @@
 import type { User } from '@supabase/supabase-js';
-import type { RoleProfile, UserRole } from '../types';
+import type { RoleProfile, UserProfile, UserRole } from '../types';
 
 export const ROLE_PROFILES: Record<UserRole, RoleProfile> = {
   vp_lingkungan: {
@@ -51,7 +51,12 @@ export function normalizeUserRole(value?: unknown): UserRole | null {
   return ROLE_ALIASES[normalized] || ROLE_ALIASES[normalized.replace(/_/g, ' ')] || null;
 }
 
-export function resolveUserRole(user: User | null): UserRole {
+export function resolveUserRole(user: User | null, profile?: UserProfile | null): UserRole {
+  if (profile?.isActive) {
+    const profileRole = normalizeUserRole(profile.roleCode);
+    if (profileRole) return profileRole;
+  }
+
   const metadata = user?.user_metadata || {};
   const candidates = [
     metadata.role,

@@ -102,6 +102,16 @@ export interface RoleProfile {
   description: string;
 }
 
+export interface UserProfile {
+  userId: string;
+  fullName: string;
+  roleCode: UserRole;
+  assignedProjectIds: string[];
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface AssetItem {
   id: string;
   fileName: string;

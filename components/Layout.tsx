@@ -28,7 +28,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
   const [collapsed, setCollapsed] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
-  const { user, roleProfile, signOut } = useAuth();
+  const { user, profile, roleProfile, signOut } = useAuth();
 
   const closeMobileMenu = () => setMobileMenuOpen(false);
   const handleMobilePageChange = (page: PageView) => {
@@ -38,7 +38,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
 
   // Derive user display info
   const userEmail = user?.email || '';
-  const userName = user?.user_metadata?.name || user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
+  const userName = profile?.fullName || user?.user_metadata?.name || user?.user_metadata?.full_name || userEmail.split('@')[0] || 'User';
   const userInitials = userName.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2) || 'U';
   const mobilePrimaryItems = [
     { page: PageView.DASHBOARD, icon: <LayoutDashboard className="h-[18px] w-[18px]" />, label: 'Dash', ariaLabel: 'Dashboard' },

@@ -32,3 +32,6 @@ dist-ssr
 !.dev.vars.example
 .env*
 !.env.example
+
+# Supabase CLI local state
+supabase/.temp/

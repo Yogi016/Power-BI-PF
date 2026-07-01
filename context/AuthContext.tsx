@@ -2,11 +2,12 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../lib/supabaseClient';
 import type { User, Session } from '@supabase/supabase-js';
 import { getRoleProfile, resolveUserRole } from '../lib/roleUtils';
-import type { RoleProfile, UserRole } from '../types';
+import type { RoleProfile, UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
     user: User | null;
     session: Session | null;
+    profile: UserProfile | null;
     role: UserRole;
     roleProfile: RoleProfile;
     loading: boolean;
@@ -19,9 +20,44 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [session, setSession] = useState<Session | null>(null);
+    const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const role = resolveUserRole(user);
+    const role = resolveUserRole(user, profile);
     const roleProfile = getRoleProfile(role);
+
+    const loadUserProfile = useCallback(async (authUser: User | null) => {
+        if (!supabase || !authUser) {
+            setProfile(null);
+            return;
+        }
+
+        const { data, error } = await supabase
+            .from('user_profiles')
+            .select('user_id, full_name, role_code, assigned_project_ids, is_active, created_at, updated_at')
+            .eq('user_id', authUser.id)
+            .maybeSingle();
+
+        if (error) {
+            console.warn('User profile unavailable, falling back to auth metadata:', error);
+            setProfile(null);
+            return;
+        }
+
+        if (!data) {
+            setProfile(null);
+            return;
+        }
+
+        setProfile({
+            userId: data.user_id,
+            fullName: data.full_name,
+            roleCode: data.role_code as UserRole,
+            assignedProjectIds: data.assigned_project_ids || [],
+            isActive: Boolean(data.is_active),
+            createdAt: data.created_at,
+            updatedAt: data.updated_at,
+        });
+    }, []);
 
     useEffect(() => {
         if (!supabase) {
@@ -30,17 +66,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         // Get initial session
-        supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+        supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
             setSession(currentSession);
-            setUser(currentSession?.user ?? null);
+            const authUser = currentSession?.user ?? null;
+            setUser(authUser);
+            await loadUserProfile(authUser);
             setLoading(false);
         });
 
         // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event, newSession) => {
+            async (_event, newSession) => {
+                setLoading(true);
                 setSession(newSession);
-                setUser(newSession?.user ?? null);
+                const authUser = newSession?.user ?? null;
+                setUser(authUser);
+                await loadUserProfile(authUser);
                 setLoading(false);
             }
         );
@@ -48,7 +89,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => {
             subscription.unsubscribe();
         };
-    }, []);
+    }, [loadUserProfile]);
 
     const signIn = useCallback(async (email: string, password: string): Promise<{ error: string | null }> => {
         if (!supabase) {
@@ -77,7 +118,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     return (
-        <AuthContext.Provider value={{ user, session, role, roleProfile, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, session, profile, role, roleProfile, loading, signIn, signOut }}>
             {children}
         </AuthContext.Provider>
     );
