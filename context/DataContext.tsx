@@ -3,6 +3,8 @@ import { MonthlyData, TaskItem, ProjectData, WeeklyData } from '../types';
 import { INITIAL_SCURVE_DATA, INITIAL_TASKS } from '../constants';
 import { parseSCurveCSV, weeklyToMonthly } from '../utils/csvParser';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from './AuthContext';
+import { scopeProjectsForRole } from '../utils/projectScope';
 
 interface DataContextType {
   // Legacy data (untuk backward compatibility)
@@ -54,6 +56,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [useManualSCurve, setUseManualSCurve] = useState<boolean>(false);
   const [csvLoaded, setCsvLoaded] = useState(false);
   const [supabaseLoaded, setSupabaseLoaded] = useState(false);
+
+  const { role, profile } = useAuth();
 
   // Load CSV data automatically on mount
   useEffect(() => {
@@ -228,11 +232,18 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setProjectFilters(prev => prev.includes(trimmed) ? prev : [...prev, trimmed]);
   };
 
+  const visibleProjects = scopeProjectsForRole(
+    projects,
+    role,
+    profile?.assignedProjectIds ?? [],
+    supabaseLoaded
+  );
+
   return (
-    <DataContext.Provider value={{ 
-      sCurveData, 
-      tasks, 
-      projects,
+    <DataContext.Provider value={{
+      sCurveData,
+      tasks,
+      projects: visibleProjects,
       weeklySummary,
       selectedPIC,
       selectedProject,
