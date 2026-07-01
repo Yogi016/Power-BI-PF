@@ -90,6 +90,7 @@ export enum PageView {
   WORK = 'work',
   LING_SIGN = 'ling_sign',
   DOKUMEN = 'dokumen',
+  COOPERATION_DOCUMENTS = 'cooperation_documents',
   ASSET = 'asset',
 }
 

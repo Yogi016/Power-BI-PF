@@ -32,7 +32,9 @@ Role ini mengatur dashboard, task inbox, dan hak aksi workflow. Role legal tidak
 
 ## Visibilitas Halaman
 
-Halaman Dokumen tetap terlihat untuk semua role. Perbedaan role diterapkan pada aksi, default filter, dan scope data, bukan pada keberadaan menu halaman.
+Halaman Dokumen tetap terlihat untuk semua role dan berfungsi sebagai arsip dokumen umum. Workspace PKS/MOU dan Dokumen Kerja Sama berada di page terpisah agar workflow approval tidak bercampur dengan arsip.
+
+Perbedaan role diterapkan pada aksi, default filter, dan scope data di page workflow PKS/MOU, bukan pada keberadaan menu halaman.
 
 - VP Lingkungan dapat melihat seluruh dokumen kerja sama dan melakukan approval final.
 - Project Manager dapat melihat dokumen dalam portfolio yang dikelola dan melakukan validasi.

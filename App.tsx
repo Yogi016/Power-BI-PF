@@ -12,6 +12,7 @@ import { CalendarPage } from './pages/CalendarPage';
 import { WorkPage } from './pages/WorkPage';
 import { LingSignPage } from './pages/LingSignPage';
 import { DokumenPage } from './pages/DokumenPage';
+import { CooperationDocumentsPage } from './pages/CooperationDocumentsPage';
 import { AssetPage } from './pages/AssetPage';
 import { CloseProjectPage } from './pages/CloseProjectPage';
 import { LoginPage } from './pages/LoginPage';
@@ -52,6 +53,8 @@ const AuthenticatedApp: React.FC = () => {
           <LingSignPage />
         ) : activePage === PageView.DOKUMEN ? (
           <DokumenPage />
+        ) : activePage === PageView.COOPERATION_DOCUMENTS ? (
+          <CooperationDocumentsPage />
         ) : activePage === PageView.ASSET ? (
           <AssetPage />
         ) : activePage === PageView.CLOSE_PROJECT ? (

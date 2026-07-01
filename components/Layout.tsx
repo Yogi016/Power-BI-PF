@@ -13,7 +13,8 @@ import {
   Briefcase,
   PenTool,
   FileText,
-  FolderArchive
+  FolderArchive,
+  ClipboardList
 } from 'lucide-react';
 import { PageView } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -51,6 +52,7 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
     { page: PageView.GANTT, icon: <BarChart3 className="h-[18px] w-[18px]" />, label: 'Gantt Chart', ariaLabel: 'Gantt Chart' },
     { page: PageView.CALENDAR, icon: <Calendar className="h-[18px] w-[18px]" />, label: 'Calendar', ariaLabel: 'Calendar' },
     { page: PageView.LING_SIGN, icon: <PenTool className="h-[18px] w-[18px]" />, label: 'Ling-Sign', ariaLabel: 'Ling-Sign' },
+    { page: PageView.COOPERATION_DOCUMENTS, icon: <ClipboardList className="h-[18px] w-[18px]" />, label: 'PKS/MOU', ariaLabel: 'PKS/MOU' },
     { page: PageView.CLOSE_PROJECT, icon: <Archive className="h-[18px] w-[18px]" />, label: 'Close Project', ariaLabel: 'Close Project' },
   ];
   const isMoreActive = mobileMoreItems.some(item => item.page === activePage);
@@ -192,6 +194,20 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
           >
             <FileText size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DOKUMEN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Dokumen</span>}
+          </button>
+
+          <button
+            onClick={() => {
+              onPageChange(PageView.COOPERATION_DOCUMENTS);
+              closeMobileMenu();
+            }}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.COOPERATION_DOCUMENTS
+              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              } ${collapsed ? 'justify-center' : ''}`}
+          >
+            <ClipboardList size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.COOPERATION_DOCUMENTS ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            {!collapsed && <span>PKS/MOU</span>}
           </button>
 
           <button
