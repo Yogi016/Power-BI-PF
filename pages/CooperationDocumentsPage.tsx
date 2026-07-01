@@ -2,16 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   BadgeCheck,
+  CheckCircle2,
   ClipboardList,
   Clock3,
   FileText,
   GitBranch,
   Loader2,
+  Plus,
   ShieldCheck,
+  Upload,
   Users,
+  X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { fetchCooperationDocuments } from '../lib/supabase';
+import { createCooperationDocumentDraft, fetchCooperationDocuments, fetchProjects, uploadDocumentFile } from '../lib/supabase';
 import {
   buildCooperationTasks,
   buildRoleDocumentInbox,
@@ -20,22 +24,74 @@ import {
   getRoleDashboardConfig,
   hasSignedDocument,
 } from '../lib/cooperationWorkflow';
-import type { CooperationDocument } from '../types';
+import type { CooperationDocument, CooperationDocumentType, Project } from '../types';
+
+type CreateFormState = {
+  title: string;
+  documentType: CooperationDocumentType;
+  partnerName: string;
+  documentNumber: string;
+  startDate: string;
+  endDate: string;
+  internalPic: string;
+  projectHead: string;
+  projectManager: string;
+  scopeSummary: string;
+  projectId: string;
+};
+
+type Notice = { type: 'success' | 'error'; message: string } | null;
+
+const DEFAULT_CREATE_FORM: CreateFormState = {
+  title: '',
+  documentType: 'PKS',
+  partnerName: '',
+  documentNumber: '',
+  startDate: '',
+  endDate: '',
+  internalPic: '',
+  projectHead: '',
+  projectManager: '',
+  scopeSummary: '',
+  projectId: '',
+};
+
+const COOPERATION_DOCUMENT_TYPE_OPTIONS: CooperationDocumentType[] = [
+  'PKS',
+  'MOU',
+  'MoA',
+  'Addendum',
+  'BAST',
+  'NDA',
+  'SK',
+  'Surat Dukungan',
+  'Lainnya',
+];
 
 export const CooperationDocumentsPage: React.FC = () => {
-  const { role, roleProfile } = useAuth();
+  const { role, roleProfile, user } = useAuth();
   const [cooperationDocuments, setCooperationDocuments] = useState<CooperationDocument[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [loadingCooperationDocs, setLoadingCooperationDocs] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [createForm, setCreateForm] = useState<CreateFormState>(DEFAULT_CREATE_FORM);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [savingDraft, setSavingDraft] = useState(false);
+  const [notice, setNotice] = useState<Notice>(null);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadCooperationDocuments = async () => {
       setLoadingCooperationDocs(true);
-      const docs = await fetchCooperationDocuments();
+      const [docs, projectRows] = await Promise.all([
+        fetchCooperationDocuments(),
+        fetchProjects(),
+      ]);
       if (!isMounted) return;
 
       setCooperationDocuments(docs);
+      setProjects(projectRows);
       setLoadingCooperationDocs(false);
     };
 
@@ -47,6 +103,7 @@ export const CooperationDocumentsPage: React.FC = () => {
   }, []);
 
   const roleConfig = useMemo(() => getRoleDashboardConfig(role), [role]);
+  const canCreateCooperationDocument = role === 'staff_officer';
 
   const roleInboxDocs = useMemo(
     () => buildRoleDocumentInbox(cooperationDocuments, role),
@@ -120,6 +177,90 @@ export const CooperationDocumentsPage: React.FC = () => {
     return `Berakhir ${formatDate(doc.endDate)}`;
   };
 
+  const reloadCooperationDocuments = async () => {
+    const docs = await fetchCooperationDocuments();
+    setCooperationDocuments(docs);
+  };
+
+  const resetCreateForm = () => {
+    setCreateForm(DEFAULT_CREATE_FORM);
+    setSelectedFile(null);
+  };
+
+  const handleCreateFormChange = <K extends keyof CreateFormState>(key: K, value: CreateFormState[K]) => {
+    setCreateForm(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleCreateDraft = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setNotice(null);
+
+    if (!canCreateCooperationDocument) {
+      setNotice({ type: 'error', message: 'Hanya Staff Officer yang membuat draft awal PKS/MOU.' });
+      return;
+    }
+
+    if (!createForm.title.trim() || !createForm.partnerName.trim() || !createForm.internalPic.trim()) {
+      setNotice({ type: 'error', message: 'Judul, mitra, dan PIC internal wajib diisi.' });
+      return;
+    }
+
+    if (!selectedFile) {
+      setNotice({ type: 'error', message: 'Upload file draft PKS/MOU terlebih dahulu.' });
+      return;
+    }
+
+    setSavingDraft(true);
+
+    try {
+      const fileUrl = await uploadDocumentFile(selectedFile, 'pks-mou');
+      if (!fileUrl) throw new Error('Upload file gagal.');
+
+      const selectedProject = projects.find(project => project.id === createForm.projectId);
+      const documentId = await createCooperationDocumentDraft({
+        title: createForm.title.trim(),
+        documentType: createForm.documentType,
+        partnerName: createForm.partnerName.trim(),
+        documentNumber: createForm.documentNumber.trim() || null,
+        startDate: createForm.startDate || null,
+        endDate: createForm.endDate || null,
+        internalPic: createForm.internalPic.trim(),
+        projectHead: createForm.projectHead.trim() || null,
+        projectManager: createForm.projectManager.trim() || null,
+        scopeSummary: createForm.scopeSummary.trim() || null,
+        createdBy: user?.id || null,
+        version: {
+          versionLabel: 'Draft v1',
+          fileName: selectedFile.name,
+          fileUrl,
+          uploadedBy: user?.id || null,
+          statusAtUpload: 'draft-internal',
+          revisionNotes: 'Upload draft awal oleh Staff Officer.',
+          revisionSource: 'internal',
+        },
+        projectLink: selectedProject
+          ? {
+              projectId: selectedProject.id,
+              projectName: selectedProject.name,
+              documentWeight: 20,
+            }
+          : null,
+      });
+
+      if (!documentId) throw new Error('Dokumen gagal disimpan ke Supabase.');
+
+      await reloadCooperationDocuments();
+      resetCreateForm();
+      setShowCreateForm(false);
+      setNotice({ type: 'success', message: 'Draft PKS/MOU berhasil dibuat dan evidence Draft v1 tersimpan.' });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Draft PKS/MOU gagal dibuat.';
+      setNotice({ type: 'error', message });
+    } finally {
+      setSavingDraft(false);
+    }
+  };
+
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-[1600px] mx-auto">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -132,7 +273,203 @@ export const CooperationDocumentsPage: React.FC = () => {
             Kelola workflow dokumen kerja sama, approval, evidence, dan task project otomatis
           </p>
         </div>
+        {canCreateCooperationDocument && (
+          <button
+            type="button"
+            onClick={() => setShowCreateForm(prev => !prev)}
+            className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            disabled={savingDraft}
+          >
+            {showCreateForm ? <X size={16} /> : <Plus size={16} />}
+            {showCreateForm ? 'Tutup Draft' : 'Draft PKS/MOU'}
+          </button>
+        )}
       </div>
+
+      {notice && (
+        <div
+          className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium ${
+            notice.type === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-rose-200 bg-rose-50 text-rose-700'
+          }`}
+        >
+          {notice.type === 'success' ? <CheckCircle2 size={17} /> : <AlertCircle size={17} />}
+          <span>{notice.message}</span>
+          <button
+            type="button"
+            onClick={() => setNotice(null)}
+            className="ml-auto rounded p-0.5 hover:bg-white/70"
+            aria-label="Tutup notifikasi"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {showCreateForm && canCreateCooperationDocument && (
+        <form onSubmit={handleCreateDraft} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-2 border-b border-slate-100 pb-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Draft Baru PKS/MOU</h2>
+              <p className="text-sm text-slate-500">Status awal: Draft Internal</p>
+            </div>
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700">
+              <Upload size={13} />
+              Evidence Draft v1
+            </span>
+          </div>
+
+          <div className="mt-4 grid gap-3 lg:grid-cols-3">
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Jenis</span>
+              <select
+                value={createForm.documentType}
+                onChange={event => handleCreateFormChange('documentType', event.target.value as CooperationDocumentType)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              >
+                {COOPERATION_DOCUMENT_TYPE_OPTIONS.map(option => (
+                  <option key={option} value={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1.5 lg:col-span-2">
+              <span className="text-xs font-bold uppercase text-slate-500">Judul Dokumen</span>
+              <input
+                value={createForm.title}
+                onChange={event => handleCreateFormChange('title', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Contoh: PKS Restorasi Mangrove Mahakam"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Mitra</span>
+              <input
+                value={createForm.partnerName}
+                onChange={event => handleCreateFormChange('partnerName', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Nama mitra"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">No Dokumen</span>
+              <input
+                value={createForm.documentNumber}
+                onChange={event => handleCreateFormChange('documentNumber', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Opsional"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">PIC Internal</span>
+              <input
+                value={createForm.internalPic}
+                onChange={event => handleCreateFormChange('internalPic', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder={user?.email || 'Nama PIC'}
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Mulai</span>
+              <input
+                type="date"
+                value={createForm.startDate}
+                onChange={event => handleCreateFormChange('startDate', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Berakhir</span>
+              <input
+                type="date"
+                value={createForm.endDate}
+                onChange={event => handleCreateFormChange('endDate', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Link Project</span>
+              <select
+                value={createForm.projectId}
+                onChange={event => handleCreateFormChange('projectId', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+              >
+                <option value="">Belum dihubungkan</option>
+                {projects.map(project => (
+                  <option key={project.id} value={project.id}>{project.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Project Head</span>
+              <input
+                value={createForm.projectHead}
+                onChange={event => handleCreateFormChange('projectHead', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Opsional"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-xs font-bold uppercase text-slate-500">Project Manager</span>
+              <input
+                value={createForm.projectManager}
+                onChange={event => handleCreateFormChange('projectManager', event.target.value)}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Opsional"
+              />
+            </label>
+
+            <label className="space-y-1.5 lg:col-span-2">
+              <span className="text-xs font-bold uppercase text-slate-500">Upload Draft</span>
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,image/jpeg,image/png"
+                onChange={event => setSelectedFile(event.target.files?.[0] || null)}
+                className="w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-1.5 file:text-sm file:font-bold file:text-white hover:bg-slate-100"
+              />
+            </label>
+
+            <label className="space-y-1.5 lg:col-span-3">
+              <span className="text-xs font-bold uppercase text-slate-500">Ruang Lingkup</span>
+              <textarea
+                value={createForm.scopeSummary}
+                onChange={event => handleCreateFormChange('scopeSummary', event.target.value)}
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                placeholder="Ringkasan kerja sama"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            <button
+              type="button"
+              onClick={resetCreateForm}
+              disabled={savingDraft}
+              className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Reset
+            </button>
+            <button
+              type="submit"
+              disabled={savingDraft}
+              className="inline-flex items-center justify-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {savingDraft ? <Loader2 size={16} className="animate-spin" /> : <Upload size={16} />}
+              {savingDraft ? 'Menyimpan...' : 'Simpan Draft'}
+            </button>
+          </div>
+        </form>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
         <div className="flex flex-col gap-4 border-b border-slate-100 bg-gradient-to-r from-emerald-50 to-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between">

@@ -376,6 +376,35 @@ export interface CooperationDocument {
   projectLinks: CooperationProjectLink[];
 }
 
+export interface CreateCooperationDocumentInput {
+  title: string;
+  documentType: CooperationDocumentType;
+  partnerName: string;
+  documentNumber?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
+  internalPic: string;
+  projectHead?: string | null;
+  projectManager?: string | null;
+  scopeSummary?: string | null;
+  createdBy?: string | null;
+  version: {
+    versionLabel: string;
+    fileName: string;
+    fileUrl: string;
+    storageKey?: string | null;
+    uploadedBy?: string | null;
+    statusAtUpload: CooperationDocumentStatus;
+    revisionNotes?: string | null;
+    revisionSource?: CooperationRevisionSource | null;
+  };
+  projectLink?: {
+    projectId: string;
+    projectName: string;
+    documentWeight?: number;
+  } | null;
+}
+
 export interface CooperationGeneratedTask {
   id: string;
   label: string;

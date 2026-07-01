@@ -16,6 +16,7 @@ import {
   CooperationDocumentVersion,
   CooperationProjectLink,
   CooperationRevisionSource,
+  CreateCooperationDocumentInput,
   UserRole,
 } from '../types';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
@@ -2075,6 +2076,96 @@ export async function fetchCooperationDocuments(): Promise<CooperationDocument[]
   } catch (error) {
     console.warn('Cooperation documents unavailable, using UI fallback data:', error);
     return [];
+  }
+}
+
+export async function createCooperationDocumentDraft(input: CreateCooperationDocumentInput): Promise<string | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data: documentRow, error: documentError } = await supabase
+      .from('cooperation_documents')
+      .insert({
+        title: input.title,
+        document_type: input.documentType,
+        partner_name: input.partnerName,
+        document_number: input.documentNumber || null,
+        start_date: input.startDate || null,
+        end_date: input.endDate || null,
+        status: 'draft-internal',
+        internal_pic: input.internalPic,
+        project_head: input.projectHead || null,
+        project_manager: input.projectManager || null,
+        scope_summary: input.scopeSummary || null,
+        created_by: input.createdBy || null,
+      })
+      .select('id')
+      .single();
+
+    if (documentError) throw documentError;
+    if (!documentRow?.id) throw new Error('Dokumen kerja sama gagal dibuat.');
+
+    const { data: versionRow, error: versionError } = await supabase
+      .from('cooperation_document_versions')
+      .insert({
+        document_id: documentRow.id,
+        version_label: input.version.versionLabel,
+        file_name: input.version.fileName,
+        file_url: input.version.fileUrl,
+        storage_key: input.version.storageKey || null,
+        uploaded_by: input.version.uploadedBy || null,
+        status_at_upload: input.version.statusAtUpload,
+        revision_notes: input.version.revisionNotes || null,
+        revision_source: input.version.revisionSource || null,
+      })
+      .select('id')
+      .single();
+
+    if (versionError) throw versionError;
+
+    if (versionRow?.id) {
+      const { error: updateError } = await supabase
+        .from('cooperation_documents')
+        .update({ current_version_id: versionRow.id })
+        .eq('id', documentRow.id);
+
+      if (updateError) throw updateError;
+    }
+
+    if (input.projectLink?.projectId && input.projectLink.projectName) {
+      const { error: linkError } = await supabase
+        .from('cooperation_document_project_links')
+        .insert({
+          document_id: documentRow.id,
+          project_id: input.projectLink.projectId,
+          project_name: input.projectLink.projectName,
+          document_weight: input.projectLink.documentWeight ?? 20,
+        });
+
+      if (linkError) throw linkError;
+    }
+
+    await supabase
+      .from('audit_events')
+      .insert({
+        entity_type: 'cooperation_document',
+        entity_id: documentRow.id,
+        actor_user_id: input.createdBy || null,
+        actor_role: 'staff_officer',
+        action: 'create_draft',
+        from_value: null,
+        to_value: {
+          status: 'draft-internal',
+          document_type: input.documentType,
+          version_label: input.version.versionLabel,
+        },
+        notes: input.version.revisionNotes || null,
+      });
+
+    return documentRow.id;
+  } catch (error) {
+    console.error('Error creating cooperation document draft:', error);
+    return null;
   }
 }
 
