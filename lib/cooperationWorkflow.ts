@@ -35,6 +35,53 @@ export const COOPERATION_STATUS_LABELS: Record<CooperationDocumentStatus, string
 
 export const COOPERATION_STATUSES = Object.keys(COOPERATION_STATUS_LABELS) as CooperationDocumentStatus[];
 
+export type CooperationTransition = {
+  from: CooperationDocumentStatus;
+  to: CooperationDocumentStatus;
+  role: UserRole;
+  kind: 'advance' | 'revisi';
+};
+
+export const COOPERATION_TRANSITIONS: CooperationTransition[] = [
+  // Staff Officer
+  { from: 'draft-internal', to: 'review-project-head', role: 'staff_officer', kind: 'advance' },
+  { from: 'review-legal-internal', to: 'review-mitra', role: 'staff_officer', kind: 'advance' },
+  { from: 'review-mitra', to: 'revisi-final', role: 'staff_officer', kind: 'advance' },
+  { from: 'revisi-final', to: 'validasi-project-manager', role: 'staff_officer', kind: 'advance' },
+  { from: 'disetujui-vp', to: 'siap-ttd', role: 'staff_officer', kind: 'advance' },
+  { from: 'siap-ttd', to: 'proses-ttd', role: 'staff_officer', kind: 'advance' },
+  { from: 'proses-ttd', to: 'aktif', role: 'staff_officer', kind: 'advance' },
+  { from: 'aktif', to: 'monitoring-implementasi', role: 'staff_officer', kind: 'advance' },
+  { from: 'monitoring-implementasi', to: 'selesai', role: 'staff_officer', kind: 'advance' },
+  { from: 'monitoring-implementasi', to: 'diperpanjang', role: 'staff_officer', kind: 'advance' },
+  { from: 'monitoring-implementasi', to: 'diarsipkan', role: 'staff_officer', kind: 'advance' },
+  // Project Head
+  { from: 'review-project-head', to: 'review-legal-internal', role: 'project_head', kind: 'advance' },
+  { from: 'review-project-head', to: 'revisi-final', role: 'project_head', kind: 'revisi' },
+  // Project Manager
+  { from: 'validasi-project-manager', to: 'menunggu-approval-vp', role: 'project_manager', kind: 'advance' },
+  { from: 'validasi-project-manager', to: 'revisi-final', role: 'project_manager', kind: 'revisi' },
+  { from: 'monitoring-implementasi', to: 'selesai', role: 'project_manager', kind: 'advance' },
+  { from: 'monitoring-implementasi', to: 'diperpanjang', role: 'project_manager', kind: 'advance' },
+  { from: 'monitoring-implementasi', to: 'diarsipkan', role: 'project_manager', kind: 'advance' },
+  // VP Lingkungan
+  { from: 'menunggu-approval-vp', to: 'disetujui-vp', role: 'vp_lingkungan', kind: 'advance' },
+  { from: 'menunggu-approval-vp', to: 'revisi-final', role: 'vp_lingkungan', kind: 'revisi' },
+];
+
+export function getAllowedTransitions(
+  status: CooperationDocumentStatus,
+  role: UserRole
+): { to: CooperationDocumentStatus; label: string; kind: 'advance' | 'revisi' }[] {
+  return COOPERATION_TRANSITIONS
+    .filter((t) => t.from === status && t.role === role)
+    .map((t) => ({
+      to: t.to,
+      label: t.kind === 'revisi' ? 'Kembalikan ke Revisi' : getCooperationStatusLabel(t.to),
+      kind: t.kind,
+    }));
+}
+
 export const COOPERATION_TASK_TEMPLATE = [
   { id: 'inisiasi', label: 'Inisiasi PKS/MOU', weightShare: 10 },
   { id: 'draft', label: 'Penyusunan Draft', weightShare: 15 },

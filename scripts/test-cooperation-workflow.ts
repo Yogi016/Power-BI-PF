@@ -4,6 +4,7 @@ import {
   buildRoleDocumentInbox,
   COOPERATION_DEMO_DOCUMENTS,
   distributeCooperationDocumentWeights,
+  getAllowedTransitions,
   mapCooperationStatusToTaskId,
   redistributeImplementationWeights,
 } from '../lib/cooperationWorkflow';
@@ -72,6 +73,37 @@ assert.equal(
   buildRoleDocumentInbox(COOPERATION_DEMO_DOCUMENTS, 'staff_officer').length,
   0,
   'Staff inbox should not include documents outside draft/revision statuses'
+);
+
+// --- getAllowedTransitions ---
+const vpActions = getAllowedTransitions('menunggu-approval-vp', 'vp_lingkungan');
+assert.deepEqual(
+  vpActions.map((a) => a.to).sort(),
+  ['disetujui-vp', 'revisi-final'],
+  'VP di status menunggu-approval-vp boleh menyetujui atau mengembalikan ke revisi'
+);
+assert.equal(
+  vpActions.find((a) => a.to === 'revisi-final')?.kind,
+  'revisi',
+  'aksi ke revisi-final harus berjenis revisi'
+);
+
+assert.deepEqual(
+  getAllowedTransitions('menunggu-approval-vp', 'staff_officer'),
+  [],
+  'staff officer tidak boleh transisi di status menunggu-approval-vp'
+);
+
+assert.deepEqual(
+  getAllowedTransitions('review-project-head', 'project_head').map((a) => a.to).sort(),
+  ['review-legal-internal', 'revisi-final'],
+  'project head boleh lanjut ke review-legal-internal atau kembalikan ke revisi'
+);
+
+assert.deepEqual(
+  getAllowedTransitions('draft-internal', 'staff_officer').map((a) => a.to),
+  ['review-project-head'],
+  'staff officer mengirim draft ke review project head'
 );
 
 console.log('cooperation workflow checks passed');
