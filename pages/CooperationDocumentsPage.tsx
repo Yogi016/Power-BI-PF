@@ -15,7 +15,6 @@ import { fetchCooperationDocuments } from '../lib/supabase';
 import {
   buildCooperationTasks,
   buildRoleDocumentInbox,
-  COOPERATION_DEMO_DOCUMENTS,
   distributeCooperationDocumentWeights,
   getCooperationStatusLabel,
   getRoleDashboardConfig,
@@ -27,7 +26,6 @@ export const CooperationDocumentsPage: React.FC = () => {
   const { role, roleProfile } = useAuth();
   const [cooperationDocuments, setCooperationDocuments] = useState<CooperationDocument[]>([]);
   const [loadingCooperationDocs, setLoadingCooperationDocs] = useState(true);
-  const [usingSampleCooperationData, setUsingSampleCooperationData] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -37,14 +35,7 @@ export const CooperationDocumentsPage: React.FC = () => {
       const docs = await fetchCooperationDocuments();
       if (!isMounted) return;
 
-      if (docs.length > 0) {
-        setCooperationDocuments(docs);
-        setUsingSampleCooperationData(false);
-      } else {
-        setCooperationDocuments(COOPERATION_DEMO_DOCUMENTS);
-        setUsingSampleCooperationData(true);
-      }
-
+      setCooperationDocuments(docs);
       setLoadingCooperationDocs(false);
     };
 
@@ -155,10 +146,10 @@ export const CooperationDocumentsPage: React.FC = () => {
                 <FileText size={13} />
                 Page terpisah dari arsip dokumen
               </span>
-              {usingSampleCooperationData && (
+              {!loadingCooperationDocs && cooperationDocuments.length === 0 && (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
                   <AlertCircle size={13} />
-                  Contoh alur sampai tabel Supabase diterapkan
+                  Belum ada data PKS/MOU
                 </span>
               )}
             </div>
@@ -241,76 +232,91 @@ export const CooperationDocumentsPage: React.FC = () => {
             </div>
 
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead>
-                  <tr className="bg-white text-left text-xs font-bold uppercase text-slate-500">
-                    <th className="px-3 py-2">Dokumen</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Project / Bobot</th>
-                    <th className="px-3 py-2">Task Aktif</th>
-                    <th className="px-3 py-2">Evidence</th>
-                    <th className="px-3 py-2">Masa Berlaku</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {cooperationDocuments.map(doc => {
-                    const task = getActiveCooperationTask(doc);
-                    const signed = hasSignedDocument(doc.versions);
-                    const projectName = doc.projectLinks[0]?.projectName || 'Belum terhubung project';
-                    const projectWeight = doc.projectLinks[0]?.documentWeight ?? documentWeights[doc.id] ?? 0;
+              {loadingCooperationDocs ? (
+                <div className="flex min-h-64 items-center justify-center gap-2 text-sm text-slate-500">
+                  <Loader2 size={18} className="animate-spin text-emerald-600" />
+                  Memuat dokumen kerja sama...
+                </div>
+              ) : cooperationDocuments.length === 0 ? (
+                <div className="flex min-h-64 flex-col items-center justify-center px-4 text-center">
+                  <ClipboardList size={42} className="mb-3 text-slate-300" />
+                  <p className="text-sm font-bold text-slate-700">Belum ada dokumen PKS/MOU</p>
+                  <p className="mt-1 max-w-md text-sm text-slate-500">
+                    Data akan muncul setelah tabel Supabase berisi dokumen kerja sama real. Tidak ada data contoh yang ditampilkan di page ini.
+                  </p>
+                </div>
+              ) : (
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead>
+                    <tr className="bg-white text-left text-xs font-bold uppercase text-slate-500">
+                      <th className="px-3 py-2">Dokumen</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Project / Bobot</th>
+                      <th className="px-3 py-2">Task Aktif</th>
+                      <th className="px-3 py-2">Evidence</th>
+                      <th className="px-3 py-2">Masa Berlaku</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {cooperationDocuments.map(doc => {
+                      const task = getActiveCooperationTask(doc);
+                      const signed = hasSignedDocument(doc.versions);
+                      const projectName = doc.projectLinks[0]?.projectName || 'Belum terhubung project';
+                      const projectWeight = doc.projectLinks[0]?.documentWeight ?? documentWeights[doc.id] ?? 0;
 
-                    return (
-                      <tr key={doc.id} className="bg-white hover:bg-slate-50/80">
-                        <td className="px-3 py-3 align-top">
-                          <p className="font-bold text-slate-900">{doc.title}</p>
-                          <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
-                            <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700">{doc.documentType}</span>
-                            <span className="inline-flex items-center gap-1"><Users size={12} /> {doc.partnerName}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getCooperationStatusClass(doc.status)}`}>
-                            {getCooperationStatusLabel(doc.status)}
-                          </span>
-                          {signed && (
-                            <p className="mt-1 text-xs font-medium text-emerald-700">Signed tersedia</p>
-                          )}
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <p className="text-sm font-semibold text-slate-800">{projectName}</p>
-                          <p className="mt-1 text-xs text-slate-500">Bobot dokumen: <span className="font-bold text-slate-800">{projectWeight.toFixed(2)}%</span></p>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <p className="text-sm font-semibold text-slate-800">{task?.label || 'Workflow selesai'}</p>
-                          <p className="mt-1 text-xs text-slate-500">Task otomatis mengikuti status dokumen.</p>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <div className="flex flex-wrap gap-1.5">
-                            {doc.versions.slice(0, 3).map(version => (
-                              <a
-                                key={version.id}
-                                href={version.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
-                              >
-                                {version.versionLabel}
-                              </a>
-                            ))}
-                            {doc.versions.length > 3 && (
-                              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">+{doc.versions.length - 3}</span>
+                      return (
+                        <tr key={doc.id} className="bg-white hover:bg-slate-50/80">
+                          <td className="px-3 py-3 align-top">
+                            <p className="font-bold text-slate-900">{doc.title}</p>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                              <span className="rounded-md bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-700">{doc.documentType}</span>
+                              <span className="inline-flex items-center gap-1"><Users size={12} /> {doc.partnerName}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-bold ${getCooperationStatusClass(doc.status)}`}>
+                              {getCooperationStatusLabel(doc.status)}
+                            </span>
+                            {signed && (
+                              <p className="mt-1 text-xs font-medium text-emerald-700">Signed tersedia</p>
                             )}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <p className="text-sm font-semibold text-slate-800">{getExpiryText(doc)}</p>
-                          <p className="mt-1 text-xs text-slate-500">{formatDate(doc.startDate)} - {formatDate(doc.endDate)}</p>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <p className="text-sm font-semibold text-slate-800">{projectName}</p>
+                            <p className="mt-1 text-xs text-slate-500">Bobot dokumen: <span className="font-bold text-slate-800">{projectWeight.toFixed(2)}%</span></p>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <p className="text-sm font-semibold text-slate-800">{task?.label || 'Workflow selesai'}</p>
+                            <p className="mt-1 text-xs text-slate-500">Task otomatis mengikuti status dokumen.</p>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <div className="flex flex-wrap gap-1.5">
+                              {doc.versions.slice(0, 3).map(version => (
+                                <a
+                                  key={version.id}
+                                  href={version.fileUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-xs font-medium text-slate-700 hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                                >
+                                  {version.versionLabel}
+                                </a>
+                              ))}
+                              {doc.versions.length > 3 && (
+                                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs text-slate-500">+{doc.versions.length - 3}</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            <p className="text-sm font-semibold text-slate-800">{getExpiryText(doc)}</p>
+                            <p className="mt-1 text-xs text-slate-500">{formatDate(doc.startDate)} - {formatDate(doc.endDate)}</p>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>
