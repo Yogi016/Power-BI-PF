@@ -107,6 +107,8 @@ CREATE INDEX IF NOT EXISTS idx_cooperation_approvals_document ON cooperation_doc
 CREATE INDEX IF NOT EXISTS idx_cooperation_project_links_document ON cooperation_document_project_links(document_id);
 CREATE INDEX IF NOT EXISTS idx_audit_events_entity ON audit_events(entity_type, entity_id);
 
+DROP TRIGGER IF EXISTS update_cooperation_documents_updated_at ON cooperation_documents;
+
 CREATE TRIGGER update_cooperation_documents_updated_at
     BEFORE UPDATE ON cooperation_documents
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -119,30 +121,35 @@ ALTER TABLE audit_events ENABLE ROW LEVEL SECURITY;
 
 -- Phase 1 policy: every authenticated user can see the Dokumen page.
 -- Record-level role scoping can be tightened after Supabase profile metadata is deployed.
+DROP POLICY IF EXISTS "Allow authenticated cooperation documents" ON cooperation_documents;
 CREATE POLICY "Allow authenticated cooperation documents" ON cooperation_documents
     FOR ALL TO authenticated
-    USING (auth.role() = 'authenticated')
-    WITH CHECK (auth.role() = 'authenticated');
+    USING (true)
+    WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated cooperation versions" ON cooperation_document_versions;
 CREATE POLICY "Allow authenticated cooperation versions" ON cooperation_document_versions
     FOR ALL TO authenticated
-    USING (auth.role() = 'authenticated')
-    WITH CHECK (auth.role() = 'authenticated');
+    USING (true)
+    WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated cooperation approvals" ON cooperation_document_approvals;
 CREATE POLICY "Allow authenticated cooperation approvals" ON cooperation_document_approvals
     FOR ALL TO authenticated
-    USING (auth.role() = 'authenticated')
-    WITH CHECK (auth.role() = 'authenticated');
+    USING (true)
+    WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated cooperation project links" ON cooperation_document_project_links;
 CREATE POLICY "Allow authenticated cooperation project links" ON cooperation_document_project_links
     FOR ALL TO authenticated
-    USING (auth.role() = 'authenticated')
-    WITH CHECK (auth.role() = 'authenticated');
+    USING (true)
+    WITH CHECK (true);
 
+DROP POLICY IF EXISTS "Allow authenticated audit events" ON audit_events;
 CREATE POLICY "Allow authenticated audit events" ON audit_events
     FOR ALL TO authenticated
-    USING (auth.role() = 'authenticated')
-    WITH CHECK (auth.role() = 'authenticated');
+    USING (true)
+    WITH CHECK (true);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE cooperation_documents TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE cooperation_document_versions TO authenticated;
