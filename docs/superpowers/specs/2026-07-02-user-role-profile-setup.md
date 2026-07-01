@@ -30,14 +30,13 @@ Tabel profil operasional user:
 ## Cara Membuat User
 
 1. Buat user di Supabase Dashboard -> Authentication -> Users.
-2. Salin UUID user dari tabel Auth user.
+2. Trigger database otomatis membuat row di `public.user_profiles`.
 3. Buka Table Editor -> `public.user_profiles`.
-4. Tambahkan row:
-   - `user_id`: UUID user Auth
-   - `full_name`: nama user
-   - `role_code`: pilih dari dropdown role
-   - `assigned_project_ids`: kosongkan dulu jika belum dipakai
-   - `is_active`: true
-5. User login dari aplikasi seperti biasa.
+4. Cari user yang baru dibuat.
+5. Ubah `full_name` jika perlu.
+6. Pilih `role_code` dari dropdown role.
+7. Kosongkan `assigned_project_ids` dulu jika belum dipakai.
+8. Pastikan `is_active` bernilai true.
+9. User login dari aplikasi seperti biasa.
 
-Jika row `user_profiles` belum dibuat, aplikasi fallback ke metadata Auth atau default `staff_officer`.
+Default role otomatis adalah `staff_officer`. Jika row `user_profiles` belum dibuat karena migration belum aktif, aplikasi tetap fallback ke metadata Auth atau default `staff_officer`.
