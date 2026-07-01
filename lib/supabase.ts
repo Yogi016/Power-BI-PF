@@ -2079,6 +2079,28 @@ export async function fetchCooperationDocuments(): Promise<CooperationDocument[]
   }
 }
 
+export async function advanceCooperationStatus(
+  documentId: string,
+  toStatus: CooperationDocumentStatus,
+  notes?: string
+): Promise<CooperationDocumentStatus | null> {
+  if (!supabase) return null;
+
+  try {
+    const { data, error } = await supabase.rpc('advance_cooperation_status', {
+      p_document_id: documentId,
+      p_to_status: toStatus,
+      p_notes: notes ?? null,
+    });
+
+    if (error) throw error;
+    return (data as CooperationDocumentStatus) ?? toStatus;
+  } catch (error) {
+    console.error('Error advancing cooperation status:', error);
+    return null;
+  }
+}
+
 export async function createCooperationDocumentDraft(input: CreateCooperationDocumentInput): Promise<string | null> {
   if (!supabase) return null;
 
