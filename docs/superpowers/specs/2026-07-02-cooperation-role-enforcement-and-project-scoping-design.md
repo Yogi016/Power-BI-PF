@@ -200,7 +200,7 @@ Satu titik filter terpusat di `context/DataContext.tsx`.
 - Setelah `projects` dimuat (baik jalur Supabase maupun CSV), turunkan `visibleProjects`:
   ```ts
   const shouldScope =
-    SCOPED_ROLES.has(role) && (assignedProjectIds?.length ?? 0) > 0 && !csvLoaded;
+    SCOPED_ROLES.has(role) && (assignedProjectIds?.length ?? 0) > 0 && supabaseLoaded;
   const visibleProjects = shouldScope
     ? projects.filter(p => assignedProjectIds.includes(p.id))
     : projects;
@@ -210,7 +210,7 @@ Satu titik filter terpusat di `context/DataContext.tsx`.
 ### Keputusan default (disetujui user)
 
 1. **Scoped role dengan `assignedProjectIds` kosong → fail-open (lihat semua).** Mencegah dashboard blank sebelum admin mengisi assignment. Dapat dibalik ke fail-closed nanti dengan mengganti syarat `shouldScope`.
-2. **Fallback CSV → scoping dilewati (lihat semua).** Id proyek CSV bukan UUID sehingga tak akan match `assigned_project_ids` dan filter akan mengosongkan seluruh dashboard. Aturan eksplisit: **scoping hanya diterapkan saat sumber proyek berasal dari Supabase.** DataContext sudah punya flag `csvLoaded`; syarat final menjadi `shouldScope = SCOPED_ROLES.has(role) && assignedProjectIds.length > 0 && !csvLoaded`.
+2. **Fallback CSV → scoping dilewati (lihat semua).** Id proyek CSV bukan UUID sehingga tak akan match `assigned_project_ids` dan filter akan mengosongkan seluruh dashboard. Aturan eksplisit: **scoping hanya diterapkan saat sumber proyek berasal dari Supabase.** DataContext punya flag `supabaseLoaded` yang menjadi `true` setelah jalur Supabase memanggil `setProjects(mappedProjects)` (id UUID). Syarat final: `shouldScope = SCOPED_ROLES.has(role) && assignedProjectIds.length > 0 && supabaseLoaded`. (Catatan: `csvLoaded` tetap `true` walau Supabase kemudian menimpa data, jadi `supabaseLoaded` adalah sinyal yang benar, bukan `!csvLoaded`.)
 
 ### Catatan keterbatasan
 
