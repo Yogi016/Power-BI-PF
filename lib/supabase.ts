@@ -2079,12 +2079,16 @@ export async function fetchCooperationDocuments(): Promise<CooperationDocument[]
   }
 }
 
+export type AdvanceCooperationResult =
+  | { ok: true; status: CooperationDocumentStatus }
+  | { ok: false; error: string };
+
 export async function advanceCooperationStatus(
   documentId: string,
   toStatus: CooperationDocumentStatus,
   notes?: string
-): Promise<CooperationDocumentStatus | null> {
-  if (!supabase) return null;
+): Promise<AdvanceCooperationResult> {
+  if (!supabase) return { ok: false, error: 'Supabase tidak dikonfigurasi.' };
 
   try {
     const { data, error } = await supabase.rpc('advance_cooperation_status', {
@@ -2094,10 +2098,11 @@ export async function advanceCooperationStatus(
     });
 
     if (error) throw error;
-    return (data as CooperationDocumentStatus) ?? toStatus;
+    return { ok: true, status: (data as CooperationDocumentStatus) ?? toStatus };
   } catch (error) {
+    const message = (error as { message?: string })?.message ?? String(error);
     console.error('Error advancing cooperation status:', error);
-    return null;
+    return { ok: false, error: message };
   }
 }
 

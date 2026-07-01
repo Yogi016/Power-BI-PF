@@ -85,11 +85,11 @@ export const CooperationDocumentsPage: React.FC = () => {
     setAdvancingId(documentId);
     setNotice(null);
     const result = await advanceCooperationStatus(documentId, toStatus);
-    if (result) {
+    if (result.ok) {
       await reloadCooperationDocuments();
       setNotice({ type: 'success', message: `Status dokumen diperbarui menjadi ${getCooperationStatusLabel(toStatus)}.` });
     } else {
-      setNotice({ type: 'error', message: 'Transisi status gagal. Role Anda mungkin tidak berhak atau terjadi kesalahan.' });
+      setNotice({ type: 'error', message: `Transisi status gagal: ${result.error}` });
     }
     setAdvancingId(null);
   };
