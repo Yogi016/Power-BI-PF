@@ -15,11 +15,12 @@ import {
   X,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { createCooperationDocumentDraft, fetchCooperationDocuments, fetchProjects, uploadCooperationDocumentFile } from '../lib/supabase';
+import { advanceCooperationStatus, createCooperationDocumentDraft, fetchCooperationDocuments, fetchProjects, uploadCooperationDocumentFile } from '../lib/supabase';
 import {
   buildCooperationTasks,
   buildRoleDocumentInbox,
   distributeCooperationDocumentWeights,
+  getAllowedTransitions,
   getCooperationStatusLabel,
   getRoleDashboardConfig,
   hasSignedDocument,
@@ -78,6 +79,20 @@ export const CooperationDocumentsPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [savingDraft, setSavingDraft] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
+  const [advancingId, setAdvancingId] = useState<string | null>(null);
+
+  const handleAdvanceStatus = async (documentId: string, toStatus: CooperationDocument['status']) => {
+    setAdvancingId(documentId);
+    setNotice(null);
+    const result = await advanceCooperationStatus(documentId, toStatus);
+    if (result) {
+      await reloadCooperationDocuments();
+      setNotice({ type: 'success', message: `Status dokumen diperbarui menjadi ${getCooperationStatusLabel(toStatus)}.` });
+    } else {
+      setNotice({ type: 'error', message: 'Transisi status gagal. Role Anda mungkin tidak berhak atau terjadi kesalahan.' });
+    }
+    setAdvancingId(null);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -594,6 +609,7 @@ export const CooperationDocumentsPage: React.FC = () => {
                       <th className="px-3 py-2">Task Aktif</th>
                       <th className="px-3 py-2">Evidence</th>
                       <th className="px-3 py-2">Masa Berlaku</th>
+                      <th className="px-3 py-2">Aksi</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -649,6 +665,33 @@ export const CooperationDocumentsPage: React.FC = () => {
                           <td className="px-3 py-3 align-top">
                             <p className="text-sm font-semibold text-slate-800">{getExpiryText(doc)}</p>
                             <p className="mt-1 text-xs text-slate-500">{formatDate(doc.startDate)} - {formatDate(doc.endDate)}</p>
+                          </td>
+                          <td className="px-3 py-3 align-top">
+                            {(() => {
+                              const actions = getAllowedTransitions(doc.status, role);
+                              if (actions.length === 0) {
+                                return <span className="text-xs text-slate-400">—</span>;
+                              }
+                              return (
+                                <div className="flex flex-col gap-1.5">
+                                  {actions.map(action => (
+                                    <button
+                                      key={action.to}
+                                      type="button"
+                                      onClick={() => handleAdvanceStatus(doc.id, action.to)}
+                                      disabled={advancingId === doc.id}
+                                      className={`inline-flex items-center justify-center rounded-md px-2.5 py-1 text-xs font-bold disabled:cursor-not-allowed disabled:opacity-60 ${
+                                        action.kind === 'revisi'
+                                          ? 'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                          : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                                      }`}
+                                    >
+                                      {advancingId === doc.id ? 'Memproses...' : action.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              );
+                            })()}
                           </td>
                         </tr>
                       );
