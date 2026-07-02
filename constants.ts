@@ -93,32 +93,26 @@ export const INITIAL_TASKS: TaskItem[] = [
 ];
 
 export const COLORS = {
-  // Primary colors - Deep blue theme
-  primary: '#1e40af', // Blue 800
-  primaryLight: '#3b82f6', // Blue 500
-  primaryDark: '#1e3a8a', // Blue 900
-  
-  // Secondary colors - Emerald green
-  secondary: '#059669', // Emerald 600
-  secondaryLight: '#10b981', // Emerald 500
-  secondaryDark: '#047857', // Emerald 700
-  
-  // Accent colors
-  accent: '#f59e0b', // Amber 500
-  accentLight: '#fbbf24', // Amber 400
-  
-  // Status colors
-  success: '#10b981', // Emerald 500
-  warning: '#f59e0b', // Amber 500
-  danger: '#ef4444', // Red 500
-  info: '#3b82f6', // Blue 500
-  
-  // Chart colors
-  planLine: '#f97316', // Orange 500 (baseline)
-  actualLine: '#0ea5e9', // Sky 500 (actual)
-  targetBar: '#c084fc', // Purple 400 (weekly target)
-  
-  // Neutral colors
+  // Single interactive accent — Action Blue (DESIGN.md)
+  action: '#0066cc',
+  actionHover: '#0055b3',
+  actionFocus: '#0071e3',
+  actionOnDark: '#2997ff',
+  actionTint: '#eff6ff',
+
+  // Semantic status (meaning only, always paired with an icon)
+  statusPositive: '#059669',
+  statusWarning: '#d97706',
+  statusDanger: '#dc2626',
+  statusNeutral: '#475569',
+
+  // Chart series
+  chartActual: '#0066cc', // solid — the focus
+  chartPlan: '#94a3b8',   // slate, dashed — the reference
+  chartGrid: '#e2e8f0',
+  chartAxis: '#64748b',
+
+  // Neutrals (slate)
   slate50: '#f8fafc',
   slate100: '#f1f5f9',
   slate200: '#e2e8f0',
@@ -127,14 +121,4 @@ export const COLORS = {
   slate700: '#334155',
   slate800: '#1e293b',
   slate900: '#0f172a',
-  
-  // Gradients
-  gradientPrimary: 'linear-gradient(135deg, #1e40af 0%, #3b82f6 100%)',
-  gradientSecondary: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-  gradientAccent: 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)',
-  
-  // Background
-  bgLight: '#ffffff',
-  bgGray: '#f8fafc',
-  bgDark: '#0f172a',
-};
+} as const;

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../lib/supabaseClient';
 import type { User, Session } from '@supabase/supabase-js';
 import { getRoleProfile, resolveUserRole } from '../lib/roleUtils';
+import { getDevRoleOverride } from '../lib/devRoleOverride';
 import type { RoleProfile, UserProfile, UserRole } from '../types';
 
 interface AuthContextType {
@@ -22,7 +23,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [session, setSession] = useState<Session | null>(null);
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
-    const role = resolveUserRole(user, profile);
+    const role = getDevRoleOverride() ?? resolveUserRole(user, profile);
     const roleProfile = getRoleProfile(role);
 
     const loadUserProfile = useCallback(async (authUser: User | null) => {
