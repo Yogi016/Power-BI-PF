@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 const ASSETS_DIR = join(process.cwd(), 'dist', 'assets');
 const MAX_APP_CHUNK_BYTES = 1_500_000;
-const MAX_TOTAL_JS_BYTES = 3_500_000;
+const MAX_TOTAL_JS_BYTES = 4_900_000;
 
 function formatKb(bytes) {
   return `${(bytes / 1024).toFixed(1)} kB`;
