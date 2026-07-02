@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Plus, Search, FileText, Trash2, Edit3, X, ExternalLink,
     Check, ChevronDown, FolderPlus, Settings2, AlertCircle, Loader2,
@@ -6,17 +6,20 @@ import {
 } from 'lucide-react';
 import { DocumentCategory, DocumentItem } from '../types';
 import {
-    fetchDocumentCategories,
     createDocumentCategory,
     updateDocumentCategory,
     deleteDocumentCategory,
-    fetchDocuments,
-    fetchAllDocuments,
     createDocument,
     updateDocument,
     deleteDocument,
     uploadDocumentFile,
 } from '../lib/supabase';
+import {
+    clearDocumentCaches,
+    getCachedAllDocuments,
+    getCachedDocumentCategories,
+    getCachedDocuments,
+} from '../lib/documentDataCache';
 
 // =====================================================
 // DOKUMEN PAGE
@@ -46,6 +49,14 @@ export const DokumenPage: React.FC = () => {
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [linkMode, setLinkMode] = useState<'link' | 'upload'>('link');
+    const categoryLoadRequestRef = useRef(0);
+    const documentLoadRequestRef = useRef(0);
+    const globalSearchRequestRef = useRef(0);
+    const activeCategoryRef = useRef<string | null>(null);
+    const globalSearchQueryRef = useRef('');
+
+    activeCategoryRef.current = activeCategory;
+    globalSearchQueryRef.current = globalSearchQuery;
 
     // Form state
     const [formData, setFormData] = useState({
@@ -62,26 +73,49 @@ export const DokumenPage: React.FC = () => {
     });
 
     // Load categories
-    const loadCategories = useCallback(async () => {
+    const loadCategories = useCallback(async (force = false) => {
+        const requestId = ++categoryLoadRequestRef.current;
         setLoading(true);
-        const cats = await fetchDocumentCategories();
-        setCategories(cats);
-        if (cats.length > 0 && !activeCategory) {
-            setActiveCategory(cats[0].id);
+        try {
+            const cats = await getCachedDocumentCategories(force);
+            if (requestId !== categoryLoadRequestRef.current) return;
+            setCategories(cats);
+            setActiveCategory((current) => current ?? cats[0]?.id ?? null);
+        } catch (error) {
+            if (requestId !== categoryLoadRequestRef.current) return;
+            console.error('Error loading document categories:', error);
+            setCategories([]);
+        } finally {
+            if (requestId === categoryLoadRequestRef.current) {
+                setLoading(false);
+            }
         }
-        setLoading(false);
     }, []);
 
     // Load documents for active category
-    const loadDocuments = useCallback(async () => {
+    const loadDocuments = useCallback(async (force = false) => {
         if (!activeCategory) {
+            documentLoadRequestRef.current += 1;
             setDocuments([]);
+            setLoadingDocs(false);
             return;
         }
+        const requestId = ++documentLoadRequestRef.current;
+        const requestedCategory = activeCategory;
         setLoadingDocs(true);
-        const docs = await fetchDocuments(activeCategory);
-        setDocuments(docs);
-        setLoadingDocs(false);
+        try {
+            const docs = await getCachedDocuments(requestedCategory, force);
+            if (requestId !== documentLoadRequestRef.current || activeCategoryRef.current !== requestedCategory) return;
+            setDocuments(docs);
+        } catch (error) {
+            if (requestId !== documentLoadRequestRef.current || activeCategoryRef.current !== requestedCategory) return;
+            console.error('Error loading documents:', error);
+            setDocuments([]);
+        } finally {
+            if (requestId === documentLoadRequestRef.current && activeCategoryRef.current === requestedCategory) {
+                setLoadingDocs(false);
+            }
+        }
     }, [activeCategory]);
 
     useEffect(() => { loadCategories(); }, [loadCategories]);
@@ -89,26 +123,42 @@ export const DokumenPage: React.FC = () => {
 
     // Global search handler
     useEffect(() => {
-        if (!globalSearchQuery.trim()) {
+        const query = globalSearchQuery.trim();
+        if (!query) {
+            globalSearchRequestRef.current += 1;
             setGlobalSearchResults([]);
             setShowGlobalResults(false);
+            setGlobalSearching(false);
             return;
         }
         const timeout = setTimeout(async () => {
+            const requestId = ++globalSearchRequestRef.current;
             setGlobalSearching(true);
-            const allDocs = await fetchAllDocuments();
-            const q = globalSearchQuery.toLowerCase();
-            const filtered = allDocs.filter(doc =>
-                doc.noSurat?.toLowerCase().includes(q) ||
-                doc.deskripsi?.toLowerCase().includes(q) ||
-                doc.jenisDokumen?.toLowerCase().includes(q) ||
-                doc.pengisi?.toLowerCase().includes(q) ||
-                doc.penerbi?.toLowerCase().includes(q) ||
-                doc.keterangan?.toLowerCase().includes(q)
-            );
-            setGlobalSearchResults(filtered);
-            setShowGlobalResults(true);
-            setGlobalSearching(false);
+            try {
+                const allDocs = await getCachedAllDocuments();
+                if (requestId !== globalSearchRequestRef.current || globalSearchQueryRef.current.trim() !== query) return;
+                const q = query.toLowerCase();
+                const filtered = allDocs.filter(doc =>
+                    doc.noSurat?.toLowerCase().includes(q) ||
+                    doc.deskripsi?.toLowerCase().includes(q) ||
+                    doc.jenisDokumen?.toLowerCase().includes(q) ||
+                    doc.pengisi?.toLowerCase().includes(q) ||
+                    doc.penerbi?.toLowerCase().includes(q) ||
+                    doc.keterangan?.toLowerCase().includes(q)
+                );
+                if (requestId !== globalSearchRequestRef.current || globalSearchQueryRef.current.trim() !== query) return;
+                setGlobalSearchResults(filtered);
+                setShowGlobalResults(true);
+            } catch (error) {
+                if (requestId !== globalSearchRequestRef.current || globalSearchQueryRef.current.trim() !== query) return;
+                console.error('Error searching documents:', error);
+                setGlobalSearchResults([]);
+                setShowGlobalResults(true);
+            } finally {
+                if (requestId === globalSearchRequestRef.current && globalSearchQueryRef.current.trim() === query) {
+                    setGlobalSearching(false);
+                }
+            }
         }, 400);
         return () => clearTimeout(timeout);
     }, [globalSearchQuery]);
@@ -150,13 +200,14 @@ export const DokumenPage: React.FC = () => {
 
     const handleSaveDoc = async () => {
         if (!activeCategory) return;
+        const targetCategory = activeCategory;
 
         let finalLink = formData.link;
 
         // If file is selected, upload it first
         if (selectedFile && linkMode === 'upload') {
             setUploading(true);
-            const activeCat = categories.find(c => c.id === activeCategory);
+            const activeCat = categories.find(c => c.id === targetCategory);
             const catName = activeCat?.name || 'general';
             const uploadedUrl = await uploadDocumentFile(selectedFile, catName);
             setUploading(false);
@@ -168,14 +219,28 @@ export const DokumenPage: React.FC = () => {
 
         if (editingDoc) {
             const ok = await updateDocument(editingDoc.id, saveData);
-            if (ok) { await loadDocuments(); setShowAddDocModal(false); resetForm(); }
+            if (ok) {
+                clearDocumentCaches(targetCategory);
+                if (activeCategoryRef.current === targetCategory) {
+                    await loadDocuments(true);
+                }
+                setShowAddDocModal(false);
+                resetForm();
+            }
         } else {
             const doc = await createDocument({
-                categoryId: activeCategory,
+                categoryId: targetCategory,
                 ...saveData,
                 displayOrder: documents.length,
             });
-            if (doc) { await loadDocuments(); setShowAddDocModal(false); resetForm(); }
+            if (doc) {
+                clearDocumentCaches(targetCategory);
+                if (activeCategoryRef.current === targetCategory) {
+                    await loadDocuments(true);
+                }
+                setShowAddDocModal(false);
+                resetForm();
+            }
         }
     };
 
@@ -197,14 +262,23 @@ export const DokumenPage: React.FC = () => {
     };
 
     const handleDeleteDoc = async (id: string) => {
+        const targetCategory = activeCategory;
+        if (!targetCategory) return;
         const ok = await deleteDocument(id);
-        if (ok) { await loadDocuments(); setDeleteConfirm(null); }
+        if (ok) {
+            clearDocumentCaches(targetCategory);
+            if (activeCategoryRef.current === targetCategory) {
+                await loadDocuments(true);
+            }
+            setDeleteConfirm(null);
+        }
     };
 
     const handleAddCategory = async () => {
         if (!newCategoryName.trim()) return;
         const cat = await createDocumentCategory(newCategoryName.trim(), categories.length);
         if (cat) {
+            clearDocumentCaches();
             setCategories(prev => [...prev, cat]);
             setActiveCategory(cat.id);
             setNewCategoryName('');
@@ -216,6 +290,7 @@ export const DokumenPage: React.FC = () => {
         if (!editingCategoryName.trim()) return;
         const ok = await updateDocumentCategory(id, editingCategoryName.trim());
         if (ok) {
+            clearDocumentCaches();
             setCategories(prev => prev.map(c => c.id === id ? { ...c, name: editingCategoryName.trim() } : c));
             setEditingCategoryId(null);
             setEditingCategoryName('');
@@ -225,6 +300,7 @@ export const DokumenPage: React.FC = () => {
     const handleDeleteCategory = async (id: string) => {
         const ok = await deleteDocumentCategory(id);
         if (ok) {
+            clearDocumentCaches();
             const newCats = categories.filter(c => c.id !== id);
             setCategories(newCats);
             if (activeCategory === id) {
