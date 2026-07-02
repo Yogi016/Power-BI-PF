@@ -120,26 +120,42 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   useEffect(() => {
     if (!supabase || supabaseLoaded) return;
 
+    let cancelled = false;
+
     const loadSupabase = async () => {
       try {
-        // fetch projects with activities and weekly progress
-        const { data: projectData, error: projError } = await supabase
-          .from('projects')
-          .select(`
-            id, name, pic,
-            activities:activities (
-              id,
-              category,
-              sub_category,
-              activity,
-              start_week,
-              end_week,
-              weeklyProgress:activity_weekly_progress (week_index, week_label, year, value)
-            )
-          `);
-        if (projError) throw projError;
+        // Run all 3 queries in parallel instead of sequentially
+        const [projectResult, summaryResult, tasksResult] = await Promise.all([
+          supabase
+            .from('projects')
+            .select(`
+              id, name, pic,
+              activities:activities (
+                id,
+                category,
+                sub_category,
+                activity,
+                start_week,
+                end_week,
+                weeklyProgress:activity_weekly_progress (week_index, week_label, year, value)
+              )
+            `),
+          supabase
+            .from('protrack.weekly_summary')
+            .select('week_index, week_label, year, baseline, actual')
+            .order('week_index', { ascending: true }),
+          supabase
+            .from('protrack.tasks')
+            .select('*'),
+        ]);
 
-        const mappedProjects: ProjectData[] = (projectData || []).map((p: any) => ({
+        if (cancelled) return;
+
+        if (projectResult.error) throw projectResult.error;
+        if (summaryResult.error) throw summaryResult.error;
+        if (tasksResult.error) throw tasksResult.error;
+
+        const mappedProjects: ProjectData[] = (projectResult.data || []).map((p: any) => ({
           id: p.id,
           name: p.name,
           pic: p.pic,
@@ -163,13 +179,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           weeklyActual: [],
         }));
 
-        const { data: summaryData, error: summaryError } = await supabase
-          .from('protrack.weekly_summary')
-          .select('week_index, week_label, year, baseline, actual')
-          .order('week_index', { ascending: true });
-        if (summaryError) throw summaryError;
-
-        const mappedSummary: WeeklyData[] = (summaryData || []).map((row: any) => ({
+        const mappedSummary: WeeklyData[] = (summaryResult.data || []).map((row: any) => ({
           week: row.week_label,
           weekIndex: row.week_index,
           year: row.year,
@@ -177,12 +187,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           actual: Number(row.actual) || 0,
         }));
 
-        const { data: tasksData, error: tasksError } = await supabase
-          .from('protrack.tasks')
-          .select('*');
-        if (tasksError) throw tasksError;
-
-        const mappedTasks: TaskItem[] = (tasksData || []).map((t: any) => ({
+        const mappedTasks: TaskItem[] = (tasksResult.data || []).map((t: any) => ({
           id: t.id,
           code: t.code,
           activity: t.activity,
@@ -197,6 +202,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           startMonth: t.start_month || undefined,
           startWeek: t.start_week || undefined,
         }));
+
+        if (cancelled) return;
 
         setProjects(mappedProjects);
         if (mappedSummary.length > 0) {
@@ -216,7 +223,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
 
     loadSupabase();
+
+    return () => { cancelled = true; };
   }, [supabaseLoaded]);
+
 
   const updateSCurveData = (data: MonthlyData[]) => {
     setSCurveData(data);

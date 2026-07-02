@@ -71,9 +71,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // Get initial session with timeout to prevent infinite loading
         const initTimeout = setTimeout(() => {
             if (cancelled) return;
-            console.warn('Auth session load timed out after 10s, proceeding without session');
+            console.warn('Auth session load timed out after 5s, proceeding without session');
             setLoading(false);
-        }, 10_000);
+        }, 5_000);
 
         supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
             if (cancelled) return;
