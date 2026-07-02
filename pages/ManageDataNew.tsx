@@ -13,7 +13,7 @@ import {
   fetchSCurveData,
 } from '../lib/supabase';
 import { supabase } from '../lib/supabaseClient';
-import { generateProjectPDF, type SignatureInfo, type ProjectPDFData } from '../utils/generateProjectPDF';
+import type { SignatureInfo, ProjectPDFData } from '../utils/generateProjectPDF';
 import { formatBudgetJuta } from '../utils/formatters';
 import {
   Plus,
@@ -1027,6 +1027,7 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
         signatures,
       };
 
+      const { generateProjectPDF } = await import('../utils/generateProjectPDF');
       await generateProjectPDF(pdfData);
       showNotification('success', `PDF "${pdfModalProject.name}" dibuka di tab baru`);
     } catch (err) {

@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Archive, AlertCircle, Building2, Calendar, CheckCircle2, Download, ExternalLink, FileText, Image as ImageIcon, ListChecks, Loader2, RotateCcw, Search, X } from 'lucide-react';
 import { Project } from '../types';
 import { fetchActivities, fetchClosedProjects, fetchSCurveData, updateProject } from '../lib/supabase';
-import { generateProjectPDF, type ProjectPDFData } from '../utils/generateProjectPDF';
+import type { ProjectPDFData } from '../utils/generateProjectPDF';
 import { formatBudgetJuta } from '../utils/formatters';
 
 interface ClosedProjectActivity {
@@ -228,6 +228,7 @@ export const CloseProjectPage: React.FC = () => {
         signatures: [],
       };
 
+      const { generateProjectPDF } = await import('../utils/generateProjectPDF');
       await generateProjectPDF(pdfData);
       showNotification('success', `PDF "${project.name}" dibuka di tab baru`);
     } catch (error) {

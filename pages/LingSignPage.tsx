@@ -16,7 +16,7 @@ import {
 } from '../lib/supabase';
 import { LingSignature, SignedDocument } from '../types';
 import { generateSignatureQR, generateVerificationCode } from '../utils/generateSignatureQR';
-import { applySignaturesToPDF, SignatureStamp } from '../utils/applySignatureToPDF';
+import type { SignatureStamp } from '../utils/applySignatureToPDF';
 
 // =====================================================
 // TAB TYPES
@@ -595,6 +595,7 @@ const SignDocumentTab: React.FC = () => {
                 });
             }
 
+            const { applySignaturesToPDF } = await import('../utils/applySignatureToPDF');
             const signedBlob = await applySignaturesToPDF(pdfBytes, stamps);
             await saveSignedDocument(pdfFile.name, saveRecords);
 

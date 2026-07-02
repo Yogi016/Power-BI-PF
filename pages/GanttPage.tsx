@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GanttChart } from '../components/GanttChart';
 import { fetchProjects, fetchActivities } from '../lib/supabase';
-import { exportToPDF, exportToExcel } from '../lib/exportUtils';
 import { Project } from '../types';
 import { Loader2, Calendar, FileDown, FileSpreadsheet } from 'lucide-react';
 
@@ -70,6 +69,7 @@ export const GanttPage: React.FC = () => {
         },
       };
 
+      const { exportToPDF } = await import('../lib/exportUtils');
       await exportToPDF(exportData, ganttRef.current || undefined);
     } catch (error) {
       console.error('Export PDF error:', error);
@@ -79,7 +79,7 @@ export const GanttPage: React.FC = () => {
     }
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
     if (!selectedProject || activities.length === 0) {
       alert('Tidak ada data untuk di-export');
       return;
@@ -106,6 +106,7 @@ export const GanttPage: React.FC = () => {
         },
       };
 
+      const { exportToExcel } = await import('../lib/exportUtils');
       exportToExcel(exportData);
     } catch (error) {
       console.error('Export Excel error:', error);
@@ -214,4 +215,3 @@ export const GanttPage: React.FC = () => {
     </div>
   );
 };
-
