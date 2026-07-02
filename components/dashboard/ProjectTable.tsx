@@ -11,6 +11,9 @@ const health = (variance: number): { status: Status; label: string } =>
 
 export const ProjectTable: React.FC<{ projects: ProjectData[] }> = ({ projects }) => (
   <Card title="Daftar Proyek">
+    {projects.length === 0 ? (
+      <p className="text-sm text-slate-500">Belum ada proyek untuk ditampilkan.</p>
+    ) : (
     <div className="overflow-x-auto custom-scrollbar">
       <table className="w-full text-sm">
         <thead>
@@ -39,5 +42,6 @@ export const ProjectTable: React.FC<{ projects: ProjectData[] }> = ({ projects }
         </tbody>
       </table>
     </div>
+    )}
   </Card>
 );
