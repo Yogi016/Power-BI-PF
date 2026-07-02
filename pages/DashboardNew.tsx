@@ -13,11 +13,19 @@ interface DashboardNewProps {
 
 export const DashboardNew: React.FC<DashboardNewProps> = () => {
   const { role } = useAuth();
+
+  let content: React.ReactNode;
   switch (role) {
-    case 'vp_lingkungan': return <VpDashboard />;
-    case 'project_manager': return <PmDashboard />;
-    case 'project_head': return <PhDashboard />;
+    case 'vp_lingkungan': content = <VpDashboard />; break;
+    case 'project_manager': content = <PmDashboard />; break;
+    case 'project_head': content = <PhDashboard />; break;
     case 'staff_officer':
-    default: return <StaffDashboard />;
+    default: content = <StaffDashboard />; break;
   }
+
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+      {content}
+    </div>
+  );
 };

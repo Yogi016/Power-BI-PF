@@ -55,6 +55,8 @@ When adding a page, update `types.ts`, `App.tsx`, desktop nav, and mobile nav in
 2. Supabase data if `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are configured.
 3. Initial constants from `constants.ts` when external data is unavailable.
 
+The Supabase load runs three queries in parallel via `Promise.all` (projects with nested activities, weekly summary, and tasks). Do not revert these to serial `await` chains — sequential fetches add 4-8 seconds of unnecessary latency.
+
 CSV parsing lives in `utils/csvParser.ts`. Supabase helpers live mostly in `lib/supabase.ts`.
 
 ## Supabase
@@ -222,3 +224,87 @@ Be careful with broad progress changes: dashboard, Gantt, calendar, Work, and Cl
 - `66c42c1 feat: allow staff to draft pks mou documents`
 - `b6868fb feat: store pks mou drafts in r2 prefix`
 - `ca3497a docs: document pks mou workflow agent notes`
+
+## Performance And Build Configuration
+
+### Tailwind CSS
+
+Tailwind CSS is processed at **build time** via the `@tailwindcss/vite` plugin (Tailwind v4). The CSS entry point is `styles/tailwind.css`, imported in `index.tsx`. Do **not** re-add the Tailwind CDN `<script>` tag to `index.html` — that was the primary cause of production slowness (300KB render-blocking runtime JS).
+
+### Deploy Target
+
+Production deploys to **Vercel** (`project-lingkungan.vercel.app`). `vercel.json` provides SPA rewrite rules and immutable cache headers for hashed assets. Do not use `@cloudflare/vite-plugin` — it was removed because it conflicts with Vercel deploys.
+
+### Vite Build
+
+`vite.config.ts` uses `manualChunks` to group vendor libraries into stable, cacheable chunks:
+
+- `vendor-recharts`: recharts + d3-* libraries.
+- `vendor-supabase`: @supabase/* SDK.
+- `vendor-pdf`: jspdf, pdf-lib, pdfjs-dist, html2canvas.
+- `vendor-calendar`: react-big-calendar + moment.
+- `vendor-icons`: lucide-react (consolidated from 30+ tiny chunks).
+- `vendor-xlsx`: xlsx library.
+- `vendor-dnd`: react-dnd.
+
+Do not remove `manualChunks` or the chunk count will balloon back to 60+ files.
+
+### Cooperation Documents Cache
+
+`hooks/useCooperationDocuments.ts` has a module-level cache with 30-second TTL and in-flight deduplication. Multiple components (VpDashboard, PmDashboard, PhDashboard, ActionInbox) share one Supabase fetch instead of each making independent requests.
+
+After mutations to cooperation documents, call `invalidateCooperationDocumentsCache()` (exported from the same hook file) to force a re-fetch on next mount.
+
+### Auth Timeout
+
+`context/AuthContext.tsx` has a 5-second session timeout. If Supabase auth does not respond within 5 seconds, the app proceeds without a session. Do not increase this beyond 5 seconds — users should not stare at a blank screen.
+
+### PWA Service Worker
+
+PWA workbox uses `NetworkFirst` for Supabase API calls with a 5-second network timeout. Precache covers 46 entries (~4.7 MB). The `maximumFileSizeToCacheInBytes` is set to 3 MB.
+
+## Design System
+
+The visual language is documented in `DESIGN.md`. Key rules for agents:
+
+- **Action Blue** (`#0066cc`) is the only interactive/selected color. Do not use emerald, indigo, or any other color for buttons, active nav, or selection states.
+- **Emerald/Amber/Red** are semantic status only (on-track / at-risk / late). Always pair with an icon.
+- **Sidebar active state**: `bg-blue-50 text-[#0066cc]` — already migrated from emerald.
+- **StatTile icon chip**: `bg-blue-50 text-[#0066cc]` — already migrated from indigo.
+- **Radius scale**: `rounded-full` (pills), `rounded-xl` (cards), `rounded-lg` (controls), `rounded-md` (chips). Do not freestyle radii.
+- **No shadow on buttons/badges/inputs.** Cards use `shadow-sm` + `border border-slate-200`. Hover uses `hover:border-slate-300`, not `hover:shadow-md`.
+- **Typography**: Inter only. `tracking-tight` on headings and KPI numbers. `tabular-nums` on all data figures. Poppins is loaded but retired from UI — do not use it in new components.
+- **Color constants**: `constants.ts` exports `COLORS` object with `action`, `statusPositive`, `statusWarning`, `statusDanger`, `chartActual`, `chartPlan`, etc. Use these in JS/chart code, not raw hex.
+
+### UI Component Library
+
+Reusable design-system components live in `components/ui/`:
+
+- `Button.tsx`: Primary (Action Blue), secondary, tertiary, danger variants. All have `active:scale-[0.98]` and `focus-visible:ring-2 ring-[#0071e3]`.
+- `Card.tsx`: `bg-white border border-slate-200 rounded-xl shadow-sm`. Optional `title` and `action` props.
+- `StatTile.tsx`: KPI card with label, value, icon chip, and optional trend pill. Value uses `text-3xl font-bold tracking-tight tabular-nums`.
+- `StatusBadge.tsx`: Pill badge with icon for positive/warning/danger/neutral status.
+- `SegmentedTabs.tsx`: Tab component for segmented controls.
+
+Use these components instead of writing inline card/button markup. They enforce DESIGN.md tokens.
+
+## Role-Aware Dashboards
+
+`pages/DashboardNew.tsx` wraps role-specific dashboards in a consistent padding/max-width container (`p-4 sm:p-6 lg:p-8 max-w-[1600px] mx-auto`). The sub-dashboards are:
+
+- `pages/dashboards/VpDashboard.tsx`: VP Lingkungan view — portfolio stats, approval inbox, status donut, S-curve.
+- `pages/dashboards/PmDashboard.tsx`: Project Manager view — validation inbox, at-risk list, project table.
+- `pages/dashboards/PhDashboard.tsx`: Project Head view — review inbox, S-curve, at-risk list.
+- `pages/dashboards/StaffDashboard.tsx`: Staff Officer view — draft inbox, S-curve, project table.
+
+Dashboard sub-components live in `components/dashboard/`:
+
+- `ActionInbox.tsx`: Role-filtered cooperation document inbox using `useCooperationDocuments` hook.
+- `SCurvePanel.tsx`: Aggregated S-curve chart for project portfolio.
+- `StatusDonut.tsx`: Pie chart of project health distribution.
+- `AtRiskList.tsx`: List of at-risk projects with variance badge.
+- `ProjectTable.tsx`: Tabular project list with health status.
+
+Metrics helpers: `utils/dashboardMetrics.ts` exports `atRiskProjects`, `projectVariance`, `latestProgress`, `latestPlanned`, `portfolioSeries`.
+
+Do not add padding inside individual dashboard components — `DashboardNew.tsx` provides the outer padding wrapper.
