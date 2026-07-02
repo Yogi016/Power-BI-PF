@@ -104,11 +104,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.DASHBOARD
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <LayoutDashboard size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DASHBOARD ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <LayoutDashboard size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DASHBOARD ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Dashboard</span>}
           </button>
 
@@ -118,11 +118,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.MANAGE_DATA
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <Database size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.MANAGE_DATA ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <Database size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.MANAGE_DATA ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Manage Data</span>}
           </button>
 
@@ -132,11 +132,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.WORK
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <Briefcase size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.WORK ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <Briefcase size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.WORK ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Work</span>}
           </button>
 
@@ -146,11 +146,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.GANTT
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <BarChart3 size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.GANTT ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <BarChart3 size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.GANTT ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Gantt Chart</span>}
           </button>
 
@@ -160,11 +160,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.CALENDAR
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <Calendar size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.CALENDAR ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <Calendar size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.CALENDAR ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Calendar</span>}
           </button>
 
@@ -174,11 +174,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.LING_SIGN
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <PenTool size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.LING_SIGN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <PenTool size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.LING_SIGN ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Ling-Sign</span>}
           </button>
 
@@ -188,11 +188,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.DOKUMEN
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <FileText size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DOKUMEN ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <FileText size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.DOKUMEN ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Dokumen</span>}
           </button>
 
@@ -202,11 +202,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.COOPERATION_DOCUMENTS
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <ClipboardList size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.COOPERATION_DOCUMENTS ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <ClipboardList size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.COOPERATION_DOCUMENTS ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>PKS/MOU</span>}
           </button>
 
@@ -216,11 +216,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.ASSET
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <FolderArchive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.ASSET ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <FolderArchive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.ASSET ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span>Asset</span>}
           </button>
         </nav>
@@ -232,11 +232,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
               closeMobileMenu();
             }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors group ${activePage === PageView.CLOSE_PROJECT
-              ? 'bg-emerald-50 text-emerald-700 font-medium'
+              ? 'bg-blue-50 text-[#0066cc] font-medium'
               : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
               } ${collapsed ? 'justify-center' : ''}`}
           >
-            <Archive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.CLOSE_PROJECT ? 'text-emerald-600' : 'text-slate-400 group-hover:text-slate-600'}`} />
+            <Archive size={20} className={`flex-shrink-0 transition-colors ${activePage === PageView.CLOSE_PROJECT ? 'text-[#0066cc]' : 'text-slate-400 group-hover:text-slate-600'}`} />
             {!collapsed && <span className="font-medium">Close Project</span>}
           </button>
           <button
@@ -270,13 +270,13 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             <div className="text-right hidden sm:block">
               <p className="text-sm font-semibold text-slate-900 leading-none mb-1">{userName}</p>
               <div className="flex items-center justify-end gap-2">
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-normal text-emerald-700">
+                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-normal text-[#0066cc]">
                   {roleProfile.label}
                 </span>
                 <p className="text-xs text-slate-500 leading-none">{userEmail}</p>
               </div>
             </div>
-            <div className="w-9 h-9 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-sm ring-2 ring-white shadow-sm">
+            <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center text-[#0066cc] font-bold text-sm ring-2 ring-white shadow-sm">
               {userInitials}
             </div>
           </div>
@@ -291,10 +291,10 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
             loading="lazy"
           />
           <div className="flex items-center gap-2">
-            <span className="max-w-32 truncate rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700">
+            <span className="max-w-32 truncate rounded-full bg-blue-50 px-2 py-1 text-[10px] font-bold text-[#0066cc]">
               {roleProfile.shortLabel}
             </span>
-            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700 font-bold text-xs ring-2 ring-white shadow-sm">
+            <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-[#0066cc] font-bold text-xs ring-2 ring-white shadow-sm">
               {userInitials}
             </div>
           </div>
@@ -333,11 +333,11 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
                         aria-label={ariaLabel}
                         aria-current={isActive ? 'page' : undefined}
                         className={`flex min-h-12 items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold transition-colors ${isActive
-                          ? 'bg-emerald-50 text-emerald-700'
+                          ? 'bg-blue-50 text-[#0066cc]'
                           : 'text-slate-600 active:bg-slate-100'
                         }`}
                       >
-                        <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl ${isActive ? 'bg-emerald-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                        <span className={`grid h-8 w-8 flex-shrink-0 place-items-center rounded-xl ${isActive ? 'bg-[#0066cc] text-white' : 'bg-slate-100 text-slate-500'}`}>
                           {icon}
                         </span>
                         <span className="min-w-0 truncate">{label}</span>
@@ -360,20 +360,20 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
                   aria-label={ariaLabel}
                   aria-current={isActive ? 'page' : undefined}
                   className={`group relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 ${isActive
-                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                    ? 'bg-blue-50 text-[#0066cc] shadow-sm'
                     : 'text-slate-500 active:bg-slate-100'
                   }`}
               >
                   {isActive && (
-                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.45)]" />
+                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-[#0066cc] shadow-[0_2px_8px_rgba(0,102,204,0.45)]" />
                   )}
                   <span className={`grid h-7 w-7 place-items-center rounded-xl transition-all duration-200 ${isActive
-                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm'
+                    ? 'bg-gradient-to-br from-[#0066cc] to-blue-500 text-white shadow-sm'
                     : 'text-slate-500 group-active:scale-95'
                     }`}>
                     {icon}
                   </span>
-                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isActive ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isActive ? 'text-[#0066cc]' : 'text-slate-500'}`}>
                     {label}
                   </span>
               </button>
@@ -385,20 +385,20 @@ export const Layout: React.FC<LayoutProps> = ({ activePage, onPageChange, childr
                   aria-label="Menu lainnya"
                   aria-expanded={mobileMoreOpen}
                   className={`group relative flex h-14 min-w-0 flex-col items-center justify-center gap-1 rounded-xl transition-all duration-200 ${isMoreActive || mobileMoreOpen
-                    ? 'bg-emerald-50 text-emerald-700 shadow-sm'
+                    ? 'bg-blue-50 text-[#0066cc] shadow-sm'
                     : 'text-slate-500 active:bg-slate-100'
                   }`}
                 >
                   {(isMoreActive || mobileMoreOpen) && (
-                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-emerald-500 shadow-[0_2px_8px_rgba(16,185,129,0.45)]" />
+                    <span className="absolute -top-1 h-1 w-7 rounded-full bg-[#0066cc] shadow-[0_2px_8px_rgba(0,102,204,0.45)]" />
                   )}
                   <span className={`grid h-7 w-7 place-items-center rounded-xl transition-all duration-200 ${isMoreActive || mobileMoreOpen
-                    ? 'bg-gradient-to-br from-emerald-500 to-teal-500 text-white shadow-sm'
+                    ? 'bg-gradient-to-br from-[#0066cc] to-blue-500 text-white shadow-sm'
                     : 'text-slate-500 group-active:scale-95'
                     }`}>
                     <Menu className="h-[18px] w-[18px]" />
                   </span>
-                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isMoreActive || mobileMoreOpen ? 'text-emerald-700' : 'text-slate-500'}`}>
+                  <span className={`max-w-full truncate text-[9px] font-bold leading-none tracking-normal ${isMoreActive || mobileMoreOpen ? 'text-[#0066cc]' : 'text-slate-500'}`}>
                     Lainnya
                   </span>
                 </button>
