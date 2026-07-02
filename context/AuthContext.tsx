@@ -66,28 +66,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
         }
 
-        // Get initial session
+        let cancelled = false;
+
+        // Get initial session with timeout to prevent infinite loading
+        const initTimeout = setTimeout(() => {
+            if (cancelled) return;
+            console.warn('Auth session load timed out after 10s, proceeding without session');
+            setLoading(false);
+        }, 10_000);
+
         supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
+            if (cancelled) return;
+            clearTimeout(initTimeout);
             setSession(currentSession);
             const authUser = currentSession?.user ?? null;
             setUser(authUser);
-            await loadUserProfile(authUser);
+            try {
+                await loadUserProfile(authUser);
+            } catch (err) {
+                console.warn('Failed to load user profile during init:', err);
+            }
+            setLoading(false);
+        }).catch((err) => {
+            if (cancelled) return;
+            clearTimeout(initTimeout);
+            console.warn('Failed to get initial session:', err);
             setLoading(false);
         });
 
         // Listen for auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (_event, newSession) => {
-                setLoading(true);
+            async (event, newSession) => {
+                // Only show loading screen for actual sign-out (clears the UI).
+                // Sign-in loading is handled by LoginPage itself.
+                // Token refresh and other events should update silently
+                // to avoid flashing the loading screen.
+                if (event === 'SIGNED_OUT') {
+                    setLoading(true);
+                }
+
                 setSession(newSession);
                 const authUser = newSession?.user ?? null;
                 setUser(authUser);
-                await loadUserProfile(authUser);
-                setLoading(false);
+
+                try {
+                    await loadUserProfile(authUser);
+                } catch (err) {
+                    console.warn('Failed to load user profile on auth change:', err);
+                }
+
+                if (event === 'SIGNED_OUT') {
+                    setLoading(false);
+                }
             }
         );
 
         return () => {
+            cancelled = true;
             subscription.unsubscribe();
         };
     }, [loadUserProfile]);
