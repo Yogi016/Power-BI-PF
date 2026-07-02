@@ -106,11 +106,11 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
         textAnchor: "end",
         height: 100,
         interval: 3, // Tampilkan setiap 4 minggu
-        tick: { fill: '#64748b', fontSize: 10 },
+        tick: { fill: COLORS.chartAxis, fontSize: 10 },
       }
     : {
         dataKey: "period",
-        tick: { fill: '#64748b', fontSize: compact ? 10 : 12 },
+        tick: { fill: COLORS.chartAxis, fontSize: compact ? 10 : 12 },
       };
 
   return (
@@ -128,7 +128,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
               <stop offset="95%" stopColor={COLORS.chartActual} stopOpacity={0}/>
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.chartGrid} />
           <XAxis 
             {...xAxisConfig}
             axisLine={false}
@@ -138,7 +138,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
           <YAxis 
             axisLine={false}
             tickLine={false}
-            tick={{ fill: '#64748b', fontSize: compact ? 10 : 12 }}
+            tick={{ fill: COLORS.chartAxis, fontSize: compact ? 10 : 12 }}
             domain={[0, CHART_MAX_PERCENT]}
             ticks={[0, 20, 40, 60, 80, 100]}
             tickFormatter={(value) => `${value}%`}
@@ -157,6 +157,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             type="monotone"
             dataKey="plan"
             stroke={COLORS.chartPlan}
+            strokeDasharray="6 4"
             strokeWidth={3}
             dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}

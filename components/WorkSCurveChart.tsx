@@ -11,6 +11,7 @@ import {
   ReferenceLine
 } from 'recharts';
 import { WorkDailyData, WorkPlanSchedule } from '../types';
+import { COLORS } from '../constants';
 
 interface Props {
   data: WorkDailyData[];
@@ -145,19 +146,19 @@ export const WorkSCurveChart: React.FC<Props> = ({ data, title, target, planSche
             data={chartData}
             margin={{ top: 10, right: 10, left: 0, bottom: 20 }}
           >
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={COLORS.chartGrid} />
             <XAxis
               dataKey="day"
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: COLORS.chartAxis, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               interval="preserveStartEnd"
-              label={{ value: 'DECEMBER', position: 'bottom', fill: '#64748b', fontSize: 10 }}
+              label={{ value: 'DECEMBER', position: 'bottom', fill: COLORS.chartAxis, fontSize: 10 }}
             />
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: '#64748b', fontSize: 10 }}
+              tick={{ fill: COLORS.chartAxis, fontSize: 10 }}
               domain={[0, yAxisMax]}
               tickFormatter={(value) => value.toLocaleString('id-ID')}
               width={50}
@@ -178,12 +179,13 @@ export const WorkSCurveChart: React.FC<Props> = ({ data, title, target, planSche
               label={{ value: `Target: ${target.toLocaleString('id-ID')}`, fill: '#94a3b8', fontSize: 10 }}
             />
 
-            {/* Rencana Penanaman (Plan) - Blue */}
+            {/* Rencana Penanaman (Plan) - slate dashed */}
             <Line
               name="Rencana penanaman"
               type="monotone"
               dataKey="rencana"
-              stroke="#3b82f6"
+              stroke={COLORS.chartPlan}
+              strokeDasharray="6 4"
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 4 }}
@@ -200,12 +202,12 @@ export const WorkSCurveChart: React.FC<Props> = ({ data, title, target, planSche
               strokeDasharray="5 5"
             />
 
-            {/* Realisasi Penanaman (Actual) - Orange */}
+            {/* Realisasi Penanaman (Actual) - Action Blue solid */}
             <Line
               name="Realisasi Penanaman"
               type="monotone"
               dataKey="realisasi"
-              stroke="#f97316"
+              stroke={COLORS.chartActual}
               strokeWidth={3}
               dot={false}
               activeDot={{ r: 6 }}
