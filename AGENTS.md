@@ -257,7 +257,9 @@ After mutations to cooperation documents, call `invalidateCooperationDocumentsCa
 
 ### Auth Timeout
 
-`context/AuthContext.tsx` has a 5-second session timeout. If Supabase auth does not respond within 5 seconds, the app proceeds without a session. Do not increase this beyond 5 seconds — users should not stare at a blank screen.
+`context/AuthContext.tsx` has a 3-second hard ceiling on the entire auth init chain (`getSession` + `loadUserProfile`). The timeout is NOT cleared when `getSession` returns — it only clears when the full chain completes. If Supabase auth does not respond within 3 seconds, the app proceeds without a session. Do not increase this beyond 3 seconds — users should not stare at a blank screen.
+
+The `loadUserProfile` query itself has a 2-second `AbortSignal.timeout`. DataContext parallel queries have a 5-second `AbortSignal.timeout`. Cooperation document queries have a 5-second `AbortSignal.timeout`. These prevent any individual query from hanging indefinitely.
 
 ### PWA Service Worker
 

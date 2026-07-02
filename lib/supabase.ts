@@ -2069,7 +2069,8 @@ export async function fetchCooperationDocuments(): Promise<CooperationDocument[]
         cooperation_document_approvals (*),
         cooperation_document_project_links (*)
       `)
-      .order('updated_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .abortSignal(AbortSignal.timeout(5_000));
 
     if (error) throw error;
     return (data || []).map(mapCooperationDocumentRow);

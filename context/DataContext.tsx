@@ -123,6 +123,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     let cancelled = false;
 
     const loadSupabase = async () => {
+      const signal = AbortSignal.timeout(5_000);
       try {
         // Run all 3 queries in parallel instead of sequentially
         const [projectResult, summaryResult, tasksResult] = await Promise.all([
@@ -139,14 +140,17 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
                 end_week,
                 weeklyProgress:activity_weekly_progress (week_index, week_label, year, value)
               )
-            `),
+            `)
+            .abortSignal(signal),
           supabase
             .from('protrack.weekly_summary')
             .select('week_index, week_label, year, baseline, actual')
-            .order('week_index', { ascending: true }),
+            .order('week_index', { ascending: true })
+            .abortSignal(signal),
           supabase
             .from('protrack.tasks')
-            .select('*'),
+            .select('*')
+            .abortSignal(signal),
         ]);
 
         if (cancelled) return;

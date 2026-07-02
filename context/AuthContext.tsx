@@ -36,7 +36,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             .from('user_profiles')
             .select('user_id, full_name, role_code, assigned_project_ids, is_active, created_at, updated_at')
             .eq('user_id', authUser.id)
-            .maybeSingle();
+            .maybeSingle()
+            .abortSignal(AbortSignal.timeout(2_000));
 
         if (error) {
             console.warn('User profile unavailable, falling back to auth metadata:', error);
@@ -67,17 +68,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         let cancelled = false;
+        let resolved = false;
 
-        // Get initial session with timeout to prevent infinite loading
+        // Hard ceiling: if the entire init chain (getSession + loadUserProfile)
+        // hasn't finished in 3 seconds, stop waiting and show the app.
         const initTimeout = setTimeout(() => {
-            if (cancelled) return;
-            console.warn('Auth session load timed out after 5s, proceeding without session');
+            if (cancelled || resolved) return;
+            resolved = true;
+            console.warn('Auth init timed out after 3s, proceeding without session');
             setLoading(false);
-        }, 5_000);
+        }, 3_000);
 
         supabase.auth.getSession().then(async ({ data: { session: currentSession } }) => {
-            if (cancelled) return;
-            clearTimeout(initTimeout);
+            if (cancelled || resolved) return;
             setSession(currentSession);
             const authUser = currentSession?.user ?? null;
             setUser(authUser);
@@ -86,9 +89,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } catch (err) {
                 console.warn('Failed to load user profile during init:', err);
             }
+            if (cancelled || resolved) return;
+            resolved = true;
+            clearTimeout(initTimeout);
             setLoading(false);
         }).catch((err) => {
-            if (cancelled) return;
+            if (cancelled || resolved) return;
+            resolved = true;
             clearTimeout(initTimeout);
             console.warn('Failed to get initial session:', err);
             setLoading(false);

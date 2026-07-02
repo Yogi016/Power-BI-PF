@@ -48,6 +48,8 @@ export default defineConfig(({ mode }) => {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024, // 3 MB
         navigateFallback: 'index.html',
+        skipWaiting: true,
+        clientsClaim: true,
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,

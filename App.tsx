@@ -23,7 +23,7 @@ const CloseProjectPage = lazy(() => import('./pages/CloseProjectPage').then((mod
 const PageLoadingFallback: React.FC = () => (
   <div className="flex min-h-[50vh] items-center justify-center">
     <div className="flex flex-col items-center gap-3">
-      <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+      <Loader2 className="h-7 w-7 animate-spin text-[#0066cc]" />
       <p className="text-sm font-medium text-slate-500">Memuat halaman...</p>
     </div>
   </div>
