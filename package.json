@@ -9,6 +9,7 @@
     "build": "vite build",
     "preview": "npm run build && wrangler dev",
     "cors:update": "tsx scripts/update_r2_cors.ts",
+    "perf:budget": "node scripts/check-performance-budget.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
