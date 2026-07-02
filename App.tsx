@@ -1,23 +1,33 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
 import { Layout } from './components/Layout';
-import { AIChatbot } from './components/AIChatbot';
-import { Dashboard } from './pages/Dashboard';
-import { DashboardNew } from './pages/DashboardNew';
-import { ManageData } from './pages/ManageData';
-import { ManageDataNew } from './pages/ManageDataNew';
-import { GanttPage } from './pages/GanttPage';
-import { CalendarPage } from './pages/CalendarPage';
-import { WorkPage } from './pages/WorkPage';
-import { LingSignPage } from './pages/LingSignPage';
-import { DokumenPage } from './pages/DokumenPage';
-import { CooperationDocumentsPage } from './pages/CooperationDocumentsPage';
-import { AssetPage } from './pages/AssetPage';
-import { CloseProjectPage } from './pages/CloseProjectPage';
 import { LoginPage } from './pages/LoginPage';
 import { PageView } from './types';
 import { Loader2 } from 'lucide-react';
+
+const AIChatbot = lazy(() => import('./components/AIChatbot').then((module) => ({ default: module.AIChatbot })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then((module) => ({ default: module.Dashboard })));
+const DashboardNew = lazy(() => import('./pages/DashboardNew').then((module) => ({ default: module.DashboardNew })));
+const ManageData = lazy(() => import('./pages/ManageData').then((module) => ({ default: module.ManageData })));
+const ManageDataNew = lazy(() => import('./pages/ManageDataNew').then((module) => ({ default: module.ManageDataNew })));
+const GanttPage = lazy(() => import('./pages/GanttPage').then((module) => ({ default: module.GanttPage })));
+const CalendarPage = lazy(() => import('./pages/CalendarPage').then((module) => ({ default: module.CalendarPage })));
+const WorkPage = lazy(() => import('./pages/WorkPage').then((module) => ({ default: module.WorkPage })));
+const LingSignPage = lazy(() => import('./pages/LingSignPage').then((module) => ({ default: module.LingSignPage })));
+const DokumenPage = lazy(() => import('./pages/DokumenPage').then((module) => ({ default: module.DokumenPage })));
+const CooperationDocumentsPage = lazy(() => import('./pages/CooperationDocumentsPage').then((module) => ({ default: module.CooperationDocumentsPage })));
+const AssetPage = lazy(() => import('./pages/AssetPage').then((module) => ({ default: module.AssetPage })));
+const CloseProjectPage = lazy(() => import('./pages/CloseProjectPage').then((module) => ({ default: module.CloseProjectPage })));
+
+const PageLoadingFallback: React.FC = () => (
+  <div className="flex min-h-[50vh] items-center justify-center">
+    <div className="flex flex-col items-center gap-3">
+      <Loader2 className="h-7 w-7 animate-spin text-emerald-600" />
+      <p className="text-sm font-medium text-slate-500">Memuat halaman...</p>
+    </div>
+  </div>
+);
 
 const AuthenticatedApp: React.FC = () => {
   const [activePage, setActivePage] = useState<PageView>(PageView.DASHBOARD);
@@ -37,40 +47,44 @@ const AuthenticatedApp: React.FC = () => {
   return (
     <DataProvider>
       <Layout activePage={activePage} onPageChange={setActivePage}>
-        {activePage === PageView.DASHBOARD ? (
-          useNewDashboard ? (
-            <DashboardNew onOpenManageDataForSCurve={handleOpenManageDataForSCurve} />
+        <Suspense fallback={<PageLoadingFallback />}>
+          {activePage === PageView.DASHBOARD ? (
+            useNewDashboard ? (
+              <DashboardNew onOpenManageDataForSCurve={handleOpenManageDataForSCurve} />
+            ) : (
+              <Dashboard />
+            )
+          ) : activePage === PageView.GANTT ? (
+            <GanttPage />
+          ) : activePage === PageView.CALENDAR ? (
+            <CalendarPage />
+          ) : activePage === PageView.WORK ? (
+            <WorkPage />
+          ) : activePage === PageView.LING_SIGN ? (
+            <LingSignPage />
+          ) : activePage === PageView.DOKUMEN ? (
+            <DokumenPage />
+          ) : activePage === PageView.COOPERATION_DOCUMENTS ? (
+            <CooperationDocumentsPage />
+          ) : activePage === PageView.ASSET ? (
+            <AssetPage />
+          ) : activePage === PageView.CLOSE_PROJECT ? (
+            <CloseProjectPage />
           ) : (
-            <Dashboard />
-          )
-        ) : activePage === PageView.GANTT ? (
-          <GanttPage />
-        ) : activePage === PageView.CALENDAR ? (
-          <CalendarPage />
-        ) : activePage === PageView.WORK ? (
-          <WorkPage />
-        ) : activePage === PageView.LING_SIGN ? (
-          <LingSignPage />
-        ) : activePage === PageView.DOKUMEN ? (
-          <DokumenPage />
-        ) : activePage === PageView.COOPERATION_DOCUMENTS ? (
-          <CooperationDocumentsPage />
-        ) : activePage === PageView.ASSET ? (
-          <AssetPage />
-        ) : activePage === PageView.CLOSE_PROJECT ? (
-          <CloseProjectPage />
-        ) : (
-          useNewManageData ? (
-            <ManageDataNew
-              focusProjectId={manageDataFocusProjectId}
-              onFocusHandled={handleFocusHandled}
-            />
-          ) : (
-            <ManageData />
-          )
-        )}
+            useNewManageData ? (
+              <ManageDataNew
+                focusProjectId={manageDataFocusProjectId}
+                onFocusHandled={handleFocusHandled}
+              />
+            ) : (
+              <ManageData />
+            )
+          )}
+        </Suspense>
       </Layout>
-      <AIChatbot />
+      <Suspense fallback={null}>
+        <AIChatbot />
+      </Suspense>
     </DataProvider>
   );
 };
