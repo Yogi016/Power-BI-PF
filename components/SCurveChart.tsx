@@ -11,11 +11,13 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { MonthlyData, WeeklyData } from '../types';
+import { PortfolioSeriesPoint, WeeklyData } from '../types';
 import { COLORS } from '../constants';
 
 interface Props {
-  data?: MonthlyData[];
+  // Accepts both fully-populated series (MonthlyData) and aggregated series that
+  // may carry `null` for a missing plan/actual at a given period.
+  data?: PortfolioSeriesPoint[];
   weeklyData?: WeeklyData[];
   showWeekly?: boolean;
   yearLabel?: string | null;
@@ -94,8 +96,9 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
       })
     : data?.map(d => ({
         period: `${d.month}${yearLabel ? ` (${yearLabel})` : ''}`,
-        plan: clampPercent(d.plan),
-        actual: clampPercent(d.actual),
+        // Preserve null (no data) so lines break/stop instead of dropping to 0.
+        plan: d.plan === null ? null : clampPercent(d.plan),
+        actual: d.actual === null ? null : clampPercent(d.actual),
       })) || [];
 
   // Untuk weekly data, kita perlu mengurangi jumlah tick yang ditampilkan
@@ -159,6 +162,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             stroke={COLORS.chartPlan}
             strokeDasharray="6 4"
             strokeWidth={3}
+            connectNulls
             dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
           />

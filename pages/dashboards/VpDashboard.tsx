@@ -6,9 +6,13 @@ import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { StatusDonut } from '../../components/dashboard/StatusDonut';
 import { atRiskProjects } from '../../utils/dashboardMetrics';
+import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
+import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
 
 export const VpDashboard: React.FC = () => {
   const { projects } = useData();
+  const { documents } = useCooperationDocuments();
+  const awaitingApproval = buildRoleDocumentInbox(documents, 'vp_lingkungan').length;
   return (
     <div className="space-y-6">
       <div>
@@ -17,7 +21,7 @@ export const VpDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Total proyek" value={projects.length} icon={<Briefcase size={20} />} />
-        <StatTile label="Menunggu approval" value="—" icon={<Stamp size={20} />} />
+        <StatTile label="Menunggu approval" value={awaitingApproval} icon={<Stamp size={20} />} />
         <StatTile label="Portfolio berisiko" value={atRiskProjects(projects).length} icon={<AlertTriangle size={20} />} />
         <StatTile label="Terlambat" value="—" icon={<Clock size={20} />} />
       </div>

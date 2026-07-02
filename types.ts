@@ -25,6 +25,15 @@ export interface MonthlyData {
   actual: number;
 }
 
+// Aggregated S-curve point where a series may be absent at a given period.
+// `null` means "no data for this series here" (vs. 0 = real zero progress),
+// so the chart can span the full plan while stopping actual at the last real week.
+export interface PortfolioSeriesPoint {
+  month: string;
+  plan: number | null;
+  actual: number | null;
+}
+
 // Data mingguan untuk S-Curve
 export interface WeeklyData {
   week: string; // Format: "Juni-1", "Juni-2", etc.

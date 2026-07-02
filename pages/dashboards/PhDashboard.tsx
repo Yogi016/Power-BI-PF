@@ -6,9 +6,13 @@ import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { AtRiskList } from '../../components/dashboard/AtRiskList';
 import { atRiskProjects } from '../../utils/dashboardMetrics';
+import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
+import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
 
 export const PhDashboard: React.FC = () => {
   const { projects } = useData();
+  const { documents } = useCooperationDocuments();
+  const needsReview = buildRoleDocumentInbox(documents, 'project_head').length;
   return (
     <div className="space-y-6">
       <div>
@@ -17,7 +21,7 @@ export const PhDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Proyek ditugaskan" value={projects.length} icon={<FolderKanban size={20} />} />
-        <StatTile label="Perlu review" value="—" icon={<ClipboardCheck size={20} />} />
+        <StatTile label="Perlu review" value={needsReview} icon={<ClipboardCheck size={20} />} />
         <StatTile label="Berisiko" value={atRiskProjects(projects).length} icon={<AlertTriangle size={20} />} />
         <StatTile label="Tindak lanjut" value="—" icon={<ListTodo size={20} />} />
       </div>

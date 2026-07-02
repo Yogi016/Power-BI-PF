@@ -81,4 +81,42 @@ const unsorted: ProjectData = {
 assert.strictEqual(latestPlanned(unsorted), 60);
 assert.strictEqual(latestProgress(unsorted), 55);
 
+// Mismatched week-indices: baseline spans weeks 0-2, actual only reaches week 1.
+// The missing series at a weekIndex must be null (not 0), so the plan line spans
+// the full timeline while actual stops at the last real actual week — no zero-dip.
+const partial: ProjectData = {
+  id: 'd',
+  name: 'D',
+  pic: 'w',
+  activities: [],
+  weeklyBaseline: [wk(0, 10, 0), wk(1, 40, 0), wk(2, 70, 0)],
+  weeklyActual: [wk(0, 0, 8), wk(1, 0, 25)],
+};
+const partialSeries = portfolioSeries([partial]);
+assert.strictEqual(partialSeries.length, 3);
+
+// weeks 0 and 1 have both series
+assert.strictEqual(partialSeries[0].plan, 10);
+assert.strictEqual(partialSeries[0].actual, 8);
+assert.strictEqual(partialSeries[1].plan, 40);
+assert.strictEqual(partialSeries[1].actual, 25);
+
+// week 2: plan present, actual has no data → null (not 0)
+assert.strictEqual(partialSeries[2].plan, 70);
+assert.strictEqual(partialSeries[2].actual, null);
+
+// A weekIndex where only actual exists (plan absent) → plan is null (no phantom plan=0)
+const actualAhead: ProjectData = {
+  id: 'e',
+  name: 'E',
+  pic: 'v',
+  activities: [],
+  weeklyBaseline: [wk(0, 10, 0)],
+  weeklyActual: [wk(0, 0, 9), wk(1, 0, 18)],
+};
+const aheadSeries = portfolioSeries([actualAhead]);
+assert.strictEqual(aheadSeries.length, 2);
+assert.strictEqual(aheadSeries[1].plan, null);
+assert.strictEqual(aheadSeries[1].actual, 18);
+
 console.log('dashboard-metrics OK');
