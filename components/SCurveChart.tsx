@@ -124,8 +124,8 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
         >
           <defs>
             <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor={COLORS.actualLine} stopOpacity={0.1}/>
-              <stop offset="95%" stopColor={COLORS.actualLine} stopOpacity={0}/>
+              <stop offset="5%" stopColor={COLORS.chartActual} stopOpacity={0.1}/>
+              <stop offset="95%" stopColor={COLORS.chartActual} stopOpacity={0}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
@@ -156,7 +156,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             name="Baseline (Plan)"
             type="monotone"
             dataKey="plan"
-            stroke={COLORS.planLine}
+            stroke={COLORS.chartPlan}
             strokeWidth={3}
             dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
@@ -186,7 +186,7 @@ export const SCurveChart: React.FC<Props> = ({ data, weeklyData, showWeekly = fa
             name="Realisasi (Actual)"
             type="monotone"
             dataKey="actual"
-            stroke={COLORS.actualLine}
+            stroke={COLORS.chartActual}
             strokeWidth={3}
             dot={{ r: showWeekly ? 2 : 4, strokeWidth: 2, fill: '#fff' }}
             activeDot={{ r: 6 }}
