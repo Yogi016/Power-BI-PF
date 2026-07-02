@@ -64,6 +64,10 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loadCSVData = async () => {
       // Skip if already loaded
       if (csvLoaded || projects.length > 0) return;
+      if (supabase) {
+        setCsvLoaded(true);
+        return;
+      }
 
       try {
         // Try to load user-provided CSV first, fallback to default
