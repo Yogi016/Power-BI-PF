@@ -5,6 +5,7 @@ import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { AtRiskList } from '../../components/dashboard/AtRiskList';
+import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
 import { atRiskProjects } from '../../utils/dashboardMetrics';
 import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
 import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
@@ -30,6 +31,7 @@ export const PhDashboard: React.FC = () => {
         <SCurvePanel projectIds={projects.map((p) => p.id)} title="Progres proyek ditugaskan" />
       </div>
       <AtRiskList projects={projects} />
+      <ProjectPortfolio projects={projects} />
     </div>
   );
 };
