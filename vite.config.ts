@@ -91,6 +91,31 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks(id) {
+            // Keep the React runtime (and the Vite preload helper that colocates
+            // with it) in a dedicated, always-loaded chunk. Without this, Rollup
+            // hoists react-dom into whichever vendor group it links first
+            // (previously vendor-calendar), forcing the entire calendar/moment
+            // bundle onto the initial critical path — even on the Login screen.
+            if (
+              id.includes('node_modules/react/') ||
+              id.includes('node_modules/react-dom/') ||
+              id.includes('node_modules/scheduler/') ||
+              id.includes('node_modules/react-is/') ||
+              // Pin Vite's __vitePreload helper to the always-loaded react
+              // chunk. Otherwise Rollup colocates it inside vendor-pdf, forcing
+              // the entry to statically import (and modulepreload) the 1.5 MB
+              // PDF bundle on first paint.
+              id.includes('vite/preload-helper') ||
+              // Pin Rollup's shared CommonJS interop helpers here too. They are
+              // tiny but get imported by react/supabase; if they land in a heavy
+              // CJS vendor (moment/calendar) they drag that whole chunk onto the
+              // initial preload path.
+              id.includes('commonjsHelpers') ||
+              id.includes('commonjs-dynamic-modules') ||
+              id.includes('\0commonjs')
+            ) {
+              return 'vendor-react';
+            }
             // Group recharts into its own vendor chunk
             if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
               return 'vendor-recharts';

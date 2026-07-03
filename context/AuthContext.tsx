@@ -69,6 +69,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         let cancelled = false;
         let resolved = false;
+        // Tracks the currently signed-in identity so we can skip redundant
+        // user_profiles fetches on events that don't change who is logged in.
+        let lastUserId: string | null = null;
 
         // Hard ceiling: if the entire init chain (getSession + loadUserProfile)
         // hasn't finished in 3 seconds, stop waiting and show the app.
@@ -84,6 +87,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setSession(currentSession);
             const authUser = currentSession?.user ?? null;
             setUser(authUser);
+            lastUserId = authUser?.id ?? null;
             try {
                 await loadUserProfile(authUser);
             } catch (err) {
@@ -116,10 +120,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const authUser = newSession?.user ?? null;
                 setUser(authUser);
 
-                try {
-                    await loadUserProfile(authUser);
-                } catch (err) {
-                    console.warn('Failed to load user profile on auth change:', err);
+                // The initial session is already handled by the getSession()
+                // chain above, and TOKEN_REFRESHED fires periodically without
+                // changing who is signed in. Re-running the user_profiles query
+                // on those events is redundant, so only reload the profile when
+                // the signed-in identity actually changes.
+                const identityChanged = lastUserId !== (authUser?.id ?? null);
+                lastUserId = authUser?.id ?? null;
+                const skipProfileReload =
+                    !identityChanged &&
+                    (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED');
+
+                if (!skipProfileReload) {
+                    try {
+                        await loadUserProfile(authUser);
+                    } catch (err) {
+                        console.warn('Failed to load user profile on auth change:', err);
+                    }
                 }
 
                 if (event === 'SIGNED_OUT') {
