@@ -4,7 +4,7 @@ import { useData } from '../../context/DataContext';
 import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
-import { ProjectTable } from '../../components/dashboard/ProjectTable';
+import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
 
 export const StaffDashboard: React.FC = () => {
   const { projects } = useData();
@@ -24,7 +24,7 @@ export const StaffDashboard: React.FC = () => {
         <ActionInbox role="staff_officer" />
         <SCurvePanel projectIds={projects.map((p) => p.id)} title="Progres proyek saya" />
       </div>
-      <ProjectTable projects={projects} />
+      <ProjectPortfolio projects={projects} />
     </div>
   );
 };
