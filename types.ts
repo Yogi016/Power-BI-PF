@@ -459,3 +459,32 @@ export interface DocumentItem {
   createdAt?: string;
   updatedAt?: string;
 }
+
+export type HelpRequestStatus = 'open' | 'in_progress' | 'done';
+
+export interface HelpRequestSummary {
+  id: string;
+  fromUser: string;
+  toUser: string;
+  subject: string;
+  status: HelpRequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  direction: 'incoming' | 'outgoing';
+  counterpartName: string;
+  unread: boolean;
+}
+
+export interface HelpRequestMessage {
+  id: string;
+  requestId: string;
+  senderUser: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface RecipientOption {
+  userId: string;
+  fullName: string;
+  roleCode: string;
+}
