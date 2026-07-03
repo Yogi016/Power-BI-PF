@@ -4,7 +4,7 @@ import { useData } from '../../context/DataContext';
 import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { AtRiskList } from '../../components/dashboard/AtRiskList';
-import { ProjectTable } from '../../components/dashboard/ProjectTable';
+import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
 import { atRiskProjects } from '../../utils/dashboardMetrics';
 import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
 import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
@@ -29,7 +29,7 @@ export const PmDashboard: React.FC = () => {
         <ActionInbox role="project_manager" />
         <AtRiskList projects={projects} />
       </div>
-      <ProjectTable projects={projects} />
+      <ProjectPortfolio projects={projects} />
     </div>
   );
 };
