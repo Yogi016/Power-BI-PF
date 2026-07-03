@@ -5,9 +5,13 @@ import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
+import { atRiskProjects, projectHealth, latestProgress } from '../../utils/dashboardMetrics';
 
 export const StaffDashboard: React.FC = () => {
   const { projects } = useData();
+  const avgProgress = projects.length
+    ? Math.round(projects.reduce((sum, p) => sum + latestProgress(p), 0) / projects.length)
+    : 0;
   return (
     <div className="space-y-6">
       <div>
@@ -16,9 +20,9 @@ export const StaffDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatTile label="Proyek saya" value={projects.length} icon={<FolderKanban size={20} />} />
-        <StatTile label="Perlu draft/upload" value="—" icon={<FileEdit size={20} />} />
-        <StatTile label="Evidence perlu update" value="—" icon={<Upload size={20} />} />
-        <StatTile label="Deadline terdekat" value="—" icon={<CalendarClock size={20} />} />
+        <StatTile label="Progress rata²" value={`${avgProgress}%`} icon={<FileEdit size={20} />} />
+        <StatTile label="Berisiko" value={atRiskProjects(projects).length} icon={<Upload size={20} />} />
+        <StatTile label="Belum mulai" value={projects.filter((p) => projectHealth(p) === 'not-started').length} icon={<CalendarClock size={20} />} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="staff_officer" />

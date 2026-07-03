@@ -56,7 +56,12 @@ export const ProjectPortfolio: React.FC<{ projects: ProjectData[] }> = ({ projec
                     key={p.id}
                     onClick={() => setSelectedId(p.id)}
                     tabIndex={0}
-                    onKeyDown={(e) => { if (e.key === 'Enter') setSelectedId(p.id); }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setSelectedId(p.id);
+                      }
+                    }}
                     className="cursor-pointer border-b border-slate-100 hover:bg-slate-50 focus-visible:bg-slate-50 focus-visible:outline-none"
                   >
                     <td className="px-3 py-2 font-medium text-slate-900">{p.name}</td>

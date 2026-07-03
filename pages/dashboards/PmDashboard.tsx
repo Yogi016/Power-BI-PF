@@ -5,7 +5,7 @@ import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { AtRiskList } from '../../components/dashboard/AtRiskList';
 import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
-import { atRiskProjects } from '../../utils/dashboardMetrics';
+import { atRiskProjects, projectHealth } from '../../utils/dashboardMetrics';
 import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
 import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
 
@@ -23,7 +23,7 @@ export const PmDashboard: React.FC = () => {
         <StatTile label="Total proyek" value={projects.length} icon={<FolderKanban size={20} />} />
         <StatTile label="Perlu validasi" value={needsValidation} icon={<ShieldCheck size={20} />} />
         <StatTile label="Bottleneck" value={atRiskProjects(projects).length} icon={<GitPullRequestArrow size={20} />} />
-        <StatTile label="Kelengkapan dok." value="—" icon={<FileCheck size={20} />} />
+        <StatTile label="On-track" value={projects.filter((p) => projectHealth(p) === 'on-track').length} icon={<FileCheck size={20} />} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="project_manager" />

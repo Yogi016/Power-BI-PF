@@ -2,12 +2,13 @@ import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import type { ProjectData } from '../../types';
 import { projectHealth } from '../../utils/dashboardMetrics';
+import type { ProjectHealth } from '../../utils/dashboardMetrics';
 import { COLORS } from '../../constants';
 import { Card } from '../ui';
 
 // Buckets projects by 4-state health.
 export const StatusDonut: React.FC<{ projects: ProjectData[] }> = ({ projects }) => {
-  const count = (h: string) => projects.filter((p) => projectHealth(p) === h).length;
+  const count = (h: ProjectHealth) => projects.filter((p) => projectHealth(p) === h).length;
   const data = [
     { name: 'Sesuai/di atas rencana', value: count('on-track'), color: COLORS.statusPositive },
     { name: 'Sedikit tertinggal', value: count('behind'), color: COLORS.statusWarning },

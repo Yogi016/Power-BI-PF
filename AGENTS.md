@@ -55,7 +55,7 @@ When adding a page, update `types.ts`, `App.tsx`, desktop nav, and mobile nav in
 2. Supabase data if `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are configured.
 3. Initial constants from `constants.ts` when external data is unavailable.
 
-The Supabase load queries the **real** tables that Manage Data uses: a flat `projects` select (active only), then a bulk `s_curve_baseline` + `s_curve_actual` fetch (`period_type = 'monthly'`, `.in('project_id', ids)`) run in parallel via `Promise.all`. Each project's `weeklyBaseline`/`weeklyActual` arrays are populated from those cumulative S-curve rows (with `weekIndex = year*1000 + period_index` so the arrays sort chronologically across years). This feeds all variance-based dashboard widgets (`StatusDonut`, `AtRiskList`, `ProjectTable`, project counts).
+The Supabase load queries the **real** tables that Manage Data uses: a flat `projects` select (active only), then a bulk `s_curve_baseline` + `s_curve_actual` fetch (`period_type = 'monthly'`, `.in('project_id', ids)`) run in parallel via `Promise.all`. Each project's `weeklyBaseline`/`weeklyActual` arrays are populated from those cumulative S-curve rows (with `weekIndex = year*1000 + period_index` so the arrays sort chronologically across years). This feeds all variance-based dashboard widgets (`StatusDonut`, `AtRiskList`, `ProjectPortfolio`, project counts).
 
 Do NOT reintroduce the old query shape — it targeted tables that do not exist (`protrack.weekly_summary`, `protrack.tasks`, nested `activity_weekly_progress`). Any one of those failing rejected the whole `Promise.all`, leaving `projects` empty and every dashboard tile at zero. The real schema has `projects`, `activities`, `weekly_progress`, `monthly_progress`, `s_curve_baseline`, `s_curve_actual` — there is no `protrack` schema.
 
@@ -318,7 +318,7 @@ Dashboard sub-components live in `components/dashboard/`:
 - `SCurvePanel.tsx`: Budget-weighted portfolio S-curve. It does NOT use DataContext `projects` or `utils/dashboardMetrics.portfolioSeries` (that path read the never-populated per-project weekly arrays). It sources data from `usePortfolioSCurve(projectIds?)`, which calls `fetchPortfolioSCurve()` in `lib/supabase.ts`. That aggregates `s_curve_baseline`/`s_curve_actual` across projects weighted by `projects.budget` (equal-weight fallback when no budgets, `null` for periods with no data). VP/PM pass no `projectIds` (whole portfolio); Staff/PH pass their scoped project ids. After saving S-curve data, `ManageDataNew` calls `invalidatePortfolioSCurveCache()` (exported from `hooks/usePortfolioSCurve.ts`, 30s TTL + in-flight dedup, same pattern as `useCooperationDocuments`).
 - `StatusDonut.tsx`: Pie chart of project health distribution.
 - `AtRiskList.tsx`: List of at-risk projects with variance badge.
-- `ProjectTable.tsx`: Tabular project list with health status.
+- `ProjectPortfolio.tsx`: Clickable project table (search + 4-state health) that opens `ProjectDetailDrawer` (right slide-over with S-curve, stats, and lazy-loaded activities). Used by all four role dashboards, scoped per role. Replaced the old `ProjectTable.tsx`.
 
 Metrics helpers: `utils/dashboardMetrics.ts` exports `atRiskProjects`, `projectVariance`, `latestProgress`, `latestPlanned`, `portfolioSeries`.
 

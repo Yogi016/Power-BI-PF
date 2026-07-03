@@ -441,8 +441,10 @@ export async function fetchProjectActivities(projectId: string): Promise<Project
       status: (a.status ?? 'not-started') as ProjectActivityRow['status'],
     }));
   } catch (error) {
+    // Rethrow so useProjectDetail can surface a distinct error state in the
+    // drawer instead of silently rendering an empty "no activities" list.
     console.error('Error fetching project activities:', error);
-    return [];
+    throw error;
   }
 }
 
