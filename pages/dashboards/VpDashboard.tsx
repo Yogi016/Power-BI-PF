@@ -29,7 +29,7 @@ export const VpDashboard: React.FC = () => {
         <ActionInbox role="vp_lingkungan" />
         <StatusDonut projects={projects} />
       </div>
-      <SCurvePanel projects={projects} title="Kurva-S portfolio" />
+      <SCurvePanel title="Kurva-S portfolio" />
     </div>
   );
 };

@@ -125,101 +125,90 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const loadSupabase = async () => {
       const signal = AbortSignal.timeout(5_000);
       try {
-        // Run all 3 queries in parallel instead of sequentially
-        const [projectResult, summaryResult, tasksResult] = await Promise.all([
-          supabase
-            .from('projects')
-            .select(`
-              id, name, pic,
-              activities:activities (
-                id,
-                category,
-                sub_category,
-                activity,
-                start_week,
-                end_week,
-                weeklyProgress:activity_weekly_progress (week_index, week_label, year, value)
-              )
-            `)
-            .abortSignal(signal),
-          supabase
-            .from('protrack.weekly_summary')
-            .select('week_index, week_label, year, baseline, actual')
-            .order('week_index', { ascending: true })
-            .abortSignal(signal),
-          supabase
-            .from('protrack.tasks')
-            .select('*')
-            .abortSignal(signal),
-        ]);
+        // 1. Active projects — flat query against the real `projects` table
+        //    (same source Manage Data uses). Prior code queried non-existent
+        //    tables (protrack.*, activity_weekly_progress), so the whole load
+        //    failed and the dashboard saw zero projects.
+        const projectResult = await supabase
+          .from('projects')
+          .select('id, name, pic, status')
+          .neq('status', 'completed')
+          .abortSignal(signal);
+
+        if (cancelled) return;
+        if (projectResult.error) throw projectResult.error;
+
+        const projectRows = projectResult.data || [];
+        const ids = projectRows.map((p: any) => p.id);
+
+        // 2. Bulk monthly S-curve for those projects from s_curve_baseline /
+        //    s_curve_actual (the tables Manage Data writes to). These feed
+        //    per-project variance → StatusDonut, AtRiskList, ProjectTable.
+        let baselineRows: any[] = [];
+        let actualRows: any[] = [];
+        if (ids.length > 0) {
+          const [baseRes, actRes] = await Promise.all([
+            supabase
+              .from('s_curve_baseline')
+              .select('project_id, period_label, period_index, year, cumulative_baseline')
+              .eq('period_type', 'monthly')
+              .in('project_id', ids)
+              .abortSignal(signal),
+            supabase
+              .from('s_curve_actual')
+              .select('project_id, period_label, period_index, year, cumulative_actual')
+              .eq('period_type', 'monthly')
+              .in('project_id', ids)
+              .abortSignal(signal),
+          ]);
+          if (baseRes.error) throw baseRes.error;
+          if (actRes.error) throw actRes.error;
+          baselineRows = baseRes.data || [];
+          actualRows = actRes.data || [];
+        }
 
         if (cancelled) return;
 
-        if (projectResult.error) throw projectResult.error;
-        if (summaryResult.error) throw summaryResult.error;
-        if (tasksResult.error) throw tasksResult.error;
+        // weekIndex is made monotonic across years so `latestPlanned` /
+        // `latestProgress` (which sort by weekIndex) pick the true latest point.
+        const baselineByProject = new Map<string, WeeklyData[]>();
+        baselineRows.forEach((r: any) => {
+          const arr = baselineByProject.get(r.project_id) ?? [];
+          arr.push({
+            week: r.period_label,
+            weekIndex: (Number(r.year) || 0) * 1000 + (Number(r.period_index) || 0),
+            year: Number(r.year) || 0,
+            baseline: Number(r.cumulative_baseline) || 0,
+            actual: 0,
+          });
+          baselineByProject.set(r.project_id, arr);
+        });
 
-        const mappedProjects: ProjectData[] = (projectResult.data || []).map((p: any) => ({
+        const actualByProject = new Map<string, WeeklyData[]>();
+        actualRows.forEach((r: any) => {
+          const arr = actualByProject.get(r.project_id) ?? [];
+          arr.push({
+            week: r.period_label,
+            weekIndex: (Number(r.year) || 0) * 1000 + (Number(r.period_index) || 0),
+            year: Number(r.year) || 0,
+            baseline: 0,
+            actual: Number(r.cumulative_actual) || 0,
+          });
+          actualByProject.set(r.project_id, arr);
+        });
+
+        const mappedProjects: ProjectData[] = projectRows.map((p: any) => ({
           id: p.id,
           name: p.name,
           pic: p.pic,
-          activities: (p.activities || []).map((a: any) => {
-            const weeklyProgress: Record<string, number> = {};
-            (a.weeklyProgress || []).forEach((wp: any) => {
-              weeklyProgress[wp.week_label] = Number(wp.value) || 0;
-            });
-            return {
-              pic: p.pic,
-              project: p.name,
-              category: a.category || undefined,
-              subCategory: a.sub_category || undefined,
-              activity: a.activity,
-              weeklyProgress,
-              startWeek: a.start_week ?? undefined,
-              endWeek: a.end_week ?? undefined,
-            };
-          }),
-          weeklyBaseline: [],
-          weeklyActual: [],
-        }));
-
-        const mappedSummary: WeeklyData[] = (summaryResult.data || []).map((row: any) => ({
-          week: row.week_label,
-          weekIndex: row.week_index,
-          year: row.year,
-          baseline: Number(row.baseline) || 0,
-          actual: Number(row.actual) || 0,
-        }));
-
-        const mappedTasks: TaskItem[] = (tasksResult.data || []).map((t: any) => ({
-          id: t.id,
-          code: t.code,
-          activity: t.activity,
-          pic: t.pic,
-          weight: Number(t.weight) || 0,
-          progress: Number(t.progress) || 0,
-          status: t.status,
-          startDate: t.start_date || new Date().toISOString(),
-          endDate: t.end_date || new Date().toISOString(),
-          projectId: t.project_id || undefined,
-          startYear: t.start_year || undefined,
-          startMonth: t.start_month || undefined,
-          startWeek: t.start_week || undefined,
+          activities: [],
+          weeklyBaseline: baselineByProject.get(p.id) ?? [],
+          weeklyActual: actualByProject.get(p.id) ?? [],
         }));
 
         if (cancelled) return;
 
         setProjects(mappedProjects);
-        if (mappedSummary.length > 0) {
-          setWeeklySummary(mappedSummary);
-          const monthlyData = weeklyToMonthly(mappedSummary);
-          if (monthlyData.length > 0) {
-            setSCurveData(monthlyData);
-          }
-        }
-        if (mappedTasks.length > 0) {
-          setTasks(mappedTasks);
-        }
         setSupabaseLoaded(true);
       } catch (err) {
         console.warn('Supabase load failed, fallback to CSV/default:', err);

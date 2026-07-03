@@ -27,7 +27,7 @@ export const PhDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="project_head" />
-        <SCurvePanel projects={projects} title="Progres proyek ditugaskan" />
+        <SCurvePanel projectIds={projects.map((p) => p.id)} title="Progres proyek ditugaskan" />
       </div>
       <AtRiskList projects={projects} />
     </div>

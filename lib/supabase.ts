@@ -17,6 +17,7 @@ import {
   CooperationProjectLink,
   CooperationRevisionSource,
   CreateCooperationDocumentInput,
+  PortfolioSeriesPoint,
   UserRole,
 } from '../types';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
@@ -252,6 +253,122 @@ export async function fetchSCurveData(
     });
   } catch (error) {
     console.error('Error fetching S-Curve data:', error);
+    return [];
+  }
+}
+
+/**
+ * Aggregate a budget-weighted portfolio S-Curve across projects.
+ *
+ * Reads the same tables Manage Data writes to (`s_curve_baseline` /
+ * `s_curve_actual`) so the dashboard reflects real entered data. Each project's
+ * cumulative % at a given period is weighted by its budget; periods where no
+ * contributing project has a budget fall back to a simple average so the curve
+ * still renders. Returns `null` for a series at a period with no data (so the
+ * chart can span the plan while stopping actual at the last realised period).
+ */
+export async function fetchPortfolioSCurve(
+  periodType: 'weekly' | 'monthly' = 'monthly',
+  projectIds?: string[]
+): Promise<PortfolioSeriesPoint[]> {
+  if (!supabase) return [];
+
+  try {
+    // 1. Active projects + their weight (budget). Optionally scoped.
+    let projectQuery = supabase
+      .from('projects')
+      .select('id, budget')
+      .neq('status', 'completed');
+    if (projectIds && projectIds.length > 0) {
+      projectQuery = projectQuery.in('id', projectIds);
+    }
+    const { data: projectRows, error: projectError } = await projectQuery;
+    if (projectError) throw projectError;
+
+    const rows = projectRows || [];
+    if (rows.length === 0) return [];
+
+    const ids = rows.map((p: any) => p.id);
+    const weightById = new Map<string, number>();
+    rows.forEach((p: any) => {
+      const b = Number(p.budget);
+      weightById.set(p.id, Number.isFinite(b) && b > 0 ? b : 0);
+    });
+
+    // 2. Bulk-fetch baseline + actual for those projects (one round-trip each).
+    const [baselineRes, actualRes] = await Promise.all([
+      supabase
+        .from('s_curve_baseline')
+        .select('project_id, period_label, period_index, year, cumulative_baseline')
+        .eq('period_type', periodType)
+        .in('project_id', ids),
+      supabase
+        .from('s_curve_actual')
+        .select('project_id, period_label, period_index, year, cumulative_actual')
+        .eq('period_type', periodType)
+        .in('project_id', ids),
+    ]);
+    if (baselineRes.error) throw baselineRes.error;
+    if (actualRes.error) throw actualRes.error;
+
+    // 3. Weighted aggregation per (year, period_index).
+    interface Bucket {
+      label: string;
+      year: number;
+      index: number;
+      planWeighted: number; planWeight: number; planSum: number; planCount: number;
+      actualWeighted: number; actualWeight: number; actualSum: number; actualCount: number;
+    }
+    const buckets = new Map<string, Bucket>();
+    const ensure = (year: number, index: number, label: string): Bucket => {
+      const key = `${year}-${index}`;
+      let b = buckets.get(key);
+      if (!b) {
+        b = {
+          label, year, index,
+          planWeighted: 0, planWeight: 0, planSum: 0, planCount: 0,
+          actualWeighted: 0, actualWeight: 0, actualSum: 0, actualCount: 0,
+        };
+        buckets.set(key, b);
+      }
+      return b;
+    };
+
+    (baselineRes.data || []).forEach((row: any) => {
+      const b = ensure(row.year, row.period_index, row.period_label);
+      const value = Number(row.cumulative_baseline) || 0;
+      const w = weightById.get(row.project_id) ?? 0;
+      b.planWeighted += value * w;
+      b.planWeight += w;
+      b.planSum += value;
+      b.planCount += 1;
+    });
+    (actualRes.data || []).forEach((row: any) => {
+      const b = ensure(row.year, row.period_index, row.period_label);
+      const value = Number(row.cumulative_actual) || 0;
+      const w = weightById.get(row.project_id) ?? 0;
+      b.actualWeighted += value * w;
+      b.actualWeight += w;
+      b.actualSum += value;
+      b.actualCount += 1;
+    });
+
+    // Weighted mean when budgets exist; equal-weight mean otherwise; null if empty.
+    const resolve = (weighted: number, weight: number, sum: number, count: number): number | null => {
+      if (weight > 0) return Math.round((weighted / weight) * 100) / 100;
+      if (count > 0) return Math.round((sum / count) * 100) / 100;
+      return null;
+    };
+
+    return [...buckets.values()]
+      .sort((a, b) => (a.year !== b.year ? a.year - b.year : a.index - b.index))
+      .map((b) => ({
+        month: b.label,
+        plan: resolve(b.planWeighted, b.planWeight, b.planSum, b.planCount),
+        actual: resolve(b.actualWeighted, b.actualWeight, b.actualSum, b.actualCount),
+      }));
+  } catch (error) {
+    console.error('Error fetching portfolio S-Curve:', error);
     return [];
   }
 }

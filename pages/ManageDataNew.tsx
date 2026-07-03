@@ -13,6 +13,7 @@ import {
   fetchSCurveData,
 } from '../lib/supabase';
 import { supabase } from '../lib/supabaseClient';
+import { invalidatePortfolioSCurveCache } from '../hooks/usePortfolioSCurve';
 import type { SignatureInfo, ProjectPDFData } from '../utils/generateProjectPDF';
 import { formatBudgetJuta } from '../utils/formatters';
 import {
@@ -757,6 +758,10 @@ export const ManageDataNew: React.FC<ManageDataNewProps> = ({
       showNotification('error', 'Gagal menyimpan data realisasi S-Curve');
       return false;
     }
+
+    // Dashboard portfolio S-curve reads the same tables — drop its cache so the
+    // next dashboard visit reflects this save immediately.
+    invalidatePortfolioSCurveCache();
 
     return true;
   };

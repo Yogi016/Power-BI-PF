@@ -1,20 +1,23 @@
 import React from 'react';
-import type { ProjectData } from '../../types';
 import { SCurveChart } from '../SCurveChart';
-import { portfolioSeries } from '../../utils/dashboardMetrics';
+import { usePortfolioSCurve } from '../../hooks/usePortfolioSCurve';
 import { Card } from '../ui';
 
 interface SCurvePanelProps {
-  projects: ProjectData[];
+  /** Optional project scope. Empty/undefined aggregates the whole portfolio. */
+  projectIds?: string[];
   title?: string;
 }
 
-// Aggregates all provided projects into one averaged S-curve.
-export const SCurvePanel: React.FC<SCurvePanelProps> = ({ projects, title = 'Kurva-S' }) => {
-  const data = portfolioSeries(projects);
+// Budget-weighted portfolio S-curve sourced from s_curve_baseline/s_curve_actual
+// (the same tables Manage Data writes to), aggregated in fetchPortfolioSCurve.
+export const SCurvePanel: React.FC<SCurvePanelProps> = ({ projectIds, title = 'Kurva-S' }) => {
+  const { data, loading } = usePortfolioSCurve(projectIds);
   return (
     <Card title={title}>
-      {data.length > 0 ? (
+      {loading ? (
+        <p className="text-sm text-slate-500">Memuat data progres…</p>
+      ) : data.length > 0 ? (
         <SCurveChart data={data} showWeekly={false} compact />
       ) : (
         <p className="text-sm text-slate-500">Belum ada data progres untuk ditampilkan.</p>

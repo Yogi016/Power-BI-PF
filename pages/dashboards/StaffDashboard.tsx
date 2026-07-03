@@ -22,7 +22,7 @@ export const StaffDashboard: React.FC = () => {
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="staff_officer" />
-        <SCurvePanel projects={projects} title="Progres proyek saya" />
+        <SCurvePanel projectIds={projects.map((p) => p.id)} title="Progres proyek saya" />
       </div>
       <ProjectTable projects={projects} />
     </div>
