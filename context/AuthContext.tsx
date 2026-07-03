@@ -105,13 +105,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setLoading(false);
         });
 
-        // Listen for auth state changes
+        // Listen for auth state changes.
+        //
+        // CRITICAL: this callback must stay synchronous and must NOT call any
+        // Supabase function (loadUserProfile queries user_profiles) directly.
+        // Supabase invokes this callback while holding the internal auth lock —
+        // e.g. during the token refresh gotrue runs when the tab regains focus.
+        // Any Supabase query inside here calls getSession() internally, which
+        // waits for that same lock → self-deadlock. The lock never releases, so
+        // every subsequent query in the app hangs and pages spin forever after
+        // switching browser tabs and coming back. Defer Supabase work to a
+        // macrotask so the lock is released first.
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, newSession) => {
+            (event, newSession) => {
                 // Only show loading screen for actual sign-out (clears the UI).
-                // Sign-in loading is handled by LoginPage itself.
-                // Token refresh and other events should update silently
-                // to avoid flashing the loading screen.
+                // Sign-in loading is handled by LoginPage itself. Token refresh
+                // and other events update silently to avoid flashing the loader.
                 if (event === 'SIGNED_OUT') {
                     setLoading(true);
                 }
@@ -120,23 +129,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 const authUser = newSession?.user ?? null;
                 setUser(authUser);
 
-                // The initial session is already handled by the getSession()
-                // chain above, and TOKEN_REFRESHED fires periodically without
-                // changing who is signed in. Re-running the user_profiles query
-                // on those events is redundant, so only reload the profile when
-                // the signed-in identity actually changes.
+                // Only reload the profile when the signed-in identity actually
+                // changes. INITIAL_SESSION, TOKEN_REFRESHED, and refocus-driven
+                // SIGNED_IN events for the same user carry no new profile data.
                 const identityChanged = lastUserId !== (authUser?.id ?? null);
                 lastUserId = authUser?.id ?? null;
-                const skipProfileReload =
-                    !identityChanged &&
-                    (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED');
 
-                if (!skipProfileReload) {
-                    try {
-                        await loadUserProfile(authUser);
-                    } catch (err) {
-                        console.warn('Failed to load user profile on auth change:', err);
-                    }
+                if (identityChanged) {
+                    setTimeout(() => {
+                        if (cancelled) return;
+                        loadUserProfile(authUser).catch((err) => {
+                            console.warn('Failed to load user profile on auth change:', err);
+                        });
+                    }, 0);
                 }
 
                 if (event === 'SIGNED_OUT') {
