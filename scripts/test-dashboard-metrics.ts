@@ -7,6 +7,8 @@ import {
   isAtRisk,
   atRiskProjects,
   portfolioSeries,
+  hasActualData,
+  projectHealth,
 } from '../utils/dashboardMetrics';
 
 const wk = (weekIndex: number, baseline: number, actual: number) => ({
@@ -118,5 +120,41 @@ const aheadSeries = portfolioSeries([actualAhead]);
 assert.strictEqual(aheadSeries.length, 2);
 assert.strictEqual(aheadSeries[1].plan, null);
 assert.strictEqual(aheadSeries[1].actual, 18);
+
+// ── Health model (4-state) ──────────────────────────────────────────
+// not-started = no actual data (all actuals 0 / empty)
+const notStarted: ProjectData = {
+  id: 'ns', name: 'NS', pic: 'x', activities: [],
+  weeklyBaseline: [wk(0, 10, 0), wk(1, 30, 0)],
+  weeklyActual: [wk(0, 0, 0), wk(1, 0, 0)],
+};
+const emptyActual: ProjectData = {
+  id: 'ea', name: 'EA', pic: 'x', activities: [],
+  weeklyBaseline: [wk(0, 10, 0)],
+  weeklyActual: [],
+};
+
+assert.strictEqual(hasActualData(onTrack), true);
+assert.strictEqual(hasActualData(notStarted), false);
+assert.strictEqual(hasActualData(emptyActual), false);
+
+assert.strictEqual(projectHealth(onTrack), 'on-track');   // variance +5
+assert.strictEqual(projectHealth(behind), 'at-risk');     // variance -30
+assert.strictEqual(projectHealth(notStarted), 'not-started');
+assert.strictEqual(projectHealth(emptyActual), 'not-started');
+
+// boundary: variance exactly -10 is "behind" (not at-risk); < -10 is at-risk
+const behindEdge: ProjectData = {
+  id: 'be', name: 'BE', pic: 'x', activities: [],
+  weeklyBaseline: [wk(0, 30, 0)],
+  weeklyActual: [wk(0, 0, 20)], // variance -10
+};
+assert.strictEqual(projectHealth(behindEdge), 'behind');
+
+// atRiskProjects excludes not-started projects
+assert.deepStrictEqual(
+  atRiskProjects([onTrack, behind, notStarted, behindEdge]).map((p) => p.id),
+  ['b'],
+);
 
 console.log('dashboard-metrics OK');

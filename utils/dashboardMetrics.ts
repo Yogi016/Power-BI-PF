@@ -19,7 +19,26 @@ export const projectVariance = (p: ProjectData): number =>
   Math.round((latestProgress(p) - latestPlanned(p)) * 10) / 10;
 
 export const AT_RISK_THRESHOLD = -10;
-export const isAtRisk = (p: ProjectData): boolean => projectVariance(p) < AT_RISK_THRESHOLD;
+
+export type ProjectHealth = 'not-started' | 'on-track' | 'behind' | 'at-risk';
+
+/** True when the project has at least one non-zero actual reading. */
+export const hasActualData = (p: ProjectData): boolean =>
+  p.weeklyActual.some((w) => w.actual > 0);
+
+/**
+ * 4-state health. Projects with no actual data are 'not-started' (they have not
+ * begun, so they are not "behind"). Otherwise bucket by variance.
+ */
+export const projectHealth = (p: ProjectData): ProjectHealth => {
+  if (!hasActualData(p)) return 'not-started';
+  const v = projectVariance(p);
+  if (v >= 0) return 'on-track';
+  if (v < AT_RISK_THRESHOLD) return 'at-risk';
+  return 'behind';
+};
+
+export const isAtRisk = (p: ProjectData): boolean => projectHealth(p) === 'at-risk';
 
 export const atRiskProjects = (projects: ProjectData[]): ProjectData[] =>
   projects.filter(isAtRisk);
