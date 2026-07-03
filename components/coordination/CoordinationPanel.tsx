@@ -120,8 +120,9 @@ const ComposeForm: React.FC<{ onCancel: () => void; onSent: () => void }> = ({ o
   return (
     <div className="flex-1 space-y-3 overflow-y-auto p-4 custom-scrollbar">
       <div>
-        <label className="mb-1 block text-xs font-semibold text-slate-500">Kirim ke</label>
+        <label htmlFor="hr-recipient" className="mb-1 block text-xs font-semibold text-slate-500">Kirim ke</label>
         <select
+          id="hr-recipient"
           value={toUser}
           onChange={(e) => setToUser(e.target.value)}
           className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]"
@@ -134,12 +135,14 @@ const ComposeForm: React.FC<{ onCancel: () => void; onSent: () => void }> = ({ o
         value={subject}
         onChange={(e) => setSubject(e.target.value)}
         placeholder="Subjek"
+        aria-label="Subjek permintaan"
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]"
       />
       <textarea
         value={body}
         onChange={(e) => setBody(e.target.value)}
         placeholder="Tulis permintaan bantuan…"
+        aria-label="Isi permintaan bantuan"
         rows={5}
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]"
       />
