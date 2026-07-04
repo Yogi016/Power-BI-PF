@@ -24,6 +24,8 @@ import {
   HelpRequestSummary,
   HelpRequestMessage,
   RecipientOption,
+  AttachmentSource,
+  HelpRequestAttachment,
 } from '../types';
 import { hasUnread } from './helpRequests';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
@@ -2797,6 +2799,31 @@ export async function uploadAssetFile(file: File, folderName?: string): Promise<
   }
 }
 
+export async function uploadCoordinationFile(file: File): Promise<{ url: string; storageKey: string } | null> {
+  try {
+    validateFileSize(file, MAX_ASSET_SIZE_MB);
+    const workerUrl = import.meta.env.VITE_R2_WORKER_URL;
+    const publicUrlBase = import.meta.env.VITE_R2_PUBLIC_URL;
+    if (!workerUrl || !publicUrlBase) {
+      throw new Error('Konfigurasi R2 belum lengkap. Periksa VITE_R2_WORKER_URL dan VITE_R2_PUBLIC_URL.');
+    }
+    const storageKey = `coordination/${Date.now()}_${sanitizeAssetFileName(file.name)}`;
+    const response = await fetch(`${workerUrl}/${storageKey}`, {
+      method: 'PUT',
+      body: file,
+      headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    });
+    if (!response.ok) {
+      const message = await response.text();
+      throw new Error(message || `Upload via worker failed: ${response.status}`);
+    }
+    return { url: `${publicUrlBase}/${storageKey}`, storageKey };
+  } catch (error) {
+    console.error('Error uploading coordination file:', error);
+    throw error;
+  }
+}
+
 export async function fetchAssets(): Promise<AssetItem[]> {
   if (!supabase) return [];
   try {
@@ -2951,20 +2978,22 @@ export async function fetchMyHelpRequests(): Promise<HelpRequestSummary[]> {
   }
 }
 
-export async function createHelpRequest(toUser: string, subject: string, body: string): Promise<boolean> {
-  if (!supabase) return false;
+export async function createHelpRequest(toUser: string, subject: string, body: string): Promise<string | null> {
+  if (!supabase) return null;
   try {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
-    if (!uid) return false;
-    const { error } = await supabase
+    if (!uid) return null;
+    const { data, error } = await supabase
       .from('help_requests')
-      .insert({ from_user: uid, to_user: toUser, subject, body });
+      .insert({ from_user: uid, to_user: toUser, subject, body })
+      .select('id')
+      .single();
     if (error) throw error;
-    return true;
+    return data?.id ?? null;
   } catch (error) {
     console.error('Error creating help request:', error);
-    return false;
+    return null;
   }
 }
 
@@ -2991,22 +3020,24 @@ export async function fetchHelpRequestThread(requestId: string): Promise<HelpReq
   }
 }
 
-export async function postHelpRequestMessage(requestId: string, body: string): Promise<boolean> {
-  if (!supabase) return false;
+export async function postHelpRequestMessage(requestId: string, body: string): Promise<string | null> {
+  if (!supabase) return null;
   try {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth?.user?.id;
-    if (!uid) return false;
-    const { error } = await supabase
+    if (!uid) return null;
+    const { data, error } = await supabase
       .from('help_request_messages')
-      .insert({ request_id: requestId, sender_user: uid, body });
+      .insert({ request_id: requestId, sender_user: uid, body })
+      .select('id')
+      .single();
     if (error) throw error;
     // Bump parent so it re-sorts to the top of both participants' lists.
     await supabase.from('help_requests').update({ updated_at: new Date().toISOString() }).eq('id', requestId);
-    return true;
+    return data?.id ?? null;
   } catch (error) {
     console.error('Error posting help request message:', error);
-    return false;
+    return null;
   }
 }
 
@@ -3054,5 +3085,59 @@ export async function fetchRecipients(): Promise<RecipientOption[]> {
   } catch (error) {
     console.error('Error fetching recipients:', error);
     return [];
+  }
+}
+
+export async function addHelpRequestAttachments(
+  requestId: string,
+  messageId: string | null,
+  items: { name: string; url: string; source: AttachmentSource; documentId?: string | null }[],
+): Promise<boolean> {
+  if (!supabase || items.length === 0) return true;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return false;
+    const rows = items.map((it) => ({
+      request_id: requestId,
+      message_id: messageId,
+      uploaded_by: uid,
+      name: it.name,
+      url: it.url,
+      source: it.source,
+      document_id: it.documentId ?? null,
+    }));
+    const { error } = await supabase.from('help_request_attachments').insert(rows);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error adding help request attachments:', error);
+    return false;
+  }
+}
+
+export async function fetchHelpRequestAttachments(requestId: string): Promise<HelpRequestAttachment[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('help_request_attachments')
+      .select('id, request_id, message_id, name, url, source, document_id, created_at')
+      .eq('request_id', requestId)
+      .order('created_at', { ascending: true })
+      .abortSignal(AbortSignal.timeout(5_000));
+    if (error) throw error;
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      requestId: a.request_id,
+      messageId: a.message_id ?? null,
+      name: a.name,
+      url: a.url,
+      source: a.source,
+      documentId: a.document_id ?? null,
+      createdAt: a.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching help request attachments:', error);
+    throw error;
   }
 }

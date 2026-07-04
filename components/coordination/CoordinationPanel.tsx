@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, X } from 'lucide-react';
-import type { HelpRequestSummary, RecipientOption } from '../../types';
-import { createHelpRequest, fetchRecipients, markHelpRequestRead } from '../../lib/supabase';
+import type { HelpRequestSummary, RecipientOption, AttachmentDraft } from '../../types';
+import { createHelpRequest, fetchRecipients, markHelpRequestRead, addHelpRequestAttachments } from '../../lib/supabase';
 import { useHelpRequests, invalidateHelpRequestsCache } from '../../hooks/useHelpRequests';
 import { SegmentedTabs, Button, StatusBadge } from '../ui';
 import type { Status } from '../ui';
 import { RequestThread } from './RequestThread';
+import { AttachmentPicker } from './AttachmentPicker';
+import { resolveAttachments } from './attachmentUpload';
 
 const STATUS_BADGE: Record<string, { status: Status; label: string }> = {
   open: { status: 'warning', label: 'Terbuka' },
@@ -106,15 +108,19 @@ const ComposeForm: React.FC<{ onCancel: () => void; onSent: () => void }> = ({ o
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [sending, setSending] = useState(false);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
 
   useEffect(() => { fetchRecipients().then(setRecipients).catch(() => setRecipients([])); }, []);
 
   const submit = async () => {
     if (!toUser || !subject.trim() || !body.trim() || sending) return;
     setSending(true);
-    const ok = await createHelpRequest(toUser, subject.trim(), body.trim());
+    const requestId = await createHelpRequest(toUser, subject.trim(), body.trim());
+    if (!requestId) { setSending(false); return; }
+    const resolved = await resolveAttachments(attachments);
+    if (resolved.length) await addHelpRequestAttachments(requestId, null, resolved);
     setSending(false);
-    if (ok) onSent();
+    onSent();
   };
 
   return (
@@ -146,6 +152,7 @@ const ComposeForm: React.FC<{ onCancel: () => void; onSent: () => void }> = ({ o
         rows={5}
         className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0071e3]"
       />
+      <AttachmentPicker drafts={attachments} onChange={setAttachments} />
       <div className="flex justify-end gap-2">
         <Button variant="secondary" onClick={onCancel}>Batal</Button>
         <Button onClick={submit} disabled={sending || !toUser || !subject.trim() || !body.trim()}>Kirim</Button>
