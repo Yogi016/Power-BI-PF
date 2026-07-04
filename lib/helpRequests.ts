@@ -1,4 +1,4 @@
-import type { HelpRequestStatus } from '../types';
+import type { HelpRequestStatus, HelpRequestAttachment } from '../types';
 
 const STATUSES: HelpRequestStatus[] = ['open', 'in_progress', 'done'];
 
@@ -28,4 +28,30 @@ export function hasUnread(
   const latest = counterpartTimes.reduce((a, b) => (a > b ? a : b));
   if (!lastReadAt) return true;
   return latest > lastReadAt;
+}
+
+const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/;
+
+/** True when the name/url points at a common image type (ignores query string). */
+export function isImageAttachment(nameOrUrl: string): boolean {
+  return IMAGE_EXT.test(nameOrUrl.split('?')[0].toLowerCase());
+}
+
+/** Splits attachments into initial-request (messageId null) and per-message groups. */
+export function groupAttachmentsByMessage(attachments: HelpRequestAttachment[]): {
+  requestLevel: HelpRequestAttachment[];
+  byMessage: Map<string, HelpRequestAttachment[]>;
+} {
+  const requestLevel: HelpRequestAttachment[] = [];
+  const byMessage = new Map<string, HelpRequestAttachment[]>();
+  for (const a of attachments) {
+    if (a.messageId === null) {
+      requestLevel.push(a);
+    } else {
+      const arr = byMessage.get(a.messageId) ?? [];
+      arr.push(a);
+      byMessage.set(a.messageId, arr);
+    }
+  }
+  return { requestLevel, byMessage };
 }
