@@ -55,7 +55,11 @@ When adding a page, update `types.ts`, `App.tsx`, desktop nav, and mobile nav in
 2. Supabase data if `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are configured.
 3. Initial constants from `constants.ts` when external data is unavailable.
 
-The Supabase load runs three queries in parallel via `Promise.all` (projects with nested activities, weekly summary, and tasks). Do not revert these to serial `await` chains — sequential fetches add 4-8 seconds of unnecessary latency.
+The Supabase load queries the **real** tables that Manage Data uses: a flat `projects` select (active only), then a bulk `s_curve_baseline` + `s_curve_actual` fetch (`period_type = 'monthly'`, `.in('project_id', ids)`) run in parallel via `Promise.all`. Each project's `weeklyBaseline`/`weeklyActual` arrays are populated from those cumulative S-curve rows (with `weekIndex = year*1000 + period_index` so the arrays sort chronologically across years). This feeds all variance-based dashboard widgets (`StatusDonut`, `AtRiskList`, `ProjectPortfolio`, project counts).
+
+Do NOT reintroduce the old query shape — it targeted tables that do not exist (`protrack.weekly_summary`, `protrack.tasks`, nested `activity_weekly_progress`). Any one of those failing rejected the whole `Promise.all`, leaving `projects` empty and every dashboard tile at zero. The real schema has `projects`, `activities`, `weekly_progress`, `monthly_progress`, `s_curve_baseline`, `s_curve_actual` — there is no `protrack` schema.
+
+`weeklySummary`, `sCurveData`, and `tasks` in DataContext are consumed only by the legacy `pages/Dashboard.tsx` and `pages/ManageData.tsx` (both off by default) and now stay at their `constants.ts` fallback. DataContext loads once per session (guarded by `supabaseLoaded`); it does not re-fetch after Manage Data mutations.
 
 CSV parsing lives in `utils/csvParser.ts`. Supabase helpers live mostly in `lib/supabase.ts`.
 
@@ -77,6 +81,8 @@ Important table/workflow areas:
 - Roles and profiles: `app_roles` and `user_profiles` from `supabase/migrations/20260702020000_create_user_profiles_roles.sql`.
 
 Apply migrations only to the correct Supabase project. A prior check found the local `.env.local` Supabase ref differed from the Supabase MCP-accessible project, so do not run migrations through MCP unless the target project ref is confirmed first.
+
+The browser client (`lib/supabaseClient.ts`) must use the **anon** key only. **Never put a `service_role` key behind a `VITE_`-prefixed env var** — anything `VITE_*` gets inlined into the client bundle the moment it is referenced via `import.meta.env`, and `service_role` bypasses all RLS (full read/write/delete for anyone who opens the bundle). `.env.local` contains a `VITE_SUPABASE_SERVICE_ROLE`; it is currently unused/unreferenced so it does not ship, but it is a landmine — a server-side service key belongs only in server/edge/worker contexts under a non-`VITE_` name (e.g. `SUPABASE_SERVICE_ROLE`). If data does not load, fix RLS policies / apply migrations — do not reach for the service key in the client.
 
 ## Authentication And Roles
 
@@ -231,6 +237,10 @@ Be careful with broad progress changes: dashboard, Gantt, calendar, Work, and Cl
 
 Tailwind CSS is processed at **build time** via the `@tailwindcss/vite` plugin (Tailwind v4). The CSS entry point is `styles/tailwind.css`, imported in `index.tsx`. Do **not** re-add the Tailwind CDN `<script>` tag to `index.html` — that was the primary cause of production slowness (300KB render-blocking runtime JS).
 
+### Fonts
+
+`index.html` loads Google Fonts **Inter only** (weights 400/500/600/700/800/900), non-render-blocking via `media="print" onload="this.media='all'"` with a `<noscript>` fallback. Poppins was removed (retired per DESIGN.md, zero code references) — do not re-add it or add render-blocking font `<link>`s. Keep weight 900 (used by `font-black`).
+
 ### Deploy Target
 
 Production deploys to **Vercel** (`project-lingkungan.vercel.app`). `vercel.json` provides SPA rewrite rules and immutable cache headers for hashed assets. Do not use `@cloudflare/vite-plugin` — it was removed because it conflicts with Vercel deploys.
@@ -239,6 +249,7 @@ Production deploys to **Vercel** (`project-lingkungan.vercel.app`). `vercel.json
 
 `vite.config.ts` uses `manualChunks` to group vendor libraries into stable, cacheable chunks:
 
+- `vendor-react`: react, react-dom, scheduler, react-is — **plus** Vite's `__vitePreload` helper and Rollup's CommonJS interop helpers (matched via `id.includes('vite/preload-helper')` / `commonjsHelpers` / `\0commonjs`). This pin is load-bearing: without it Rollup hoisted react-dom into `vendor-calendar` and the preload helper into `vendor-pdf`, forcing both heavy bundles (`vendor-calendar` ~96 KB gz, `vendor-pdf` ~520 KB gz) onto the initial `modulepreload` path — even on the Login screen. Keep this branch first. Verify after any chunk change with: `grep modulepreload dist/index.html` should list only `vendor-react`, `vendor-supabase`, `vendor-icons`, entry, and css.
 - `vendor-recharts`: recharts + d3-* libraries.
 - `vendor-supabase`: @supabase/* SDK.
 - `vendor-pdf`: jspdf, pdf-lib, pdfjs-dist, html2canvas.
@@ -260,6 +271,8 @@ After mutations to cooperation documents, call `invalidateCooperationDocumentsCa
 `context/AuthContext.tsx` has a 3-second hard ceiling on the entire auth init chain (`getSession` + `loadUserProfile`). The timeout is NOT cleared when `getSession` returns — it only clears when the full chain completes. If Supabase auth does not respond within 3 seconds, the app proceeds without a session. Do not increase this beyond 3 seconds — users should not stare at a blank screen.
 
 The `loadUserProfile` query itself has a 2-second `AbortSignal.timeout`. DataContext parallel queries have a 5-second `AbortSignal.timeout`. Cooperation document queries have a 5-second `AbortSignal.timeout`. These prevent any individual query from hanging indefinitely.
+
+**Never make the `onAuthStateChange` callback `async` or call any Supabase function directly inside it.** Supabase invokes that callback while holding its internal auth lock (e.g. during the token refresh it runs when the tab regains focus). Any Supabase query inside the callback calls `getSession()` internally, which waits on that same lock → self-deadlock; the lock never releases and every subsequent query hangs, so pages spin forever after switching browser tabs and coming back. The callback is synchronous, only reloads the profile when the signed-in identity actually changes, and defers the `loadUserProfile` call via `setTimeout(fn, 0)` so the lock is released first. Keep it that way.
 
 ### PWA Service Worker
 
@@ -302,10 +315,10 @@ Use these components instead of writing inline card/button markup. They enforce 
 Dashboard sub-components live in `components/dashboard/`:
 
 - `ActionInbox.tsx`: Role-filtered cooperation document inbox using `useCooperationDocuments` hook.
-- `SCurvePanel.tsx`: Aggregated S-curve chart for project portfolio.
+- `SCurvePanel.tsx`: Budget-weighted portfolio S-curve. It does NOT use DataContext `projects` or `utils/dashboardMetrics.portfolioSeries` (that path read the never-populated per-project weekly arrays). It sources data from `usePortfolioSCurve(projectIds?)`, which calls `fetchPortfolioSCurve()` in `lib/supabase.ts`. That aggregates `s_curve_baseline`/`s_curve_actual` across projects weighted by `projects.budget` (equal-weight fallback when no budgets, `null` for periods with no data). VP/PM pass no `projectIds` (whole portfolio); Staff/PH pass their scoped project ids. After saving S-curve data, `ManageDataNew` calls `invalidatePortfolioSCurveCache()` (exported from `hooks/usePortfolioSCurve.ts`, 30s TTL + in-flight dedup, same pattern as `useCooperationDocuments`).
 - `StatusDonut.tsx`: Pie chart of project health distribution.
 - `AtRiskList.tsx`: List of at-risk projects with variance badge.
-- `ProjectTable.tsx`: Tabular project list with health status.
+- `ProjectPortfolio.tsx`: Clickable project table (search + 4-state health) that opens `ProjectDetailDrawer` (right slide-over with S-curve, stats, and lazy-loaded activities). Used by all four role dashboards, scoped per role. Replaced the old `ProjectTable.tsx`.
 
 Metrics helpers: `utils/dashboardMetrics.ts` exports `atRiskProjects`, `projectVariance`, `latestProgress`, `latestPlanned`, `portfolioSeries`.
 

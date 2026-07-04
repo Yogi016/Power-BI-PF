@@ -5,7 +5,8 @@ import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { StatusDonut } from '../../components/dashboard/StatusDonut';
-import { atRiskProjects } from '../../utils/dashboardMetrics';
+import { atRiskProjects, projectHealth } from '../../utils/dashboardMetrics';
+import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
 import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
 import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
 
@@ -23,13 +24,18 @@ export const VpDashboard: React.FC = () => {
         <StatTile label="Total proyek" value={projects.length} icon={<Briefcase size={20} />} />
         <StatTile label="Menunggu approval" value={awaitingApproval} icon={<Stamp size={20} />} />
         <StatTile label="Portfolio berisiko" value={atRiskProjects(projects).length} icon={<AlertTriangle size={20} />} />
-        <StatTile label="Terlambat" value="—" icon={<Clock size={20} />} />
+        <StatTile
+          label="Belum mulai"
+          value={projects.filter((p) => projectHealth(p) === 'not-started').length}
+          icon={<Clock size={20} />}
+        />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="vp_lingkungan" />
         <StatusDonut projects={projects} />
       </div>
       <SCurvePanel title="Kurva-S portfolio" />
+      <ProjectPortfolio projects={projects} />
     </div>
   );
 };

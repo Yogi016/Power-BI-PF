@@ -1,19 +1,19 @@
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import type { ProjectData } from '../../types';
-import { isAtRisk, projectVariance } from '../../utils/dashboardMetrics';
+import { projectHealth } from '../../utils/dashboardMetrics';
+import type { ProjectHealth } from '../../utils/dashboardMetrics';
 import { COLORS } from '../../constants';
 import { Card } from '../ui';
 
-// Buckets projects by health using variance.
+// Buckets projects by 4-state health.
 export const StatusDonut: React.FC<{ projects: ProjectData[] }> = ({ projects }) => {
-  const ahead = projects.filter((p) => projectVariance(p) >= 0).length;
-  const risk = projects.filter(isAtRisk).length;
-  const behind = projects.length - ahead - risk;
+  const count = (h: ProjectHealth) => projects.filter((p) => projectHealth(p) === h).length;
   const data = [
-    { name: 'Sesuai/di atas rencana', value: ahead, color: COLORS.statusPositive },
-    { name: 'Sedikit tertinggal', value: behind, color: COLORS.statusWarning },
-    { name: 'Berisiko', value: risk, color: COLORS.statusDanger },
+    { name: 'Sesuai/di atas rencana', value: count('on-track'), color: COLORS.statusPositive },
+    { name: 'Sedikit tertinggal', value: count('behind'), color: COLORS.statusWarning },
+    { name: 'Berisiko', value: count('at-risk'), color: COLORS.statusDanger },
+    { name: 'Belum ada realisasi', value: count('not-started'), color: COLORS.statusNeutral },
   ].filter((d) => d.value > 0);
 
   return (

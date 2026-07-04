@@ -459,3 +459,14 @@ export interface DocumentItem {
   createdAt?: string;
   updatedAt?: string;
 }
+
+// Slim, typed activity row for dashboard drill-down (distinct from the legacy
+// ActivityData shape used by ProjectData.activities).
+export interface ProjectActivityRow {
+  id: string;
+  code: string | null;
+  activityName: string;
+  pic: string | null;
+  weight: number; // percentage 0-100
+  status: ActivityStatus;
+}

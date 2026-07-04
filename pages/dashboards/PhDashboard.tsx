@@ -5,7 +5,8 @@ import { StatTile } from '../../components/ui';
 import { ActionInbox } from '../../components/dashboard/ActionInbox';
 import { SCurvePanel } from '../../components/dashboard/SCurvePanel';
 import { AtRiskList } from '../../components/dashboard/AtRiskList';
-import { atRiskProjects } from '../../utils/dashboardMetrics';
+import { ProjectPortfolio } from '../../components/dashboard/ProjectPortfolio';
+import { atRiskProjects, projectHealth } from '../../utils/dashboardMetrics';
 import { useCooperationDocuments } from '../../hooks/useCooperationDocuments';
 import { buildRoleDocumentInbox } from '../../lib/cooperationWorkflow';
 
@@ -23,13 +24,14 @@ export const PhDashboard: React.FC = () => {
         <StatTile label="Proyek ditugaskan" value={projects.length} icon={<FolderKanban size={20} />} />
         <StatTile label="Perlu review" value={needsReview} icon={<ClipboardCheck size={20} />} />
         <StatTile label="Berisiko" value={atRiskProjects(projects).length} icon={<AlertTriangle size={20} />} />
-        <StatTile label="Tindak lanjut" value="—" icon={<ListTodo size={20} />} />
+        <StatTile label="Belum mulai" value={projects.filter((p) => projectHealth(p) === 'not-started').length} icon={<ListTodo size={20} />} />
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <ActionInbox role="project_head" />
         <SCurvePanel projectIds={projects.map((p) => p.id)} title="Progres proyek ditugaskan" />
       </div>
       <AtRiskList projects={projects} />
+      <ProjectPortfolio projects={projects} />
     </div>
   );
 };

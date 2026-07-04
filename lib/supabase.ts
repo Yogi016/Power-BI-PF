@@ -18,6 +18,7 @@ import {
   CooperationRevisionSource,
   CreateCooperationDocumentInput,
   PortfolioSeriesPoint,
+  ProjectActivityRow,
   UserRole,
 } from '../types';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
@@ -414,6 +415,36 @@ export async function fetchActivities(projectId: string): Promise<ActivityData[]
   } catch (error) {
     console.error('Error fetching activities:', error);
     return [];
+  }
+}
+
+/**
+ * Slim, typed activity fetch for dashboard drill-down. Returns only the fields
+ * the drawer renders (weight + status), unlike the legacy `fetchActivities`.
+ */
+export async function fetchProjectActivities(projectId: string): Promise<ProjectActivityRow[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('activities')
+      .select('id, code, activity_name, pic, weight, status')
+      .eq('project_id', projectId)
+      .order('code', { ascending: true })
+      .abortSignal(AbortSignal.timeout(5_000));
+    if (error) throw error;
+    return (data || []).map((a: any) => ({
+      id: a.id,
+      code: a.code ?? null,
+      activityName: a.activity_name,
+      pic: a.pic ?? null,
+      weight: Number(a.weight) || 0,
+      status: (a.status ?? 'not-started') as ProjectActivityRow['status'],
+    }));
+  } catch (error) {
+    // Rethrow so useProjectDetail can surface a distinct error state in the
+    // drawer instead of silently rendering an empty "no activities" list.
+    console.error('Error fetching project activities:', error);
+    throw error;
   }
 }
 

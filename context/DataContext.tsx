@@ -143,7 +143,7 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
         // 2. Bulk monthly S-curve for those projects from s_curve_baseline /
         //    s_curve_actual (the tables Manage Data writes to). These feed
-        //    per-project variance → StatusDonut, AtRiskList, ProjectTable.
+        //    per-project variance → StatusDonut, AtRiskList, ProjectPortfolio.
         let baselineRows: any[] = [];
         let actualRows: any[] = [];
         if (ids.length > 0) {
