@@ -101,11 +101,17 @@ export interface AttachmentDraft {
 }
 ```
 
-## Pure helper + test — `lib/helpRequests.ts` / `scripts/test-help-requests.ts`
+## Pure helpers + test — `lib/helpRequests.ts` / `scripts/test-help-requests.ts`
 
-`groupAttachmentsByMessage(attachments): { requestLevel: HelpRequestAttachment[]; byMessage: Map<string, HelpRequestAttachment[]> }`
-splits attachments into initial-request (messageId null) and per-message groups.
-Add unit tests for this grouping alongside the existing `hasUnread` tests.
+- `groupAttachmentsByMessage(attachments): { requestLevel: HelpRequestAttachment[]; byMessage: Map<string, HelpRequestAttachment[]> }`
+  splits attachments into initial-request (messageId null) and per-message groups.
+- `isImageAttachment(nameOrUrl: string): boolean` — true when the name/url ends in
+  a common image extension (`.png .jpg .jpeg .gif .webp .bmp .svg`, case-insensitive,
+  ignoring any query string). Drives thumbnail rendering.
+
+Add unit tests for both alongside the existing `hasUnread` tests (e.g.
+`isImageAttachment('foto.PNG') === true`, `isImageAttachment('surat.pdf') === false`,
+`isImageAttachment('https://r2/x/a.jpg?token=1') === true`).
 
 ## UI — `components/coordination/`
 
@@ -113,7 +119,9 @@ Add unit tests for this grouping alongside the existing `hasUnread` tests.
 - Props: `{ drafts: AttachmentDraft[]; onChange: (next) => void }`.
 - Two controls: **Upload file** (`<input type="file" multiple>`) and **Dari
   Dokumen** (opens `DocumentPicker`). Adds to `drafts`.
-- Renders staged drafts as chips (name + remove ×).
+- Renders staged drafts as chips (name + remove ×). For image drafts, the chip
+  shows a small thumbnail preview: `URL.createObjectURL(file)` for uploads (revoked
+  on removal/unmount) and the document `url` for Dokumen images.
 
 ### `DocumentPicker.tsx` (new)
 - Modal listing `fetchAllDocuments()` filtered to those with a non-empty `link`,
@@ -134,7 +142,11 @@ Add unit tests for this grouping alongside the existing `hasUnread` tests.
   `addHelpRequestAttachments(requestId, messageId, resolvedItems)`; refetch.
 - Fetch attachments (`fetchHelpRequestAttachments`) alongside the thread; render
   request-level attachments under the header, and each message's attachments
-  under its bubble as clickable links (open in new tab, `rel="noopener"`).
+  under its bubble. **Image attachments** (`isImageAttachment`) render as a
+  clickable thumbnail (`<img>`, `max-h-40 rounded-lg object-cover`, `loading="lazy"`)
+  linking to the full image in a new tab; non-image attachments render as a
+  file-icon link (name + open-in-new-tab). All links use `target="_blank"` +
+  `rel="noopener noreferrer"`.
 
 All copy Bahasa Indonesia; reuse `Button`, `Card`, DESIGN.md tokens (Action Blue,
 `rounded-lg` chips). Upload failures show a notification but don't block sending
@@ -143,12 +155,12 @@ the message/request.
 ## Out of scope (YAGNI)
 
 - Deleting/renaming attachments after send.
-- Image thumbnails / inline previews (links only).
+- Inline preview for non-image files (PDF/doc viewers) — those stay links.
 - Drag-and-drop upload.
 
 ## Verification
 
-- `npx tsx scripts/test-help-requests.ts` (grouping + existing) → `help-requests OK`.
+- `npx tsx scripts/test-help-requests.ts` (grouping + isImageAttachment + existing) → `help-requests OK`.
 - `./node_modules/.bin/vite build` exit 0.
 - Manual (after migration applied): attach an uploaded file and a Dokumen file on
   a new request; reply with an attachment; confirm both participants see and can
