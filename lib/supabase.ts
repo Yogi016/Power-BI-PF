@@ -20,7 +20,12 @@ import {
   PortfolioSeriesPoint,
   ProjectActivityRow,
   UserRole,
+  HelpRequestStatus,
+  HelpRequestSummary,
+  HelpRequestMessage,
+  RecipientOption,
 } from '../types';
+import { hasUnread } from './helpRequests';
 // Using Cloudflare Worker via VITE_R2_WORKER_URL for secure uploads
 
 // =====================================================
@@ -2874,5 +2879,180 @@ export async function deleteAsset(asset: AssetItem): Promise<boolean> {
   } catch (error) {
     console.error('Error deleting asset:', error);
     return false;
+  }
+}
+
+// =====================================================
+// COORDINATION HUB (help requests)
+// =====================================================
+
+/** Requests where the current user is a participant, with unread + counterpart name. */
+export async function fetchMyHelpRequests(): Promise<HelpRequestSummary[]> {
+  if (!supabase) return [];
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return [];
+
+    const { data: reqData, error: reqError } = await supabase
+      .from('help_requests')
+      .select('id, from_user, to_user, subject, status, created_at, updated_at')
+      .or(`from_user.eq.${uid},to_user.eq.${uid}`)
+      .order('updated_at', { ascending: false })
+      .abortSignal(AbortSignal.timeout(5_000));
+    if (reqError) throw reqError;
+
+    const requests = reqData || [];
+    if (requests.length === 0) return [];
+
+    const ids = requests.map((r: any) => r.id);
+    const counterpartIds = Array.from(
+      new Set(requests.map((r: any) => (r.from_user === uid ? r.to_user : r.from_user))),
+    );
+
+    const [msgRes, readRes, profileRes] = await Promise.all([
+      supabase.from('help_request_messages').select('request_id, sender_user, created_at').in('request_id', ids),
+      supabase.from('help_request_reads').select('request_id, last_read_at').eq('user_id', uid).in('request_id', ids),
+      supabase.from('user_profiles').select('user_id, full_name').in('user_id', counterpartIds),
+    ]);
+    if (msgRes.error) throw msgRes.error;
+    if (readRes.error) throw readRes.error;
+    if (profileRes.error) throw profileRes.error;
+
+    const messagesByReq = new Map<string, { senderUser: string; createdAt: string }[]>();
+    (msgRes.data || []).forEach((m: any) => {
+      const arr = messagesByReq.get(m.request_id) ?? [];
+      arr.push({ senderUser: m.sender_user, createdAt: m.created_at });
+      messagesByReq.set(m.request_id, arr);
+    });
+    const readByReq = new Map<string, string>();
+    (readRes.data || []).forEach((r: any) => readByReq.set(r.request_id, r.last_read_at));
+    const nameById = new Map<string, string>();
+    (profileRes.data || []).forEach((p: any) => nameById.set(p.user_id, p.full_name));
+
+    return requests.map((r: any): HelpRequestSummary => {
+      const counterpartId = r.from_user === uid ? r.to_user : r.from_user;
+      return {
+        id: r.id,
+        fromUser: r.from_user,
+        toUser: r.to_user,
+        subject: r.subject,
+        status: r.status,
+        createdAt: r.created_at,
+        updatedAt: r.updated_at,
+        direction: r.to_user === uid ? 'incoming' : 'outgoing',
+        counterpartName: nameById.get(counterpartId) || 'Pengguna',
+        unread: hasUnread(r.created_at, r.from_user, messagesByReq.get(r.id) ?? [], readByReq.get(r.id) ?? null, uid),
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching help requests:', error);
+    return [];
+  }
+}
+
+export async function createHelpRequest(toUser: string, subject: string, body: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return false;
+    const { error } = await supabase
+      .from('help_requests')
+      .insert({ from_user: uid, to_user: toUser, subject, body });
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error creating help request:', error);
+    return false;
+  }
+}
+
+export async function fetchHelpRequestThread(requestId: string): Promise<HelpRequestMessage[]> {
+  if (!supabase) return [];
+  try {
+    const { data, error } = await supabase
+      .from('help_request_messages')
+      .select('id, request_id, sender_user, body, created_at')
+      .eq('request_id', requestId)
+      .order('created_at', { ascending: true })
+      .abortSignal(AbortSignal.timeout(5_000));
+    if (error) throw error;
+    return (data || []).map((m: any) => ({
+      id: m.id,
+      requestId: m.request_id,
+      senderUser: m.sender_user,
+      body: m.body,
+      createdAt: m.created_at,
+    }));
+  } catch (error) {
+    console.error('Error fetching help request thread:', error);
+    throw error;
+  }
+}
+
+export async function postHelpRequestMessage(requestId: string, body: string): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return false;
+    const { error } = await supabase
+      .from('help_request_messages')
+      .insert({ request_id: requestId, sender_user: uid, body });
+    if (error) throw error;
+    // Bump parent so it re-sorts to the top of both participants' lists.
+    await supabase.from('help_requests').update({ updated_at: new Date().toISOString() }).eq('id', requestId);
+    return true;
+  } catch (error) {
+    console.error('Error posting help request message:', error);
+    return false;
+  }
+}
+
+export async function updateHelpRequestStatus(requestId: string, status: HelpRequestStatus): Promise<boolean> {
+  if (!supabase) return false;
+  try {
+    const { error } = await supabase.from('help_requests').update({ status }).eq('id', requestId);
+    if (error) throw error;
+    return true;
+  } catch (error) {
+    console.error('Error updating help request status:', error);
+    return false;
+  }
+}
+
+export async function markHelpRequestRead(requestId: string): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    if (!uid) return;
+    await supabase
+      .from('help_request_reads')
+      .upsert({ request_id: requestId, user_id: uid, last_read_at: new Date().toISOString() });
+  } catch (error) {
+    console.error('Error marking help request read:', error);
+  }
+}
+
+/** All other users, for the recipient picker. */
+export async function fetchRecipients(): Promise<RecipientOption[]> {
+  if (!supabase) return [];
+  try {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth?.user?.id;
+    const { data, error } = await supabase
+      .from('user_profiles')
+      .select('user_id, full_name, role_code')
+      .order('full_name', { ascending: true })
+      .abortSignal(AbortSignal.timeout(5_000));
+    if (error) throw error;
+    return (data || [])
+      .filter((p: any) => p.user_id !== uid)
+      .map((p: any) => ({ userId: p.user_id, fullName: p.full_name || 'Pengguna', roleCode: p.role_code }));
+  } catch (error) {
+    console.error('Error fetching recipients:', error);
+    return [];
   }
 }

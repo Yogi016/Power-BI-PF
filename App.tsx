@@ -7,6 +7,7 @@ import { PageView } from './types';
 import { Loader2 } from 'lucide-react';
 
 const AIChatbot = lazy(() => import('./components/AIChatbot').then((module) => ({ default: module.AIChatbot })));
+const CoordinationBubble = lazy(() => import('./components/coordination/CoordinationBubble').then((module) => ({ default: module.CoordinationBubble })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then((module) => ({ default: module.Dashboard })));
 const DashboardNew = lazy(() => import('./pages/DashboardNew').then((module) => ({ default: module.DashboardNew })));
 const ManageData = lazy(() => import('./pages/ManageData').then((module) => ({ default: module.ManageData })));
@@ -84,6 +85,9 @@ const AuthenticatedApp: React.FC = () => {
       </Layout>
       <Suspense fallback={null}>
         <AIChatbot />
+      </Suspense>
+      <Suspense fallback={null}>
+        <CoordinationBubble />
       </Suspense>
     </DataProvider>
   );
