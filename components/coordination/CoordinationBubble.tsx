@@ -33,15 +33,15 @@ export const CoordinationBubble: React.FC = () => {
             type="button"
             onClick={() => { invalidateHelpRequestsCache(); setOpen(true); }}
             className="group relative mx-auto flex h-11 w-full max-w-md items-center gap-2.5 rounded-2xl border border-slate-200/90 bg-white/95 px-2.5 text-left text-slate-600 shadow-[0_-8px_24px_rgba(15,23,42,0.10)] backdrop-blur-xl transition hover:border-blue-200 hover:bg-white focus:outline-none focus:ring-4 focus:ring-blue-100 sm:mx-0 sm:h-14 sm:w-auto sm:justify-center sm:gap-2 sm:rounded-lg sm:border-0 sm:bg-[#0066cc] sm:px-4 sm:text-white sm:shadow-xl sm:backdrop-blur-none sm:hover:bg-[#0055b3] sm:focus:ring-blue-200"
-            aria-label="Buka Pusat Koordinasi"
-            title="Koordinasi"
+            aria-label="Buka Chat JS"
+            title="Chat JS"
           >
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-blue-50 text-[#0066cc] ring-1 ring-blue-100 transition group-hover:bg-blue-100 sm:h-auto sm:w-auto sm:bg-transparent sm:text-white sm:ring-0 sm:group-hover:bg-transparent">
               <MessagesSquare size={19} />
             </span>
             <span className="min-w-0 flex-1 sm:flex-none">
-              <span className="block truncate text-[13px] font-bold leading-tight text-slate-800 sm:hidden">Koordinasi</span>
-              <span className="hidden text-sm font-black tracking-normal sm:block">Koordinasi</span>
+              <span className="block truncate text-[13px] font-bold leading-tight text-slate-800 sm:hidden">Chat JS</span>
+              <span className="hidden text-sm font-black tracking-normal sm:block">Chat JS</span>
               <span className="block truncate text-[10px] font-medium leading-tight text-slate-400 sm:hidden">Minta bantuan &amp; koordinasi tim</span>
             </span>
             <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-[#0066cc] text-white shadow-sm transition group-hover:bg-[#0055b3] sm:hidden">
