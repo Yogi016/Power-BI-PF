@@ -499,3 +499,27 @@ export interface RecipientOption {
   fullName: string;
   roleCode: string;
 }
+
+export type AttachmentSource = 'upload' | 'document';
+
+export interface HelpRequestAttachment {
+  id: string;
+  requestId: string;
+  messageId: string | null;
+  name: string;
+  url: string;
+  source: AttachmentSource;
+  documentId: string | null;
+  createdAt: string;
+}
+
+// Staged (pre-send) attachment in the composer/reply box.
+export interface AttachmentDraft {
+  key: string;                // local id for list keys/removal
+  name: string;
+  source: AttachmentSource;
+  file?: File;                // upload: the file to send
+  previewUrl?: string;        // upload: object URL for image preview (revoke on removal/unmount)
+  url?: string;               // document: the existing file URL
+  documentId?: string;        // document: source record id
+}
