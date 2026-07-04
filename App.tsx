@@ -6,6 +6,10 @@ import { LoginPage } from './pages/LoginPage';
 import { PageView } from './types';
 import { Loader2 } from 'lucide-react';
 
+// Temporarily hide the Danta.AI launcher while the Coordination hub takes its
+// slot. Code is kept intact — flip this back to `true` to re-enable Danta.AI.
+const SHOW_DANTA_AI = false;
+
 const AIChatbot = lazy(() => import('./components/AIChatbot').then((module) => ({ default: module.AIChatbot })));
 const CoordinationBubble = lazy(() => import('./components/coordination/CoordinationBubble').then((module) => ({ default: module.CoordinationBubble })));
 const Dashboard = lazy(() => import('./pages/Dashboard').then((module) => ({ default: module.Dashboard })));
@@ -83,9 +87,11 @@ const AuthenticatedApp: React.FC = () => {
           )}
         </Suspense>
       </Layout>
-      <Suspense fallback={null}>
-        <AIChatbot />
-      </Suspense>
+      {SHOW_DANTA_AI && (
+        <Suspense fallback={null}>
+          <AIChatbot />
+        </Suspense>
+      )}
       <Suspense fallback={null}>
         <CoordinationBubble />
       </Suspense>
