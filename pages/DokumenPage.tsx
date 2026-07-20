@@ -48,6 +48,7 @@ export const DokumenPage: React.FC = () => {
     const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'doc' | 'category'; id: string } | null>(null);
     const [uploading, setUploading] = useState(false);
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [isDragging, setIsDragging] = useState(false);
     const [linkMode, setLinkMode] = useState<'link' | 'upload'>('link');
     const categoryLoadRequestRef = useRef(0);
     const documentLoadRequestRef = useRef(0);
@@ -196,6 +197,30 @@ export const DokumenPage: React.FC = () => {
         setEditingDoc(null);
         setSelectedFile(null);
         setLinkMode('link');
+        setIsDragging(false);
+    };
+
+    const handleDragOver = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!isDragging) setIsDragging(true);
+    };
+
+    const handleDragLeave = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+    };
+
+    const handleDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            const file = e.dataTransfer.files[0];
+            setSelectedFile(file);
+            e.dataTransfer.clearData();
+        }
     };
 
     const handleSaveDoc = async () => {
@@ -917,7 +942,12 @@ export const DokumenPage: React.FC = () => {
                                 ) : (
                                     <div className="space-y-2">
                                         <label
-                                            className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${selectedFile
+                                            onDragOver={handleDragOver}
+                                            onDragLeave={handleDragLeave}
+                                            onDrop={handleDrop}
+                                            className={`flex flex-col items-center justify-center w-full h-28 border-2 border-dashed rounded-xl cursor-pointer transition-all ${isDragging
+                                                ? 'border-emerald-500 bg-emerald-100/60 ring-2 ring-emerald-400/30 scale-[1.01]'
+                                                : selectedFile
                                                 ? 'border-emerald-300 bg-emerald-50/50'
                                                 : 'border-slate-300 hover:border-emerald-400 hover:bg-slate-50'
                                                 }`}
@@ -926,24 +956,31 @@ export const DokumenPage: React.FC = () => {
                                                 <div className="flex items-center gap-2 text-emerald-700">
                                                     <File size={20} />
                                                     <div className="text-sm">
-                                                        <p className="font-medium">{selectedFile.name}</p>
+                                                        <p className="font-medium max-w-[280px] sm:max-w-[360px] truncate">{selectedFile.name}</p>
                                                         <p className="text-xs text-emerald-600">
                                                             {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
                                                         </p>
                                                     </div>
                                                     <button
                                                         type="button"
-                                                        onClick={e => { e.preventDefault(); setSelectedFile(null); }}
+                                                        onClick={e => { e.preventDefault(); e.stopPropagation(); setSelectedFile(null); }}
                                                         className="ml-2 p-1 rounded-md hover:bg-emerald-100 text-emerald-600"
                                                     >
                                                         <X size={14} />
                                                     </button>
                                                 </div>
+                                            ) : isDragging ? (
+                                                <div className="flex flex-col items-center text-emerald-600">
+                                                    <Upload size={28} className="mb-1 animate-bounce" />
+                                                    <p className="text-xs font-semibold">Lepaskan file di sini</p>
+                                                </div>
                                             ) : (
                                                 <div className="flex flex-col items-center text-slate-400">
-                                                    <Upload size={24} className="mb-1" />
-                                                    <p className="text-xs font-medium">Klik untuk pilih file</p>
-                                                    <p className="text-[10px] mt-0.5">PDF, DOC, XLS, PPT, dll.</p>
+                                                    <Upload size={24} className="mb-1 text-slate-400" />
+                                                    <p className="text-xs font-medium text-slate-600">
+                                                        Seret & lepas file ke sini atau <span className="text-emerald-600 font-semibold underline">pilih file</span>
+                                                    </p>
+                                                    <p className="text-[10px] mt-0.5 text-slate-400">PDF, DOC, XLS, PPT, JPG, PNG, ZIP, dll.</p>
                                                 </div>
                                             )}
                                             <input
